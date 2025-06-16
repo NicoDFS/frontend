@@ -1,0 +1,1040 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import MainLayout from '@/components/layout/MainLayout';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardFooter
+} from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+  DialogClose
+} from '@/components/ui/dialog';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger
+} from '@/components/ui/tabs';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Wallet,
+  Plus,
+  Download,
+  Copy,
+  RefreshCw,
+  CheckCircle2,
+  AlertCircle,
+  Send,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Clock,
+  CheckCircle,
+  XCircle,
+  ExternalLink
+} from 'lucide-react';
+import InternalWalletStatus from '@/components/wallet/InternalWalletStatus';
+import './dashboard.css';
+
+// GraphQL queries and mutations
+const SEND_TRANSACTION_MUTATION = `
+  mutation SendTransaction($input: SendTransactionInput!) {
+    sendTransaction(input: $input) {
+      id
+      hash
+      status
+    }
+  }
+`;
+
+const ME_QUERY = `
+  query Me {
+    me {
+      id
+      username
+      email
+      wallets {
+        id
+        address
+        chainId
+        balance {
+          klc
+          tokens {
+            symbol
+            balance
+          }
+        }
+        transactions(limit: 10) {
+          id
+          type
+          status
+          hash
+          fromAddress
+          toAddress
+          amount
+          tokenAddress
+          tokenSymbol
+          tokenDecimals
+          fee
+          blockNumber
+          timestamp
+        }
+      }
+    }
+  }
+`;
+
+const CREATE_WALLET_MUTATION = `
+  mutation CreateWallet($password: String!) {
+    createWallet(password: $password) {
+      id
+      address
+      chainId
+    }
+  }
+`;
+
+const EXPORT_WALLET_QUERY = `
+  query ExportWallet($walletId: ID!, $password: String!) {
+    exportWallet(walletId: $walletId, password: $password) {
+      keystore
+      privateKey
+    }
+  }
+`;
+
+// Wallet interface
+interface Token {
+  symbol: string;
+  balance: string;
+}
+
+interface WalletBalance {
+  klc: string;
+  tokens: Token[];
+}
+
+interface Transaction {
+  id: string;
+  type: string;
+  status: string;
+  hash?: string;
+  fromAddress: string;
+  toAddress?: string;
+  amount: string;
+  tokenAddress?: string;
+  tokenSymbol?: string;
+  tokenDecimals?: number;
+  fee?: string;
+  blockNumber?: number;
+  timestamp: string;
+}
+
+interface Wallet {
+  id: string;
+  address: string;
+  chainId: number;
+  balance?: WalletBalance;
+  transactions?: Transaction[];
+}
+
+interface User {
+  id: string;
+  username: string;
+  email?: string;
+  wallets: Wallet[];
+}
+
+export default function DashboardPage() {
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [createWalletPassword, setCreateWalletPassword] = useState('');
+  const [exportWalletId, setExportWalletId] = useState<string | null>(null);
+  const [exportPassword, setExportPassword] = useState('');
+  const [exportKeystore, setExportKeystore] = useState<string | null>(null);
+  const [exportPrivateKey, setExportPrivateKey] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [creatingWallet, setCreatingWallet] = useState(false);
+  const [createWalletError, setCreateWalletError] = useState<string | null>(null);
+
+  // Send transaction state
+  const [sendWalletId, setSendWalletId] = useState<string | null>(null);
+  const [sendToAddress, setSendToAddress] = useState('');
+  const [sendAmount, setSendAmount] = useState('');
+  const [sendAsset, setSendAsset] = useState('KLC');
+  const [sendPassword, setSendPassword] = useState('');
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [sendingTransaction, setSendingTransaction] = useState(false);
+
+  // Fetch user data on component mount
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const token = localStorage.getItem('auth_token');
+
+        if (!token) {
+          router.push('/login');
+          return;
+        }
+
+        const response = await fetch('/api/graphql', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            query: ME_QUERY,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (result.errors) {
+          throw new Error(result.errors[0].message);
+        }
+
+        setUser(result.data.me);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch user data');
+        console.error('Error fetching user data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserData();
+  }, [router]);
+
+  // Handle wallet creation
+  const handleCreateWallet = async () => {
+    try {
+      setCreatingWallet(true);
+      setCreateWalletError(null);
+
+      if (!createWalletPassword || createWalletPassword.length < 8) {
+        setCreateWalletError('Password must be at least 8 characters long');
+        return;
+      }
+
+      const token = localStorage.getItem('auth_token');
+
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+
+      const response = await fetch('/api/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          query: CREATE_WALLET_MUTATION,
+          variables: {
+            password: createWalletPassword,
+          },
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.errors) {
+        throw new Error(result.errors[0].message);
+      }
+
+      // Refresh user data to show new wallet
+      const userResponse = await fetch('/api/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          query: ME_QUERY,
+        }),
+      });
+
+      const userResult = await userResponse.json();
+
+      if (userResult.errors) {
+        throw new Error(userResult.errors[0].message);
+      }
+
+      setUser(userResult.data.me);
+      setCreateWalletPassword('');
+    } catch (err) {
+      setCreateWalletError(err instanceof Error ? err.message : 'Failed to create wallet');
+      console.error('Error creating wallet:', err);
+    } finally {
+      setCreatingWallet(false);
+    }
+  };
+
+  // Handle wallet export
+  const handleExportWallet = async () => {
+    try {
+      setExportError(null);
+      setExportKeystore(null);
+      setExportPrivateKey(null);
+
+      if (!exportWalletId) {
+        setExportError('No wallet selected for export');
+        return;
+      }
+
+      if (!exportPassword) {
+        setExportError('Password is required');
+        return;
+      }
+
+      const token = localStorage.getItem('auth_token');
+
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+
+      const response = await fetch('/api/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          query: EXPORT_WALLET_QUERY,
+          variables: {
+            walletId: exportWalletId,
+            password: exportPassword,
+          },
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.errors) {
+        throw new Error(result.errors[0].message);
+      }
+
+      setExportKeystore(result.data.exportWallet.keystore);
+      setExportPrivateKey(result.data.exportWallet.privateKey);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Failed to export wallet');
+      console.error('Error exporting wallet:', err);
+    }
+  };
+
+  // Copy private key to clipboard
+  const copyToClipboard = () => {
+    if (exportPrivateKey) {
+      navigator.clipboard.writeText(exportPrivateKey);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  // Handle send transaction
+  const handleSendTransaction = async (walletId?: string) => {
+    try {
+      setSendError(null);
+      setSendingTransaction(true);
+
+      // Use provided walletId or fallback to state
+      const activeWalletId = walletId || sendWalletId;
+
+      // Validate inputs
+      if (!activeWalletId) {
+        setSendError('No wallet selected');
+        return;
+      }
+
+      if (!sendToAddress) {
+        setSendError('Recipient address is required');
+        return;
+      }
+
+      if (!sendToAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
+        setSendError('Invalid recipient address format');
+        return;
+      }
+
+      if (!sendAmount || parseFloat(sendAmount) <= 0) {
+        setSendError('Amount must be greater than 0');
+        return;
+      }
+
+      if (!sendPassword) {
+        setSendError('Password is required to sign the transaction');
+        return;
+      }
+
+      const token = localStorage.getItem('auth_token');
+
+      if (!token) {
+        router.push('/login');
+        return;
+      }
+
+      // Find the wallet
+      const wallet = user?.wallets.find(w => w.id === activeWalletId);
+      if (!wallet) {
+        setSendError('Wallet not found');
+        return;
+      }
+
+      // Check if sending KLC and if balance is sufficient
+      if (sendAsset === 'KLC' && wallet.balance) {
+        const balance = parseFloat(wallet.balance.klc);
+        const amount = parseFloat(sendAmount);
+
+        if (amount > balance) {
+          setSendError('Insufficient KLC balance');
+          return;
+        }
+      }
+
+      // Check if sending token and if balance is sufficient
+      if (sendAsset !== 'KLC' && wallet.balance) {
+        const token = wallet.balance.tokens.find(t => t.symbol === sendAsset);
+
+        if (!token) {
+          setSendError(`No ${sendAsset} tokens found in wallet`);
+          return;
+        }
+
+        const balance = parseFloat(token.balance);
+        const amount = parseFloat(sendAmount);
+
+        if (amount > balance) {
+          setSendError(`Insufficient ${sendAsset} balance`);
+          return;
+        }
+      }
+
+      // Send transaction
+      const response = await fetch('/api/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          query: SEND_TRANSACTION_MUTATION,
+          variables: {
+            input: {
+              walletId: activeWalletId,
+              toAddress: sendToAddress,
+              amount: sendAmount,
+              asset: sendAsset,
+              password: sendPassword,
+              chainId: wallet.chainId
+            },
+          },
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.errors) {
+        throw new Error(result.errors[0].message);
+      }
+
+      // Reset form
+      setSendToAddress('');
+      setSendAmount('');
+      setSendPassword('');
+
+      // Refresh user data to show updated balances and transactions
+      const userResponse = await fetch('/api/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          query: ME_QUERY,
+        }),
+      });
+
+      const userResult = await userResponse.json();
+
+      if (userResult.errors) {
+        throw new Error(userResult.errors[0].message);
+      }
+
+      setUser(userResult.data.me);
+
+      // Show success message
+      alert('Transaction sent successfully!');
+
+    } catch (err) {
+      setSendError(err instanceof Error ? err.message : 'Failed to send transaction');
+      console.error('Error sending transaction:', err);
+    } finally {
+      setSendingTransaction(false);
+    }
+  };
+
+  // Format address for display
+  const formatAddress = (address: string) => {
+    return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
+  };
+
+  // Format balance with commas
+  const formatBalance = (balance: string) => {
+    const num = parseFloat(balance);
+    return num.toLocaleString(undefined, { maximumFractionDigits: 6 });
+  };
+
+  return (
+    <MainLayout>
+      <div className="dashboard-container">
+        <div className="dashboard-header">
+          <h1 className="dashboard-title">Wallet Dashboard</h1>
+          <p className="dashboard-subtitle">
+            Manage your KalyChain wallets and assets
+          </p>
+        </div>
+
+        {loading ? (
+          <Card className="p-8 text-center">
+            <CardContent>
+              <div className="flex flex-col items-center justify-center py-8">
+                <RefreshCw className="h-8 w-8 animate-spin text-blue-500 mb-4" />
+                <p className="text-lg font-medium">Loading your wallet data...</p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : error ? (
+          <Card className="p-8">
+            <CardContent>
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <AlertCircle className="h-12 w-12 text-red-500 mb-4" />
+                <h3 className="text-xl font-bold mb-2">Error Loading Data</h3>
+                <p className="text-slate-600 mb-4">{error}</p>
+                <Button
+                  onClick={() => window.location.reload()}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  Try Again
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <div className="mb-6">
+              <Tabs defaultValue="wallets" className="w-full">
+                <TabsList className="mb-4">
+                  <TabsTrigger value="wallets">My Wallets</TabsTrigger>
+                  <TabsTrigger value="account">Account</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="wallets">
+                  {/* Internal Wallet Connection Status */}
+                  <InternalWalletStatus />
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 wallet-grid">
+                    {user?.wallets.map((wallet) => (
+                      <Card key={wallet.id} className="wallet-card">
+                        <CardHeader className="wallet-header">
+                          <div className="flex justify-between items-start">
+                            <CardTitle className="text-lg">KalyChain Wallet</CardTitle>
+                            <div className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                              Chain ID: {wallet.chainId}
+                            </div>
+                          </div>
+                          <div className="wallet-address" title={wallet.address}>
+                            {wallet.address}
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <Tabs defaultValue="balance" className="w-full">
+                            <TabsList className="mb-4">
+                              <TabsTrigger value="balance">Balance</TabsTrigger>
+                              <TabsTrigger value="transactions">Transactions</TabsTrigger>
+                            </TabsList>
+
+                            <TabsContent value="balance">
+                              <div>
+                                <div className="text-sm text-slate-500 mb-1">Balance</div>
+                                <div className="wallet-balance">
+                                  {wallet.balance ? formatBalance(wallet.balance.klc) : '0'} KLC
+                                </div>
+
+                                {wallet.balance && wallet.balance.tokens.length > 0 && (
+                                  <div className="token-list">
+                                    <div className="text-sm text-slate-500 mb-2">Tokens</div>
+                                    {wallet.balance.tokens.map((token, index) => (
+                                      <div key={index} className="token-item">
+                                        <div className="token-icon">
+                                          {token.symbol.charAt(0)}
+                                        </div>
+                                        <div className="token-details">
+                                          <div className="token-symbol">{token.symbol}</div>
+                                          <div className="token-balance">{formatBalance(token.balance)}</div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </TabsContent>
+
+                            <TabsContent value="transactions">
+                              <div className="transactions-list">
+                                <div className="text-sm text-slate-500 mb-2">Recent Transactions</div>
+                                {wallet.transactions && wallet.transactions.length > 0 ? (
+                                  <div className="space-y-3">
+                                    {wallet.transactions.map((tx) => (
+                                      <div key={tx.id} className="transaction-item border rounded-md p-3">
+                                        <div className="flex justify-between items-start mb-2">
+                                          <div className="flex items-center">
+                                            {tx.type === 'SEND' ? (
+                                              <ArrowUpRight className="h-4 w-4 text-orange-500 mr-2" />
+                                            ) : tx.type === 'RECEIVE' ? (
+                                              <ArrowDownLeft className="h-4 w-4 text-green-500 mr-2" />
+                                            ) : (
+                                              <RefreshCw className="h-4 w-4 text-blue-500 mr-2" />
+                                            )}
+                                            <span className="font-medium">
+                                              {tx.type === 'SEND' ? 'Sent' : tx.type === 'RECEIVE' ? 'Received' : tx.type}
+                                            </span>
+                                          </div>
+                                          <div className="flex items-center">
+                                            {tx.status === 'PENDING' ? (
+                                              <Clock className="h-4 w-4 text-yellow-500 mr-1" />
+                                            ) : tx.status === 'CONFIRMED' ? (
+                                              <CheckCircle className="h-4 w-4 text-green-500 mr-1" />
+                                            ) : (
+                                              <XCircle className="h-4 w-4 text-red-500 mr-1" />
+                                            )}
+                                            <span className="text-xs">
+                                              {tx.status}
+                                            </span>
+                                          </div>
+                                        </div>
+
+                                        <div className="text-sm mb-1">
+                                          <span className="text-slate-500 mr-1">Amount:</span>
+                                          <span className="font-medium">
+                                            {formatBalance(tx.amount)} {tx.tokenSymbol || 'KLC'}
+                                          </span>
+                                        </div>
+
+                                        {tx.type === 'SEND' && tx.toAddress && (
+                                          <div className="text-sm mb-1">
+                                            <span className="text-slate-500 mr-1">To:</span>
+                                            <span className="font-mono text-xs">{formatAddress(tx.toAddress)}</span>
+                                          </div>
+                                        )}
+
+                                        {tx.type === 'RECEIVE' && (
+                                          <div className="text-sm mb-1">
+                                            <span className="text-slate-500 mr-1">From:</span>
+                                            <span className="font-mono text-xs">{formatAddress(tx.fromAddress)}</span>
+                                          </div>
+                                        )}
+
+                                        <div className="text-xs text-slate-500">
+                                          {new Date(tx.timestamp).toLocaleString()}
+                                        </div>
+
+                                        {tx.hash && (
+                                          <div className="mt-2">
+                                            <a
+                                              href={`https://kalyscan.io/tx/${tx.hash}`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-xs text-blue-600 flex items-center hover:underline"
+                                            >
+                                              View on Explorer
+                                              <ExternalLink className="h-3 w-3 ml-1" />
+                                            </a>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="text-center py-4 text-slate-500">
+                                    No transactions found
+                                  </div>
+                                )}
+                              </div>
+                            </TabsContent>
+                          </Tabs>
+                        </CardContent>
+                        <CardFooter>
+                          <div className="wallet-actions flex gap-2">
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button
+                                  variant="default"
+                                  className="action-button"
+                                  onClick={() => {
+                                    // Reset form when opening dialog
+                                    setSendToAddress('');
+                                    setSendAmount('');
+                                    setSendPassword('');
+                                    setSendError(null);
+                                    setSendAsset('KLC');
+                                  }}
+                                >
+                                  <Send className="h-4 w-4 mr-1" />
+                                  Send
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle>Send Assets</DialogTitle>
+                                  <DialogDescription>
+                                    Send KLC or tokens from your wallet to another address.
+                                  </DialogDescription>
+                                </DialogHeader>
+
+                                {sendError && (
+                                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 flex items-start gap-2">
+                                    <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
+                                    <p className="text-sm text-red-700">{sendError}</p>
+                                  </div>
+                                )}
+
+                                <form autoComplete="off" className="space-y-4 mt-2">
+                                  <div>
+                                    <Label htmlFor="send-asset">Asset</Label>
+                                    <Select
+                                      value={sendAsset}
+                                      onValueChange={setSendAsset}
+                                    >
+                                      <SelectTrigger>
+                                        <SelectValue placeholder="Select asset" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="KLC">KLC (Native)</SelectItem>
+                                        {wallet.balance?.tokens.map((token) => (
+                                          <SelectItem key={token.symbol} value={token.symbol}>
+                                            {token.symbol}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+
+                                  <div>
+                                    <Label htmlFor="send-to-address">Recipient Address</Label>
+                                    <Input
+                                      id="send-to-address"
+                                      name="recipient-address"
+                                      type="text"
+                                      value={sendToAddress}
+                                      onChange={(e) => setSendToAddress(e.target.value)}
+                                      placeholder="0x..."
+                                      autoComplete="off"
+                                      spellCheck={false}
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <Label htmlFor="send-amount">Amount</Label>
+                                    <div className="relative">
+                                      <Input
+                                        id="send-amount"
+                                        name="send-amount"
+                                        type="number"
+                                        value={sendAmount}
+                                        onChange={(e) => setSendAmount(e.target.value)}
+                                        placeholder="0.0"
+                                        step="0.000001"
+                                        min="0"
+                                        autoComplete="off"
+                                        className="pr-16"
+                                      />
+                                      <div className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-500 pointer-events-none">
+                                        {sendAsset}
+                                      </div>
+                                    </div>
+
+                                    {wallet.balance && (
+                                      <div className="flex justify-between mt-1">
+                                        <span className="text-xs text-slate-500">
+                                          Available: {
+                                            sendAsset === 'KLC'
+                                              ? `${formatBalance(wallet.balance.klc)} KLC`
+                                              : `${formatBalance(wallet.balance.tokens.find(t => t.symbol === sendAsset)?.balance || '0')} ${sendAsset}`
+                                          }
+                                        </span>
+                                        <button
+                                          type="button"
+                                          className="text-xs text-blue-600 hover:underline"
+                                          onClick={() => {
+                                            if (sendAsset === 'KLC') {
+                                              setSendAmount(wallet.balance?.klc || '0');
+                                            } else {
+                                              const token = wallet.balance?.tokens.find(t => t.symbol === sendAsset);
+                                              setSendAmount(token?.balance || '0');
+                                            }
+                                          }}
+                                        >
+                                          Max
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div>
+                                    <Label htmlFor="send-password">Wallet Password</Label>
+                                    <Input
+                                      id="send-password"
+                                      name="wallet-password"
+                                      type="password"
+                                      value={sendPassword}
+                                      onChange={(e) => setSendPassword(e.target.value)}
+                                      placeholder="Enter your wallet password"
+                                      autoComplete="current-password"
+                                    />
+                                    <p className="text-xs text-slate-500 mt-1">
+                                      Your password is required to sign the transaction
+                                    </p>
+                                  </div>
+                                </form>
+
+                                <DialogFooter className="mt-6">
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                      setSendToAddress('');
+                                      setSendAmount('');
+                                      setSendPassword('');
+                                      setSendError(null);
+                                    }}
+                                    disabled={sendingTransaction}
+                                  >
+                                    Cancel
+                                  </Button>
+                                  <Button
+                                    onClick={() => {
+                                      handleSendTransaction(wallet.id);
+                                    }}
+                                    disabled={sendingTransaction}
+                                  >
+                                    {sendingTransaction ? (
+                                      <>
+                                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                        Sending...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Send className="h-4 w-4 mr-2" />
+                                        Send
+                                      </>
+                                    )}
+                                  </Button>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
+
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className="action-button"
+                                  onClick={() => {
+                                    setExportWalletId(wallet.id);
+                                    setExportPassword('');
+                                    setExportKeystore(null);
+                                    setExportPrivateKey(null);
+                                    setExportError(null);
+                                  }}
+                                >
+                                  <Download className="h-4 w-4" />
+                                  Export
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="export-dialog-content">
+                                <DialogHeader>
+                                  <DialogTitle>Export Wallet</DialogTitle>
+                                  <DialogDescription>
+                                    Enter your password to export this wallet's private key.
+                                  </DialogDescription>
+                                </DialogHeader>
+
+                                {exportError && (
+                                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 flex items-start gap-2">
+                                    <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
+                                    <p className="text-sm text-red-700">{exportError}</p>
+                                  </div>
+                                )}
+
+                                <div className="password-input">
+                                  <Label htmlFor="export-password">Password</Label>
+                                  <Input
+                                    id="export-password"
+                                    type="password"
+                                    value={exportPassword}
+                                    onChange={(e) => setExportPassword(e.target.value)}
+                                    placeholder="Enter your wallet password"
+                                  />
+                                </div>
+
+                                {!exportPrivateKey ? (
+                                  <DialogFooter className="mt-4">
+                                    <Button
+                                      variant="outline"
+                                      onClick={handleExportWallet}
+                                    >
+                                      Export Private Key
+                                    </Button>
+                                  </DialogFooter>
+                                ) : (
+                                  <div className="mt-4">
+                                    <Label>Your Private Key</Label>
+                                    <div className="keystore-display bg-yellow-50 border border-yellow-200 p-3 rounded-md text-sm font-mono break-all">
+                                      {exportPrivateKey}
+                                    </div>
+                                    <p className="text-xs text-amber-600 mt-2 mb-3">
+                                      <AlertCircle className="h-3 w-3 inline-block mr-1" />
+                                      Warning: Never share your private key with anyone. Anyone with your private key has full control of your wallet.
+                                    </p>
+                                    <Button
+                                      variant="outline"
+                                      className="copy-button mt-2"
+                                      onClick={copyToClipboard}
+                                    >
+                                      {copied ? (
+                                        <>
+                                          <CheckCircle2 className="h-4 w-4" />
+                                          Copied!
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Copy className="h-4 w-4" />
+                                          Copy to Clipboard
+                                        </>
+                                      )}
+                                    </Button>
+                                  </div>
+                                )}
+                              </DialogContent>
+                            </Dialog>
+                          </div>
+                        </CardFooter>
+                      </Card>
+                    ))}
+
+                    {/* Create New Wallet Card */}
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Card className="create-wallet-card">
+                          <Plus className="create-wallet-icon" />
+                          <p className="create-wallet-text">Create New Wallet</p>
+                        </Card>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Create New Wallet</DialogTitle>
+                          <DialogDescription>
+                            Create a new KalyChain wallet. Your password will be used to encrypt the private key.
+                          </DialogDescription>
+                        </DialogHeader>
+
+                        {createWalletError && (
+                          <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 flex items-start gap-2">
+                            <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
+                            <p className="text-sm text-red-700">{createWalletError}</p>
+                          </div>
+                        )}
+
+                        <div className="mt-4">
+                          <Label htmlFor="wallet-password">Password</Label>
+                          <Input
+                            id="wallet-password"
+                            type="password"
+                            value={createWalletPassword}
+                            onChange={(e) => setCreateWalletPassword(e.target.value)}
+                            placeholder="Enter a secure password (min 8 characters)"
+                          />
+                          <p className="text-xs text-slate-500 mt-1">
+                            This password will be used to encrypt your wallet's private key.
+                            Make sure to use a strong password and keep it safe.
+                          </p>
+                        </div>
+
+                        <DialogFooter className="mt-4">
+                          <DialogClose asChild>
+                            <Button variant="outline">Cancel</Button>
+                          </DialogClose>
+                          <Button
+                            onClick={handleCreateWallet}
+                            disabled={creatingWallet}
+                          >
+                            {creatingWallet ? 'Creating...' : 'Create Wallet'}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="account">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Account Information</CardTitle>
+                      <CardDescription>
+                        Your personal account details
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div>
+                          <Label>Username</Label>
+                          <div className="text-lg font-medium">{user?.username}</div>
+                        </div>
+
+                        {user?.email && (
+                          <div>
+                            <Label>Email</Label>
+                            <div className="text-lg font-medium">{user.email}</div>
+                          </div>
+                        )}
+
+                        <div>
+                          <Label>Wallets</Label>
+                          <div className="text-lg font-medium">{user?.wallets.length || 0}</div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              </Tabs>
+            </div>
+          </>
+        )}
+      </div>
+    </MainLayout>
+  );
+}

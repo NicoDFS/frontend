@@ -1,0 +1,214 @@
+// Contract ABIs for KalySwap Launchpad
+// Simplified ABIs containing only the functions we need for the frontend
+
+export const STANDARD_TOKEN_FACTORY_ABI = [
+  {
+    "inputs": [
+      {"internalType": "string", "name": "name", "type": "string"},
+      {"internalType": "string", "name": "symbol", "type": "string"},
+      {"internalType": "uint8", "name": "decimals", "type": "uint8"},
+      {"internalType": "uint256", "name": "totalSupply", "type": "uint256"}
+    ],
+    "name": "create",
+    "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "fee",
+    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  }
+] as const;
+
+export const LIQUIDITY_GENERATOR_TOKEN_FACTORY_ABI = [
+  {
+    "inputs": [
+      {"internalType": "string", "name": "name", "type": "string"},
+      {"internalType": "string", "name": "symbol", "type": "string"},
+      {"internalType": "uint256", "name": "totalSupply", "type": "uint256"},
+      {"internalType": "address", "name": "router", "type": "address"},
+      {"internalType": "address", "name": "charity", "type": "address"},
+      {"internalType": "uint16", "name": "taxFeeBps", "type": "uint16"},
+      {"internalType": "uint16", "name": "liquidityFeeBps", "type": "uint16"},
+      {"internalType": "uint16", "name": "charityBps", "type": "uint16"}
+    ],
+    "name": "create",
+    "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "fee",
+    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  }
+] as const;
+
+export const PRESALE_FACTORY_ABI = [
+  {
+    "inputs": [
+      {"internalType": "address", "name": "_sale_token", "type": "address"},
+      {"internalType": "address", "name": "_base_token", "type": "address"},
+      {"internalType": "uint256[2]", "name": "_rates", "type": "uint256[2]"},
+      {"internalType": "uint256[2]", "name": "_raises", "type": "uint256[2]"},
+      {"internalType": "uint256", "name": "_softcap", "type": "uint256"},
+      {"internalType": "uint256", "name": "_hardcap", "type": "uint256"},
+      {"internalType": "uint256", "name": "_liquidityPercent", "type": "uint256"},
+      {"internalType": "uint256", "name": "_presale_start", "type": "uint256"},
+      {"internalType": "uint256", "name": "_presale_end", "type": "uint256"}
+    ],
+    "name": "create",
+    "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "fee",
+    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  }
+] as const;
+
+export const FAIRLAUNCH_FACTORY_ABI = [
+  {
+    "inputs": [
+      {"internalType": "address", "name": "_saleToken", "type": "address"},
+      {"internalType": "address", "name": "_baseToken", "type": "address"},
+      {"internalType": "bool", "name": "_isNative", "type": "bool"},
+      {"internalType": "uint256", "name": "_buybackRate", "type": "uint256"},
+      {"internalType": "bool", "name": "_isWhitelist", "type": "bool"},
+      {"internalType": "uint256", "name": "_sellingAmount", "type": "uint256"},
+      {"internalType": "uint256", "name": "_softCap", "type": "uint256"},
+      {"internalType": "uint256", "name": "_liquidityPercent", "type": "uint256"},
+      {"internalType": "uint256", "name": "_fairlaunchStart", "type": "uint256"},
+      {"internalType": "uint256", "name": "_fairlaunchEnd", "type": "uint256"},
+      {"internalType": "address", "name": "_referrer", "type": "address"}
+    ],
+    "name": "createFairlaunch",
+    "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "fee",
+    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  }
+] as const;
+
+// Presale contract ABI for LP lock settings
+export const PRESALE_ABI = [
+  {
+    "inputs": [
+      {"internalType": "uint256", "name": "_lockDuration", "type": "uint256"},
+      {"internalType": "address", "name": "_recipient", "type": "address"}
+    ],
+    "name": "setLPLockSettings",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "lpLockDuration",
+    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "lpRecipient",
+    "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "MIN_LP_LOCK_TIME",
+    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "FOREVER_LOCK",
+    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  }
+] as const;
+
+// ERC20 ABI for token interactions
+export const ERC20_ABI = [
+  {
+    "inputs": [
+      {"internalType": "address", "name": "spender", "type": "address"},
+      {"internalType": "uint256", "name": "amount", "type": "uint256"}
+    ],
+    "name": "approve",
+    "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"internalType": "address", "name": "account", "type": "address"}
+    ],
+    "name": "balanceOf",
+    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "decimals",
+    "outputs": [{"internalType": "uint8", "name": "", "type": "uint8"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "name",
+    "outputs": [{"internalType": "string", "name": "", "type": "string"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "symbol",
+    "outputs": [{"internalType": "string", "name": "", "type": "string"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "totalSupply",
+    "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  }
+] as const;
+
+// Export all ABIs in a single object for easy access
+export const CONTRACT_ABIS = {
+  STANDARD_TOKEN_FACTORY: STANDARD_TOKEN_FACTORY_ABI,
+  LIQUIDITY_GENERATOR_TOKEN_FACTORY: LIQUIDITY_GENERATOR_TOKEN_FACTORY_ABI,
+  PRESALE_FACTORY: PRESALE_FACTORY_ABI,
+  PRESALE: PRESALE_ABI,
+  FAIRLAUNCH_FACTORY: FAIRLAUNCH_FACTORY_ABI,
+  ERC20: ERC20_ABI,
+} as const;
+
+// Helper function to get ABI by contract name
+export function getContractABI(contractName: keyof typeof CONTRACT_ABIS) {
+  return CONTRACT_ABIS[contractName];
+}

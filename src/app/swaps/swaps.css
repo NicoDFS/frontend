@@ -1,0 +1,475 @@
+/* KalySwap Mobile App Design - Swaps Page Styles */
+
+.token-logo {
+  transition: all 0.2s ease-in-out;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
+}
+
+.token-logo:hover {
+  opacity: 0.9;
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.swap-button-container {
+  position: relative;
+}
+
+.swap-button-container::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 20px;
+  background: rgba(59, 130, 246, 0.4);
+  z-index: 1;
+}
+
+.swap-button-container::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(90deg);
+  width: 2px;
+  height: 20px;
+  background: rgba(59, 130, 246, 0.4);
+  z-index: 1;
+}
+
+.price-impact-warning {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 1px solid #f59e0b;
+}
+
+.price-impact-high {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  border: 1px solid #ef4444;
+}
+
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.token-balance-shimmer {
+  background: linear-gradient(90deg, rgba(30, 58, 138, 0.1) 25%, rgba(59, 130, 246, 0.2) 50%, rgba(30, 58, 138, 0.1) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.chart-placeholder {
+  background: rgba(30, 58, 138, 0.1);
+  backdrop-filter: blur(10px);
+  border: 2px dashed rgba(59, 130, 246, 0.3);
+  border-radius: 12px;
+}
+
+.market-stats-card {
+  background: rgba(30, 58, 138, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  box-shadow: 0 8px 32px rgba(30, 58, 138, 0.3);
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 768px) {
+  .trading-interface {
+    padding: 1rem;
+  }
+
+  .token-selector {
+    font-size: 0.875rem;
+  }
+
+  .amount-input {
+    font-size: 1rem;
+  }
+
+  .swaps-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1rem;
+  }
+
+  .trading-chart-wrapper {
+    min-height: 350px;
+    max-height: 450px;
+  }
+
+  .transaction-data-container {
+    margin-top: 1rem;
+  }
+}
+
+/* Tablet responsive adjustments */
+@media (max-width: 1279px) and (min-width: 769px) {
+  .swaps-grid {
+    grid-template-columns: 1fr !important;
+    gap: 1.5rem;
+  }
+
+  .trading-controls-container {
+    order: -1; /* Move trading controls above chart on tablet */
+  }
+}
+
+/* KalySwap Layout with Glass Morphism */
+.chart-container {
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+  background: rgba(30, 58, 138, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(30, 58, 138, 0.3);
+  transition: all 0.3s ease;
+}
+
+.chart-container:hover {
+  box-shadow: 0 12px 40px rgba(30, 58, 138, 0.4);
+  transform: translateY(-2px);
+}
+
+.chart-container > div {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.transaction-data-container {
+  width: 100%;
+  position: relative;
+  z-index: 2;
+  margin-top: 1.5rem;
+  background: rgba(30, 58, 138, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(30, 58, 138, 0.3);
+  transition: all 0.3s ease;
+}
+
+.transaction-data-container:hover {
+  box-shadow: 0 12px 40px rgba(30, 58, 138, 0.4);
+  transform: translateY(-2px);
+}
+
+/* Ensure proper spacing and no overlaps */
+.swaps-layout {
+  min-height: 100vh;
+}
+
+.swaps-grid {
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 1280px) {
+  .swaps-grid {
+    grid-template-columns: 3fr 1fr;
+  }
+}
+
+/* Enhanced Trading Chart with Glass Effect */
+.trading-chart-wrapper {
+  position: relative;
+  width: 100%;
+  min-height: 500px;
+  max-height: 650px;
+  overflow: hidden;
+  contain: layout style;
+  padding: 0;
+  margin: 0;
+  background: rgba(30, 58, 138, 0.05);
+  backdrop-filter: blur(8px);
+  border-radius: 12px;
+}
+
+.trading-chart-wrapper > div {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 100% !important;
+  max-height: 650px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.trading-chart-wrapper canvas {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100% !important;
+  max-height: 650px !important;
+}
+
+/* Enhanced TradingChart component with dark theme */
+.trading-chart-wrapper .bg-white {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow: hidden;
+  border-radius: 12px;
+  background: rgba(30, 58, 138, 0.1) !important;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  box-shadow: 0 8px 32px rgba(30, 58, 138, 0.3);
+  color: white !important;
+}
+
+/* Force all chart elements to use dark theme */
+.trading-chart-wrapper * {
+  color: white !important;
+}
+
+.trading-chart-wrapper .bg-white * {
+  background: transparent !important;
+  color: white !important;
+}
+
+/* Chart controls and buttons */
+.trading-chart-wrapper button {
+  background: rgba(30, 64, 175, 0.2) !important;
+  color: white !important;
+  border: 1px solid rgba(59, 130, 246, 0.2) !important;
+}
+
+.trading-chart-wrapper button:hover {
+  background: rgba(30, 64, 175, 0.3) !important;
+}
+
+/* Chart timeframe buttons */
+.trading-chart-wrapper [class*="bg-blue"],
+.trading-chart-wrapper [class*="bg-gray"] {
+  background: rgba(30, 64, 175, 0.2) !important;
+  color: white !important;
+}
+
+/* Remove all extra padding and margins from chart containers */
+.trading-chart-wrapper .relative > div {
+  width: 100% !important;
+  max-width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Ensure chart content doesn't get cut off */
+.trading-chart-wrapper .relative {
+  min-height: 100%;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Tighten chart header spacing */
+.trading-chart-wrapper .p-4 {
+  padding: 0.75rem !important;
+}
+
+/* Remove any default margins from chart elements */
+.trading-chart-wrapper * {
+  box-sizing: border-box;
+}
+
+/* Ensure chart fills container completely */
+.trading-chart-wrapper > div:first-child {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Ensure volume bars don't overlap price */
+.trading-chart-wrapper canvas:last-child {
+  z-index: 1;
+}
+
+.trading-chart-wrapper canvas:first-child {
+  z-index: 2;
+}
+
+/* Enhanced Trading Controls with Glass Effect */
+.trading-controls-container {
+  position: relative;
+  z-index: 3;
+}
+
+.trading-controls-container > * {
+  background: rgba(30, 58, 138, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(30, 58, 138, 0.3);
+  transition: all 0.3s ease;
+}
+
+.trading-controls-container > *:hover {
+  box-shadow: 0 12px 40px rgba(30, 58, 138, 0.4);
+  transform: translateY(-2px);
+}
+
+/* KalySwap Dark Theme (Always Active) */
+.chart-placeholder {
+  background: rgba(30, 58, 138, 0.1);
+  backdrop-filter: blur(10px);
+  border: 2px dashed rgba(59, 130, 246, 0.3);
+  color: white;
+}
+
+.market-stats-card {
+  background: rgba(30, 58, 138, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  box-shadow: 0 8px 32px rgba(30, 58, 138, 0.3);
+  color: white;
+}
+
+/* Enhanced Glow Effects for Interactive Elements */
+.trading-chart-wrapper:hover,
+.chart-container:hover,
+.transaction-data-container:hover {
+  box-shadow: 0 0 30px rgba(59, 130, 246, 0.2);
+}
+
+/* Smooth Animations */
+* {
+  transition: all 0.2s ease;
+}
+
+/* Glass Morphism Enhancement */
+.glass-effect {
+  background: rgba(30, 58, 138, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  box-shadow: 0 8px 32px rgba(30, 58, 138, 0.3);
+}
+
+/* Enhanced token selector with better readability */
+.token-selector {
+  background: rgba(30, 64, 175, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: white !important;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.token-selector:hover {
+  background: rgba(30, 64, 175, 0.2);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+/* Force token symbol text to be white and readable */
+.token-selector span,
+.token-selector div,
+.token-selector p {
+  color: white !important;
+  font-weight: 500;
+}
+
+/* Token symbol in buttons */
+button[class*="token"] span,
+button[class*="select"] span {
+  color: white !important;
+  font-weight: 600;
+}
+
+/* Select trigger and value styling */
+[data-radix-select-trigger] {
+  color: white !important;
+  background: rgba(30, 64, 175, 0.1) !important;
+  border: 1px solid rgba(59, 130, 246, 0.2) !important;
+}
+
+[data-radix-select-value] {
+  color: white !important;
+}
+
+/* Dropdown content */
+[data-radix-select-content] {
+  background: rgba(15, 23, 42, 0.95) !important;
+  border: 1px solid rgba(59, 130, 246, 0.2) !important;
+  backdrop-filter: blur(10px);
+}
+
+[data-radix-select-item] {
+  color: white !important;
+}
+
+[data-radix-select-item]:hover {
+  background: rgba(30, 64, 175, 0.2) !important;
+}
+
+/* Swap Interface Dark Theme Enhancements */
+.swap-interface-container {
+  background: rgba(30, 58, 138, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 12px;
+}
+
+/* Input field styling for swap interface */
+.swap-interface-container input[type="number"] {
+  background: rgba(15, 23, 42, 0.3) !important;
+  border: 1px solid rgba(59, 130, 246, 0.2) !important;
+  color: white !important;
+}
+
+.swap-interface-container input[type="number"]:focus {
+  border-color: rgba(59, 130, 246, 0.4) !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* Labels and text in swap interface */
+.swap-interface-container label {
+  color: white !important;
+}
+
+.swap-interface-container .text-gray-500,
+.swap-interface-container .text-gray-600,
+.swap-interface-container .text-gray-700 {
+  color: #d1d5db !important;
+}
+
+/* Settings panel styling */
+.swap-interface-container .bg-gray-50 {
+  background: rgba(15, 23, 42, 0.5) !important;
+  border: 1px solid rgba(59, 130, 246, 0.2) !important;
+}
+
+/* Balance text and small text elements */
+.swap-interface-container .text-xs {
+  color: #d1d5db !important;
+}
+
+/* Swap button styling */
+.swap-interface-container button {
+  transition: all 0.2s ease;
+}
+
+.swap-interface-container button:hover {
+  transform: translateY(-1px);
+}
+
+/* Loading spinner in dark theme */
+.swap-interface-container .animate-spin {
+  border-color: rgba(59, 130, 246, 0.3);
+  border-top-color: #3b82f6;
+}

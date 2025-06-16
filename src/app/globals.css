@@ -1,0 +1,422 @@
+
+@import "./reset.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* KalySwap Mobile App Color System */
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 15, 23, 42;
+  --background-end-rgb: 30, 41, 59;
+  --radius: 0.75rem;
+
+  /* Main background gradient from mobile app */
+  --background: #0f172a;
+  --foreground: #ffffff;
+
+  /* Glass morphism cards with blue tint */
+  --card: rgba(30, 58, 138, 0.1);
+  --card-foreground: #ffffff;
+
+  /* Popover/dropdown styling */
+  --popover: rgba(30, 58, 138, 0.15);
+  --popover-foreground: #ffffff;
+
+  /* Orange gradient for primary actions (Connect, Swap buttons) */
+  --primary: #f59e0b;
+  --primary-foreground: #ffffff;
+
+  /* Blue gradient for secondary actions */
+  --secondary: rgba(30, 64, 175, 0.2);
+  --secondary-foreground: #ffffff;
+
+  /* Muted elements */
+  --muted: rgba(30, 58, 138, 0.1);
+  --muted-foreground: #94a3b8;
+
+  /* Accent color (orange) */
+  --accent: #f59e0b;
+  --accent-foreground: #ffffff;
+
+  /* Destructive actions */
+  --destructive: #ef4444;
+
+  /* Borders with blue tint */
+  --border: rgba(59, 130, 246, 0.2);
+
+  /* Input fields with dark blue background */
+  --input: rgba(30, 58, 138, 0.2);
+
+  /* Focus ring */
+  --ring: #3b82f6;
+
+  /* Chart colors */
+  --chart-1: #3b82f6;
+  --chart-2: #10b981;
+  --chart-3: #f59e0b;
+  --chart-4: #8b5cf6;
+  --chart-5: #ef4444;
+
+  /* Sidebar colors */
+  --sidebar: rgba(30, 58, 138, 0.1);
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #3b82f6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgba(30, 64, 175, 0.2);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(59, 130, 246, 0.2);
+  --sidebar-ring: #3b82f6;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+.dark {
+  --background: oklch(0.129 0.042 264.695);
+  --foreground: oklch(0.984 0.003 247.858);
+  --card: oklch(0.208 0.042 265.755);
+  --card-foreground: oklch(0.984 0.003 247.858);
+  --popover: oklch(0.208 0.042 265.755);
+  --popover-foreground: oklch(0.984 0.003 247.858);
+  --primary: oklch(0.929 0.013 255.508);
+  --primary-foreground: oklch(0.208 0.042 265.755);
+  --secondary: oklch(0.279 0.041 260.031);
+  --secondary-foreground: oklch(0.984 0.003 247.858);
+  --muted: oklch(0.279 0.041 260.031);
+  --muted-foreground: oklch(0.704 0.04 256.788);
+  --accent: oklch(0.279 0.041 260.031);
+  --accent-foreground: oklch(0.984 0.003 247.858);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.551 0.027 264.364);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.208 0.042 265.755);
+  --sidebar-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-accent: oklch(0.279 0.041 260.031);
+  --sidebar-accent-foreground: oklch(0.984 0.003 247.858);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.551 0.027 264.364);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply text-foreground;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+}
+
+/* KalySwap Component Styling - Mobile App Design */
+@layer components {
+
+  /* Enhanced Card Components with Glass Morphism */
+  .card {
+    background: rgba(30, 58, 138, 0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    box-shadow: 0 8px 32px rgba(30, 58, 138, 0.3);
+    transition: all 0.3s ease;
+  }
+
+  .card:hover {
+    box-shadow: 0 12px 40px rgba(30, 58, 138, 0.4);
+    transform: translateY(-2px);
+  }
+
+  /* Ensure all Card components use consistent blue borders */
+  [data-slot="card"],
+  .card,
+  .bg-card {
+    border-color: rgba(59, 130, 246, 0.2) !important;
+  }
+
+  /* Primary Buttons - Orange Gradient (Connect Wallet, Swap, Send) */
+  .btn-primary,
+  button[class*="bg-primary"],
+  .button:not(.button-secondary):not(.button-outline) {
+    background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+    color: white;
+    font-weight: 600;
+    border: none;
+    transition: all 0.2s ease;
+  }
+
+  .btn-primary:hover,
+  button[class*="bg-primary"]:hover {
+    background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
+    box-shadow: 0 8px 25px rgba(245, 158, 11, 0.4);
+    transform: translateY(-1px);
+  }
+
+  .btn-primary:active,
+  button[class*="bg-primary"]:active {
+    transform: translateY(0);
+  }
+
+  /* Secondary Buttons - Blue Gradient */
+  .btn-secondary,
+  button[class*="bg-secondary"] {
+    background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%);
+    color: white;
+    font-weight: 600;
+    border: none;
+    transition: all 0.2s ease;
+  }
+
+  .btn-secondary:hover,
+  button[class*="bg-secondary"]:hover {
+    background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+    box-shadow: 0 8px 25px rgba(30, 64, 175, 0.4);
+    transform: translateY(-1px);
+  }
+
+  /* Input Fields - Dark Blue Glass Effect */
+  .input,
+  input[type="text"],
+  input[type="number"],
+  input[type="email"],
+  input[type="password"],
+  textarea {
+    background: rgba(30, 58, 138, 0.2);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    color: white;
+    backdrop-filter: blur(8px);
+    transition: all 0.2s ease;
+  }
+
+  .input:focus,
+  input:focus,
+  textarea:focus {
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    background: rgba(30, 58, 138, 0.3);
+  }
+
+  .input::placeholder,
+  input::placeholder,
+  textarea::placeholder {
+    color: #94a3b8;
+  }
+
+  /* Tab Components */
+  .tabs-list {
+    background: rgba(30, 58, 138, 0.15);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+  }
+
+  .tabs-trigger {
+    color: #94a3b8;
+    transition: all 0.2s ease;
+  }
+
+  .tabs-trigger[data-state="active"] {
+    background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3);
+  }
+
+  /* Select Components */
+  .select-trigger {
+    background: rgba(30, 58, 138, 0.2);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    color: white;
+    backdrop-filter: blur(8px);
+  }
+
+  .select-content {
+    background: rgba(30, 58, 138, 0.15);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+  }
+
+  .select-item {
+    color: white;
+    transition: all 0.2s ease;
+  }
+
+  .select-item:hover {
+    background: rgba(59, 130, 246, 0.2);
+  }
+
+  /* Labels */
+  .label {
+    color: #94a3b8;
+    font-weight: 500;
+  }
+
+  /* Loading Spinners */
+  .animate-spin {
+    border-color: rgba(59, 130, 246, 0.3);
+    border-top-color: #3b82f6;
+  }
+
+  /* Connection Warning Card - Orange Theme */
+  .border-orange-200 {
+    border-color: rgba(245, 158, 11, 0.3) !important;
+  }
+
+  .bg-orange-50 {
+    background: rgba(245, 158, 11, 0.1) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+
+  .text-orange-700 {
+    color: #f59e0b !important;
+  }
+
+  .text-orange-600 {
+    color: #fbbf24 !important;
+  }
+
+  /* Gray text to light colors for dark theme */
+  .text-gray-500 {
+    color: #94a3b8 !important;
+  }
+
+  .text-gray-600 {
+    color: #94a3b8 !important;
+  }
+
+  .text-gray-700 {
+    color: #ffffff !important;
+  }
+
+  /* Card titles */
+  .card h3,
+  .card h2,
+  [class*="CardTitle"] {
+    color: white !important;
+  }
+
+  /* Enhance disabled states */
+  [disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Coming soon sections */
+  .text-center .opacity-50 {
+    color: #94a3b8;
+  }
+
+  /* Fix token symbol readability */
+  .select-item,
+  .select-trigger,
+  .select-value {
+    color: white !important;
+  }
+
+  /* Token selector text */
+  .token-selector span,
+  .token-selector div {
+    color: white !important;
+  }
+
+  /* Chart background fix - make it match the dark theme */
+  .trading-chart-wrapper .bg-white,
+  .chart-container .bg-white,
+  [class*="bg-white"] {
+    background: rgba(30, 58, 138, 0.1) !important;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+  }
+
+  /* Chart text colors */
+  .trading-chart-wrapper,
+  .chart-container {
+    color: white;
+  }
+
+  .trading-chart-wrapper * {
+    color: white !important;
+  }
+
+  /* Fix any remaining white backgrounds in charts */
+  canvas + div,
+  .chart-controls,
+  .chart-header {
+    background: transparent !important;
+    color: white !important;
+  }
+
+  /* Ensure all text in trading interface is readable */
+  .trading-controls-container * {
+    color: white !important;
+  }
+
+  /* Fix select dropdown text */
+  [role="option"] {
+    color: white !important;
+  }
+
+  /* Fix placeholder text */
+  ::placeholder {
+    color: #94a3b8 !important;
+    opacity: 1;
+  }
+}
