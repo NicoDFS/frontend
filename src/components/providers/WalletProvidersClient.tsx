@@ -1,10 +1,11 @@
 'use client'
 
-import { ReactNode, useState, useEffect } from 'react'
+import { ReactNode } from 'react'
 import { WagmiProvider } from 'wagmi'
 import { RainbowKitProvider } from '@rainbow-me/rainbowkit'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { wagmiConfig } from '@/config/wagmi.config'
+import { useHydration } from '@/hooks/useHydration'
 
 // Import Rainbow Kit styles
 import '@rainbow-me/rainbowkit/styles.css'
@@ -13,40 +14,30 @@ interface WalletProvidersClientProps {
   children: ReactNode
 }
 
-export default function WalletProvidersClient({ children }: WalletProvidersClientProps) {
-  const [mounted, setMounted] = useState(false)
-
-  // Create a client for React Query (inside component to avoid SSR issues)
-  const [queryClient] = useState(() => new QueryClient({
-    defaultOptions: {
-      queries: {
-        staleTime: 0, // Disable stale time to prevent caching issues
-        retry: 1, // Reduce retries
-        refetchOnWindowFocus: false,
-        refetchOnMount: false,
-        refetchOnReconnect: false,
-      },
+// Create QueryClient outside component to prevent recreation
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 0,
+      retry: 1,
+      refetchOnWindowFocus: false,
+      refetchOnMount: false,
+      refetchOnReconnect: false,
     },
-    // Disable logger to prevent console errors
-    logger: {
-      log: () => {},
-      warn: () => {},
-      error: () => {},
-    },
-  }))
+  },
+  logger: {
+    log: () => {},
+    warn: () => {},
+    error: () => {},
+  },
+})
 
-  // Prevent hydration mismatch by only rendering after mount
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+function WalletProvidersClient({ children }: WalletProvidersClientProps) {
+  const isHydrated = useHydration()
 
-  // Return a loading placeholder during hydration to prevent mismatch
-  if (!mounted) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        {children}
-      </div>
-    )
+  // Return children without wallet providers during SSR
+  if (!isHydrated) {
+    return <>{children}</>
   }
 
   return (
@@ -63,3 +54,5 @@ export default function WalletProvidersClient({ children }: WalletProvidersClien
     </QueryClientProvider>
   )
 }
+
+export default WalletProvidersClient

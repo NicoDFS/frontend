@@ -1,6 +1,6 @@
 'use client'
 
-import { ReactNode, useState, useEffect } from 'react'
+import { ReactNode } from 'react'
 import dynamic from 'next/dynamic'
 
 interface WalletProvidersProps {
@@ -12,21 +12,11 @@ const DynamicWalletProviders = dynamic(
   () => import('./WalletProvidersClient'),
   {
     ssr: false,
-    loading: () => <div>Loading wallet providers...</div>
+    loading: () => null // Return null instead of loading text to prevent layout shift
   }
 )
 
 export function WalletProviders({ children }: WalletProvidersProps) {
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  if (!mounted) {
-    return <>{children}</>
-  }
-
   return (
     <DynamicWalletProviders>
       {children}
