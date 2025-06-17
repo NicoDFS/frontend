@@ -1,5 +1,5 @@
 import { createConnector } from 'wagmi'
-import { Address, Hash } from 'viem'
+import { Address, Hash, TransactionRequest } from 'viem'
 import { kalychain } from '@/config/chains'
 
 // Internal wallet state management
@@ -17,10 +17,68 @@ interface InternalWalletState {
   }>
 }
 
+// Helper functions for state persistence
+const STORAGE_KEY = 'kalyswap_internal_wallet_state'
+
+const saveStateToStorage = (state: InternalWalletState) => {
+  // Only save to localStorage on the client side
+  if (typeof window === 'undefined') return
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  } catch (error) {
+    console.warn('Failed to save internal wallet state:', error)
+  }
+}
+
+const loadStateFromStorage = (): InternalWalletState => {
+  // Only access localStorage on the client side
+  if (typeof window === 'undefined') {
+    return {
+      isConnected: false,
+      activeWallet: null,
+      availableWallets: []
+    }
+  }
+
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      // Validate the structure
+      if (parsed && typeof parsed === 'object') {
+        return {
+          isConnected: Boolean(parsed.isConnected),
+          activeWallet: parsed.activeWallet || null,
+          availableWallets: Array.isArray(parsed.availableWallets) ? parsed.availableWallets : []
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to load internal wallet state:', error)
+  }
+
+  return {
+    isConnected: false,
+    activeWallet: null,
+    availableWallets: []
+  }
+}
+
+// Initialize with empty state during SSR, will be hydrated on client
 let internalWalletState: InternalWalletState = {
   isConnected: false,
   activeWallet: null,
   availableWallets: []
+}
+
+// Client-side initialization
+let isInitialized = false
+const initializeClientState = () => {
+  if (typeof window !== 'undefined' && !isInitialized) {
+    internalWalletState = loadStateFromStorage()
+    isInitialized = true
+  }
 }
 
 // Event emitter for wallet state changes
@@ -35,7 +93,14 @@ export const internalWalletConnector = createConnector((config) => {
   
   async connect({ chainId } = {}) {
     try {
+      // Initialize client state if not already done
+      initializeClientState()
+
       // Check if user is authenticated
+      if (typeof window === 'undefined') {
+        throw new Error('Internal wallet can only be used on the client side')
+      }
+
       const token = localStorage.getItem('auth_token')
       if (!token) {
         throw new Error('Please login to access your internal wallets')
@@ -89,6 +154,9 @@ export const internalWalletConnector = createConnector((config) => {
 
       internalWalletState.isConnected = true
 
+      // Save state to localStorage
+      saveStateToStorage(internalWalletState)
+
       // Emit connect event
       eventTarget.dispatchEvent(new CustomEvent('connect', {
         detail: {
@@ -111,15 +179,22 @@ export const internalWalletConnector = createConnector((config) => {
     internalWalletState.activeWallet = null
     internalWalletState.availableWallets = []
 
+    // Save state to localStorage
+    saveStateToStorage(internalWalletState)
+
     // Emit disconnect event
     eventTarget.dispatchEvent(new CustomEvent('disconnect'))
   },
 
   async getAccounts() {
-    if (!internalWalletState.isConnected || !internalWalletState.activeWallet) {
-      return []
+    // Initialize client state if not already done
+    initializeClientState()
+
+    // Return account if we have an active wallet, regardless of connection state
+    if (internalWalletState.activeWallet) {
+      return [internalWalletState.activeWallet.address]
     }
-    return [internalWalletState.activeWallet.address]
+    return []
   },
 
   async getChainId() {
@@ -136,6 +211,25 @@ export const internalWalletConnector = createConnector((config) => {
         if (method === 'eth_accounts') {
           return internalWalletState.activeWallet ? [internalWalletState.activeWallet.address] : []
         }
+        if (method === 'eth_sendTransaction') {
+          // Handle eth_sendTransaction by using our internal sendTransaction method
+          if (!params || !params[0]) {
+            throw new Error('Transaction parameters required')
+          }
+
+          const txParams = params[0]
+          const transactionRequest: TransactionRequest = {
+            to: txParams.to,
+            value: txParams.value ? BigInt(txParams.value) : undefined,
+            data: txParams.data,
+            gas: txParams.gas ? BigInt(txParams.gas) : undefined,
+            gasPrice: txParams.gasPrice ? BigInt(txParams.gasPrice) : undefined,
+          }
+
+          // Use the connector's sendTransaction method
+          const connector = this as any // Type assertion to access sendTransaction
+          return await connector.sendTransaction(transactionRequest)
+        }
         throw new Error(`Method ${method} not supported by internal wallet`)
       },
       on: () => {},
@@ -144,8 +238,34 @@ export const internalWalletConnector = createConnector((config) => {
   },
 
   async isAuthorized() {
+    // Initialize client state if not already done
+    initializeClientState()
+
+    // Only check authorization on client side
+    if (typeof window === 'undefined') return false
+
     const token = localStorage.getItem('auth_token')
-    return !!token && internalWalletState.isConnected
+    // Check if we have a valid auth token and persisted wallet state
+    if (!token) return false
+
+    // Always restore connection if we have a persisted active wallet
+    if (internalWalletState.activeWallet) {
+      // Ensure connection state is set
+      internalWalletState.isConnected = true
+      saveStateToStorage(internalWalletState)
+
+      // Always emit connect event to ensure wagmi knows about the connection
+      setTimeout(() => {
+        eventTarget.dispatchEvent(new CustomEvent('connect', {
+          detail: {
+            accounts: [internalWalletState.activeWallet!.address],
+            chainId: internalWalletState.activeWallet!.chainId
+          }
+        }))
+      }, 0)
+    }
+
+    return !!token && !!internalWalletState.activeWallet
   },
 
   async switchChain({ chainId }) {
@@ -179,7 +299,7 @@ export const internalWalletConnector = createConnector((config) => {
     // Handle provider messages if needed
   },
 
-  async sendTransaction(parameters) {
+  async sendTransaction(parameters: TransactionRequest) {
     if (!internalWalletState.activeWallet) {
       throw new Error('No wallet connected')
     }
@@ -283,7 +403,7 @@ export const internalWalletConnector = createConnector((config) => {
     }
   },
 
-  async signMessage({ message }) {
+  async signMessage({ message }: { message: string }) {
     if (!internalWalletState.activeWallet) {
       throw new Error('No wallet connected')
     }
@@ -398,11 +518,17 @@ async function promptForPassword(): Promise<string | null> {
 
 // Export helper functions for wallet management
 export const internalWalletUtils = {
-  getState: () => internalWalletState,
+  getState: () => {
+    initializeClientState()
+    return internalWalletState
+  },
   selectWallet: (walletId: string) => {
+    initializeClientState()
     const wallet = internalWalletState.availableWallets.find(w => w.id === walletId)
     if (wallet) {
       internalWalletState.activeWallet = wallet
+      internalWalletState.isConnected = true
+      saveStateToStorage(internalWalletState)
       eventTarget.dispatchEvent(new CustomEvent('accountsChanged', { detail: [wallet.address] }))
     }
   },
@@ -411,5 +537,9 @@ export const internalWalletUtils = {
   },
   removeEventListener: (event: string, handler: EventListener) => {
     eventTarget.removeEventListener(event, handler)
+  },
+  // Force initialization for client-side usage
+  initialize: () => {
+    initializeClientState()
   }
 }

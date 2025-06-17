@@ -174,7 +174,7 @@ export function useExplorerTransactions({
       const transformedTransactions: ExplorerTransaction[] = data.items
         .filter(tx => tx.to.hash.toLowerCase() === ROUTER_ADDRESS.toLowerCase()) // Only transactions TO the router
         .map(tx => {
-          const tokenPair = tx.raw_input ? decodeSwapInput(tx.raw_input, tx.method) : null;
+          const tokenPair = tx.raw_input ? decodeSwapInput(tx.raw_input, tx.method) || undefined : undefined;
           return {
             id: tx.hash,
             hash: tx.hash,

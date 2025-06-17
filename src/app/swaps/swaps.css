@@ -371,6 +371,13 @@
   transition: all 0.2s ease;
 }
 
+/* Force solid background for token selector modal */
+[data-radix-dialog-content] {
+  background: rgb(15 23 42) !important;
+  border: 1px solid rgb(51 65 85) !important;
+  backdrop-filter: none !important;
+}
+
 .token-selector:hover {
   background: rgba(30, 64, 175, 0.2);
   border-color: rgba(59, 130, 246, 0.3);

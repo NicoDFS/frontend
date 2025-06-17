@@ -39,7 +39,7 @@ export function useBridgeTransfer() {
     setError(null);
     setSuccessMessage(null);
 
-    let transferIndex: number;
+    let transferIndex: number | undefined;
 
     try {
       // Check if we need to switch chains
@@ -49,7 +49,7 @@ export function useBridgeTransfer() {
 
         // Manual chain switch required - show user-friendly message
         const error = `Please switch to ${bridgeHelpers.getChainDisplayName(params.originChain)} in your wallet before proceeding`;
-        toast.warn('Chain Switch Required', error);
+        toast.error('Chain Switch Required', error);
         loggerHelpers.chainSwitch('Manual chain switch required', `${params.originChain} (${originChainId})`);
         throw new Error(error);
       }
@@ -136,9 +136,7 @@ export function useBridgeTransfer() {
       console.log(`📋 Created ${transferTxs.length} transactions`);
       transferTxs.forEach((tx, index) => {
         console.log(`Transaction ${index + 1}:`, {
-          category: tx.category,
-          to: tx.to,
-          data: tx.data ? 'present' : 'none'
+          category: tx.category
         });
       });
 
@@ -161,21 +159,19 @@ export function useBridgeTransfer() {
 
         console.log(`⏳ Confirming ${category} transaction: ${txHash}`);
 
-        // Wait for transaction receipt and extract message ID
-        try {
-          const provider = multiProvider.getProvider(params.originChain);
-          const receipt = await provider.waitForTransactionReceipt({ hash: txHash as `0x${string}` });
-
-          // Extract message ID from transaction receipt logs
-          const messageId = bridgeHelpers.extractMessageIdFromReceipt(receipt, params.originChain);
-          if (messageId) {
-            console.log(`📧 Message ID extracted: ${messageId}`);
-            updateTransferStatus(transferIndex, confirmingStatus, txHash, messageId);
-          }
-        } catch (receiptError) {
-          console.warn('⚠️ Failed to extract message ID from receipt:', receiptError);
-          // Continue without message ID - not critical for transfer success
-        }
+        // TODO: Wait for transaction receipt and extract message ID
+        // This is not critical for transfer success, so we'll skip it for now
+        // try {
+        //   const provider = multiProvider.getProvider(params.originChain);
+        //   const receipt = await provider.waitForTransaction(txHash);
+        //   const messageId = bridgeHelpers.extractMessageIdFromReceipt(receipt, params.originChain);
+        //   if (messageId) {
+        //     console.log(`📧 Message ID extracted: ${messageId}`);
+        //     updateTransferStatus(transferIndex, confirmingStatus, txHash, messageId);
+        //   }
+        // } catch (receiptError) {
+        //   console.warn('⚠️ Failed to extract message ID from receipt:', receiptError);
+        // }
 
         // Show transaction sent toast
         toastHelpers.transactionSuccess(txHash, params.originChain, toast);

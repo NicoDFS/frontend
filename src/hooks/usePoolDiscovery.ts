@@ -89,9 +89,9 @@ export function usePoolDiscovery() {
       });
 
       const [symbol, name, decimals] = await Promise.all([
-        tokenContract.read.symbol(),
-        tokenContract.read.name(),
-        tokenContract.read.decimals()
+        tokenContract.read.symbol([]),
+        tokenContract.read.name([]),
+        tokenContract.read.decimals([])
       ]);
 
       return {
@@ -124,24 +124,25 @@ export function usePoolDiscovery() {
 
       // Get basic pair info
       const [reserves, totalSupply, token0Address, token1Address] = await Promise.all([
-        pairContract.read.getReserves(),
-        pairContract.read.totalSupply(),
-        pairContract.read.token0(),
-        pairContract.read.token1()
+        pairContract.read.getReserves([]),
+        pairContract.read.totalSupply([]),
+        pairContract.read.token0([]),
+        pairContract.read.token1([])
       ]);
 
       // Get token information
       const [token0Info, token1Info] = await Promise.all([
-        getTokenInfo(token0Address),
-        getTokenInfo(token1Address)
+        getTokenInfo(token0Address as string),
+        getTokenInfo(token1Address as string)
       ]);
 
       if (!token0Info || !token1Info) return null;
 
       // Format reserves and total supply
-      const reserve0 = formatUnits(reserves[0], token0Info.decimals);
-      const reserve1 = formatUnits(reserves[1], token1Info.decimals);
-      const formattedTotalSupply = formatUnits(totalSupply, 18);
+      const reservesArray = reserves as [bigint, bigint, number];
+      const reserve0 = formatUnits(reservesArray[0], token0Info.decimals);
+      const reserve1 = formatUnits(reservesArray[1], token1Info.decimals);
+      const formattedTotalSupply = formatUnits(totalSupply as bigint, 18);
 
       return {
         id: pairAddress,
@@ -176,7 +177,7 @@ export function usePoolDiscovery() {
       });
 
       // Get total number of pairs
-      const allPairsLength = await factoryContract.read.allPairsLength();
+      const allPairsLength = await factoryContract.read.allPairsLength([]);
       const totalPairs = Number(allPairsLength);
 
       console.log(`📊 Found ${totalPairs} total pairs in factory`);
@@ -197,7 +198,7 @@ export function usePoolDiscovery() {
         const pairAddresses = await Promise.all(batch);
 
         // Get pool data for each pair in this batch
-        const poolDataPromises = pairAddresses.map(address => getPoolData(address));
+        const poolDataPromises = pairAddresses.map(address => getPoolData(address as string));
         const poolDataResults = await Promise.all(poolDataPromises);
 
         // Filter out null results and add to pools array

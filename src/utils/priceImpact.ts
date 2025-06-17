@@ -1,7 +1,6 @@
 'use client';
 
-import { parseUnits, formatUnits, getContract } from 'viem';
-import { PublicClient } from 'wagmi';
+import { parseUnits, formatUnits, getContract, PublicClient } from 'viem';
 import { getContractAddress, DEFAULT_CHAIN_ID } from '@/config/contracts';
 import { FACTORY_ABI, PAIR_ABI } from '@/config/abis';
 
@@ -75,16 +74,16 @@ export async function getPairReserves(
 
     // Get reserves and token addresses
     const [reserves, token0, token1] = await Promise.all([
-      pairContract.read.getReserves(),
-      pairContract.read.token0(),
-      pairContract.read.token1(),
+      pairContract.read.getReserves([]),
+      pairContract.read.token0([]),
+      pairContract.read.token1([]),
     ]);
 
     return {
-      reserve0: reserves[0],
-      reserve1: reserves[1],
-      token0: token0.toLowerCase(),
-      token1: token1.toLowerCase(),
+      reserve0: (reserves as [bigint, bigint, number])[0],
+      reserve1: (reserves as [bigint, bigint, number])[1],
+      token0: (token0 as string).toLowerCase(),
+      token1: (token1 as string).toLowerCase(),
     };
   } catch (error) {
     console.error('Error getting pair reserves:', error);
@@ -102,7 +101,7 @@ export function calculatePriceImpactFromReserves(
 ): string {
   try {
     // Ensure we have valid reserves
-    if (reserveIn === 0n || reserveOut === 0n || inputAmount === 0n) {
+    if (reserveIn === BigInt(0) || reserveOut === BigInt(0) || inputAmount === BigInt(0)) {
       return '0';
     }
 

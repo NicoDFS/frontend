@@ -19,6 +19,7 @@ interface SignupFormData {
   password: string;
   confirmPassword: string;
   createWallet: boolean;
+  securityAcknowledged: boolean;
 }
 
 // GraphQL mutation for user registration
@@ -54,6 +55,7 @@ export default function SignupPage() {
     password: '',
     confirmPassword: '',
     createWallet: true,
+    securityAcknowledged: false,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,6 +87,11 @@ export default function SignupPage() {
 
     if (formData.password.length < 8) {
       setError('Password must be at least 8 characters long');
+      return;
+    }
+
+    if (!formData.securityAcknowledged) {
+      setError('You must acknowledge the security warning to create an account');
       return;
     }
 
@@ -254,44 +261,45 @@ export default function SignupPage() {
                 </div>
               </div>
 
+              {/* Security Warning and Acknowledgment */}
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-amber-800 mb-2">Important Security Notice</h4>
+                    <p className="text-sm text-amber-700 mb-3">
+                      <strong>We do not offer password recovery</strong> to maintain the highest level of wallet security.
+                      If you lose your password, you will permanently lose access to your wallet and funds.
+                    </p>
+                    <p className="text-sm text-amber-700 mb-4">
+                      Please save your password in a secure location such as a password manager or write it down and store it safely.
+                    </p>
+                    <div className="flex items-start gap-3">
+                      <input
+                        id="securityAcknowledged"
+                        name="securityAcknowledged"
+                        type="checkbox"
+                        checked={formData.securityAcknowledged}
+                        onChange={(e) => setFormData(prev => ({ ...prev, securityAcknowledged: e.target.checked }))}
+                        className="form-checkbox mt-1"
+                        required
+                      />
+                      <label htmlFor="securityAcknowledged" className="text-sm text-amber-800 font-medium">
+                        I understand that password recovery is not available and I am responsible for keeping my password safe
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <button
                 type="submit"
                 className="submit-button"
-                disabled={loading}
+                disabled={loading || !formData.securityAcknowledged}
               >
                 {loading ? 'Creating account...' : 'Create Account'}
               </button>
             </form>
-
-            <div className="divider">
-              <span className="divider-text">Or continue with</span>
-            </div>
-
-            <div className="wallet-buttons">
-              <button
-                type="button"
-                className="wallet-button"
-                onClick={() => alert('MetaMask integration coming soon!')}
-              >
-                <svg className="h-5 w-5" viewBox="0 0 35 33" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M32.9582 1L19.8241 10.7183L22.2665 5.09082L32.9582 1Z" fill="#E17726" stroke="#E17726" strokeWidth="0.25" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M2.65881 1L15.6758 10.809L13.3529 5.09082L2.65881 1Z" fill="#E27625" stroke="#E27625" strokeWidth="0.25" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M28.2599 23.5363L24.7437 28.8899L32.3234 30.9315L34.5454 23.6501L28.2599 23.5363Z" fill="#E27625" stroke="#E27625" strokeWidth="0.25" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M1.07227 23.6501L3.28277 30.9315L10.8539 28.8899L7.34619 23.5363L1.07227 23.6501Z" fill="#E27625" stroke="#E27625" strokeWidth="0.25" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                MetaMask
-              </button>
-              <button
-                type="button"
-                className="wallet-button"
-                onClick={() => alert('WalletConnect integration coming soon!')}
-              >
-                <svg className="h-5 w-5" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M9.58818 11.8556C13.1293 8.31442 18.8706 8.31442 22.4117 11.8556L22.8379 12.2818C23.015 12.4589 23.015 12.7459 22.8379 12.9231L21.3801 14.3809C21.2915 14.4695 21.148 14.4695 21.0594 14.3809L20.473 13.7945C18.0026 11.3241 13.9973 11.3241 11.5269 13.7945L10.8989 14.4225C10.8103 14.5111 10.6668 14.5111 10.5782 14.4225L9.12041 12.9647C8.94331 12.7876 8.94331 12.5005 9.12041 12.3234L9.58818 11.8556ZM25.4268 14.8707L26.7243 16.1682C26.9014 16.3453 26.9014 16.6323 26.7243 16.8094L20.8737 22.66C20.6966 22.8371 20.4096 22.8371 20.2325 22.66L16.2918 18.7193C16.2475 18.675 16.1758 18.675 16.1315 18.7193L12.1908 22.66C12.0137 22.8371 11.7267 22.8371 11.5496 22.66L5.67568 16.7861C5.49858 16.609 5.49858 16.322 5.67568 16.1449L6.97318 14.8474C7.15028 14.6703 7.43729 14.6703 7.61439 14.8474L11.5551 18.7881C11.5994 18.8324 11.6711 18.8324 11.7154 18.7881L15.6561 14.8474C15.8332 14.6703 16.1202 14.6703 16.2973 14.8474L20.238 18.7881C20.2823 18.8324 20.354 18.8324 20.3983 18.7881L24.339 14.8474C24.5161 14.6703 24.8031 14.6703 24.9802 14.8474L25.4268 14.8707Z" fill="#3396FF"/>
-                </svg>
-                WalletConnect
-              </button>
-            </div>
 
             <div className="login-link">
               Already have an account?{' '}

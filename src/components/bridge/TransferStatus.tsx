@@ -7,7 +7,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ExternalLink, Clock, CheckCircle, AlertCircle, ArrowRight, Copy } from 'lucide-react';
-import { useTransferStore, TransferStatus, transferStatusHelpers } from '@/hooks/bridge/useTransferStore';
+import { useTransferStore, TransferStatus as TransferStatusEnum, transferStatusHelpers } from '@/hooks/bridge/useTransferStore';
 import { bridgeHelpers } from '@/utils/bridge/bridgeHelpers';
 import { useToast } from '@/components/ui/toast';
 
@@ -51,14 +51,14 @@ export function TransferStatus({ className }: TransferStatusProps) {
 
   const getProgressPercentage = () => {
     const statusOrder = [
-      TransferStatus.Preparing,
-      TransferStatus.CreatingTxs,
-      TransferStatus.SigningApproval,
-      TransferStatus.ConfirmingApproval,
-      TransferStatus.SigningTransfer,
-      TransferStatus.ConfirmingTransfer,
-      TransferStatus.ConfirmedTransfer,
-      TransferStatus.Delivered,
+      TransferStatusEnum.Preparing,
+      TransferStatusEnum.CreatingTxs,
+      TransferStatusEnum.SigningApproval,
+      TransferStatusEnum.ConfirmingApproval,
+      TransferStatusEnum.SigningTransfer,
+      TransferStatusEnum.ConfirmingTransfer,
+      TransferStatusEnum.ConfirmedTransfer,
+      TransferStatusEnum.Delivered,
     ];
 
     const currentIndex = statusOrder.indexOf(latestTransfer.status);

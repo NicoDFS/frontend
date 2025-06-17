@@ -49,32 +49,37 @@ export function useUserPositions(poolAddresses: string[]) {
       // Get user's LP token balance and total supply
       const [lpTokenBalance, totalSupply, reserves] = await Promise.all([
         pairContract.read.balanceOf([address]),
-        pairContract.read.totalSupply(),
-        pairContract.read.getReserves()
+        pairContract.read.totalSupply([]),
+        pairContract.read.getReserves([])
       ]);
 
-      const lpTokenBalanceFormatted = formatUnits(lpTokenBalance, 18);
-      const totalSupplyFormatted = formatUnits(totalSupply, 18);
+      const lpTokenBalanceFormatted = formatUnits(lpTokenBalance as bigint, 18);
+      const totalSupplyFormatted = formatUnits(totalSupply as bigint, 18);
+
+      // Cast types properly
+      const lpTokenBalanceBigInt = lpTokenBalance as bigint;
+      const totalSupplyBigInt = totalSupply as bigint;
+      const reservesArray = reserves as [bigint, bigint, number];
 
       // Calculate pool share percentage
-      const poolShare = totalSupply > 0n
-        ? ((Number(lpTokenBalance) / Number(totalSupply)) * 100).toFixed(4)
+      const poolShare = totalSupplyBigInt > BigInt(0)
+        ? ((Number(lpTokenBalanceBigInt) / Number(totalSupplyBigInt)) * 100).toFixed(4)
         : '0';
 
       // Calculate user's share of each token
-      const userShare = totalSupply > 0n ? Number(lpTokenBalance) / Number(totalSupply) : 0;
-      const token0Amount = (Number(formatUnits(reserves[0], 18)) * userShare).toFixed(6);
-      const token1Amount = (Number(formatUnits(reserves[1], 18)) * userShare).toFixed(6);
+      const userShare = totalSupplyBigInt > BigInt(0) ? Number(lpTokenBalanceBigInt) / Number(totalSupplyBigInt) : 0;
+      const token0Amount = (Number(formatUnits(reservesArray[0], 18)) * userShare).toFixed(6);
+      const token1Amount = (Number(formatUnits(reservesArray[1], 18)) * userShare).toFixed(6);
 
       return {
         poolAddress,
         lpTokenBalance: lpTokenBalanceFormatted,
-        lpTokenBalanceRaw: lpTokenBalance,
+        lpTokenBalanceRaw: lpTokenBalanceBigInt,
         totalSupply: totalSupplyFormatted,
         poolShare,
         token0Amount,
         token1Amount,
-        hasPosition: lpTokenBalance > 0n
+        hasPosition: lpTokenBalanceBigInt > BigInt(0)
       };
     } catch (error) {
       return null;

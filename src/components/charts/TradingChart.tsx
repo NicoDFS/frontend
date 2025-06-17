@@ -306,7 +306,6 @@ export default function TradingChart({
         },
         mode: PriceScaleMode.Normal,
         visible: false,
-        drawTicks: false,
         borderVisible: false,
       });
 

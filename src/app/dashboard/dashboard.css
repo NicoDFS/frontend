@@ -1,9 +1,11 @@
-/* Dashboard specific styles */
+/* Dashboard specific styles - Dark Theme with Glass Morphism */
 
 .dashboard-container {
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem 1rem;
+  min-height: calc(100vh - 64px);
+  position: relative;
 }
 
 .dashboard-header {
@@ -20,38 +22,43 @@
 }
 
 .dashboard-subtitle {
-  color: #64748b;
+  color: #94a3b8;
   font-size: 1rem;
 }
 
 .wallet-card {
-  background: white;
-  border-radius: 1rem;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  transition: transform 0.2s, box-shadow 0.2s;
+  background: rgba(30, 58, 138, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(30, 58, 138, 0.3);
+  transition: all 0.3s ease;
+  color: white;
   overflow: hidden;
 }
 
 .wallet-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 12px 40px rgba(30, 58, 138, 0.4);
 }
 
 .wallet-header {
   padding: 1.5rem;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid rgba(59, 130, 246, 0.2);
 }
 
 .wallet-address {
   font-family: monospace;
   font-size: 0.875rem;
-  color: #64748b;
-  background: #f8fafc;
+  color: #94a3b8;
+  background: rgba(30, 58, 138, 0.2);
+  border: 1px solid rgba(59, 130, 246, 0.2);
   padding: 0.5rem;
   border-radius: 0.5rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  backdrop-filter: blur(8px);
 }
 
 .wallet-balance {
@@ -59,11 +66,12 @@
   font-weight: 700;
   margin-top: 0.5rem;
   margin-bottom: 0.25rem;
+  color: white;
 }
 
 .wallet-balance-usd {
   font-size: 0.875rem;
-  color: #64748b;
+  color: #94a3b8;
 }
 
 .token-list {
@@ -74,23 +82,31 @@
   display: flex;
   align-items: center;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+  transition: background-color 0.2s ease;
 }
 
 .token-item:last-child {
   border-bottom: none;
 }
 
+.token-item:hover {
+  background: rgba(30, 58, 138, 0.1);
+}
+
 .token-icon {
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
-  background: #f1f5f9;
+  background: rgba(30, 58, 138, 0.2);
+  border: 1px solid rgba(59, 130, 246, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
   margin-right: 0.75rem;
   flex-shrink: 0;
+  color: #94a3b8;
+  font-weight: 600;
 }
 
 .token-details {
@@ -100,11 +116,12 @@
 .token-symbol {
   font-weight: 600;
   font-size: 0.875rem;
+  color: white;
 }
 
 .token-balance {
   font-size: 0.875rem;
-  color: #64748b;
+  color: #94a3b8;
 }
 
 .wallet-actions {
@@ -123,7 +140,16 @@
   border-radius: 0.5rem;
   font-weight: 500;
   font-size: 0.875rem;
-  transition: background-color 0.2s;
+  background: rgba(30, 58, 138, 0.2);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  color: white;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+}
+
+.action-button:hover {
+  background: rgba(30, 58, 138, 0.3);
+  border-color: rgba(59, 130, 246, 0.4);
 }
 
 .create-wallet-card {
@@ -133,35 +159,51 @@
   justify-content: center;
   padding: 2rem;
   text-align: center;
-  border: 2px dashed #e2e8f0;
-  border-radius: 1rem;
-  background: #f8fafc;
+  border: 2px dashed rgba(59, 130, 246, 0.3);
+  border-radius: 12px;
+  background: rgba(30, 58, 138, 0.1);
+  backdrop-filter: blur(10px);
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.3s ease;
+  color: white;
 }
 
 .create-wallet-card:hover {
-  background: #f1f5f9;
+  background: rgba(30, 58, 138, 0.2);
+  border-color: rgba(59, 130, 246, 0.5);
+  transform: translateY(-2px);
 }
 
 .create-wallet-icon {
   width: 3rem;
   height: 3rem;
-  color: #64748b;
+  color: #94a3b8;
   margin-bottom: 1rem;
 }
 
 .create-wallet-text {
   font-weight: 500;
-  color: #64748b;
+  color: #94a3b8;
 }
 
 .export-dialog-content {
   max-width: 32rem;
+  background: rgba(30, 58, 138, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  color: white;
 }
 
 .password-input {
   margin-top: 1rem;
+  background: rgba(30, 58, 138, 0.2);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  color: white;
+  backdrop-filter: blur(8px);
+}
+
+.password-input::placeholder {
+  color: #94a3b8;
 }
 
 .export-actions {
@@ -172,7 +214,8 @@
 }
 
 .keystore-display {
-  background: #f1f5f9;
+  background: rgba(30, 58, 138, 0.2);
+  border: 1px solid rgba(59, 130, 246, 0.2);
   padding: 1rem;
   border-radius: 0.5rem;
   font-family: monospace;
@@ -180,6 +223,8 @@
   max-height: 10rem;
   overflow-y: auto;
   margin-top: 1rem;
+  color: #94a3b8;
+  backdrop-filter: blur(8px);
 }
 
 .copy-button {
@@ -187,13 +232,43 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  background: rgba(30, 58, 138, 0.2);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  color: white;
+}
+
+/* Dialog and Dropdown Overrides for Dark Theme */
+[data-radix-popper-content-wrapper] {
+  z-index: 50;
+}
+
+.dashboard-container [role="dialog"] {
+  background: rgb(15 23 42) !important;
+  border: 1px solid rgb(51 65 85) !important;
+  color: white !important;
+}
+
+.dashboard-container [role="listbox"],
+.dashboard-container [data-radix-select-content] {
+  background: rgb(30 41 59) !important;
+  border: 1px solid rgb(51 65 85) !important;
+  color: white !important;
+  backdrop-filter: none !important;
+}
+
+.dashboard-container [role="option"] {
+  color: white !important;
+}
+
+.dashboard-container [role="option"]:hover {
+  background: rgba(59, 130, 246, 0.2) !important;
 }
 
 @media (max-width: 768px) {
   .dashboard-container {
     padding: 1rem;
   }
-  
+
   .wallet-grid {
     grid-template-columns: 1fr;
   }

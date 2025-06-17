@@ -69,7 +69,6 @@ export default function SwapHistory({
     transactions: userSwapTransactions,
     loading: userSwapLoading,
     error: userSwapError,
-    fetchTransactions: fetchUserTransactions,
     getFilteredTransactions,
     pendingCount
   } = useSwapTransactions({
@@ -83,8 +82,9 @@ export default function SwapHistory({
     ...getFilteredTransactions('all'),
     ...userExplorerTransactions
   ].sort((a, b) => {
-    const aTime = 'timestamp' in a ? a.timestamp.getTime() : new Date(a.timestamp).getTime();
-    const bTime = 'timestamp' in b ? b.timestamp.getTime() : new Date(b.timestamp).getTime();
+    // Both SwapTransaction and ExplorerTransaction have timestamp as Date objects
+    const aTime = a.timestamp.getTime();
+    const bTime = b.timestamp.getTime();
     return bTime - aTime;
   }).slice(0, maxItems);
 
@@ -97,7 +97,7 @@ export default function SwapHistory({
   const error = activeTab === 'recent' ? recentError : (userExplorerError || userSwapError);
   const refetch = activeTab === 'recent' ? refetchRecent : () => {
     refetchUserExplorer();
-    fetchUserTransactions();
+    // Note: useSwapTransactions auto-refreshes, no manual fetch needed
   };
 
   // Format time display

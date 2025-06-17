@@ -95,9 +95,9 @@ export default function TokenSelector({
         });
 
         const [symbol, name, decimals] = await Promise.all([
-          tokenContract.read.symbol(),
-          tokenContract.read.name(),
-          tokenContract.read.decimals()
+          tokenContract.read.symbol([]),
+          tokenContract.read.name([]),
+          tokenContract.read.decimals([])
         ]);
 
         const customToken: Token = {

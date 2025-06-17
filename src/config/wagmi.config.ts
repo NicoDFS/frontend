@@ -1,20 +1,51 @@
-import { getDefaultConfig } from '@rainbow-me/rainbowkit'
+import { getDefaultConfig, getDefaultWallets, connectorsForWallets } from '@rainbow-me/rainbowkit'
+import { createConfig, http } from 'wagmi'
 import { kalychain, supportedChains } from './chains'
 import { arbitrum, bsc, polygon } from 'viem/chains'
+import { kalyswapWallet } from './wallets'
 
 // Get project ID from environment variables
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'your-project-id'
 
-// Use default Rainbow Kit config with minimal settings
-export const wagmiConfig = getDefaultConfig({
-  appName: 'KalySwap V3',
-  projectId,
-  chains: supportedChains,
-  ssr: false,
-})
+// Create wagmi config with internal wallet registered for auto-reconnection
+const createWagmiConfigWithInternalWallet = () => {
+  // Get default wallets
+  const { wallets } = getDefaultWallets({
+    appName: 'KalySwap V3',
+    projectId,
+  })
 
-// We'll handle the internal wallet connector separately in the component
-// by importing and using it directly when needed
+  // Add our internal wallet to ensure it's registered for auto-reconnection
+  const allWallets = [
+    ...wallets,
+    {
+      groupName: 'KalySwap',
+      wallets: [kalyswapWallet],
+    },
+  ]
+
+  // Create connectors - this registers the internal wallet for auto-reconnection
+  const connectors = connectorsForWallets(allWallets, {
+    appName: 'KalySwap V3',
+    projectId,
+  })
+
+  // Create transports
+  const transports = supportedChains.reduce((acc, chain) => {
+    acc[chain.id] = http()
+    return acc
+  }, {} as Record<number, any>)
+
+  return createConfig({
+    chains: supportedChains,
+    connectors,
+    transports,
+    ssr: false,
+  })
+}
+
+// Use config with internal wallet registered
+export const wagmiConfig = createWagmiConfigWithInternalWallet()
 
 // DEBUG: Log the configuration (only in development)
 if (process.env.NODE_ENV === 'development') {

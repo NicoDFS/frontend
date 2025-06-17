@@ -18,10 +18,14 @@ interface ConnectWalletProps {
 }
 
 export function ConnectWallet({ children, className }: ConnectWalletProps) {
-  const { isConnected, walletType, address, chainId } = useWallet()
+  const { isConnected, walletType } = useWallet()
+  const { isConnected: wagmiConnected, connector } = useAccount()
   const [showWalletModal, setShowWalletModal] = useState(false)
   const { connect, connectors } = useConnect()
   const router = useRouter()
+
+  // Use wagmi connection state as the primary source of truth
+  const actuallyConnected = wagmiConnected || isConnected
 
   // DEBUG: Log available connectors (only in development and not during render)
   useEffect(() => {
@@ -38,26 +42,16 @@ export function ConnectWallet({ children, className }: ConnectWalletProps) {
   // Custom Connect Button approach - more reliable than trying to integrate with Rainbow Kit modal
   return (
     <div className={className}>
-      {isConnected ? (
+      {actuallyConnected ? (
         // Show connected state with Rainbow Kit button
-        <div className="flex items-center gap-2">
-          <ConnectButton
-            showBalance={false}
-            chainStatus="icon"
-            accountStatus={{
-              smallScreen: 'avatar',
-              largeScreen: 'full',
-            }}
-          />
-          {walletType && (
-            <Badge
-              variant={walletType === 'external' ? 'default' : 'secondary'}
-              className="text-xs"
-            >
-              {walletType === 'external' ? 'External' : 'Internal'}
-            </Badge>
-          )}
-        </div>
+        <ConnectButton
+          showBalance={false}
+          chainStatus="icon"
+          accountStatus={{
+            smallScreen: 'avatar',
+            largeScreen: 'full',
+          }}
+        />
       ) : (
         // Show custom connect options when not connected
         <Dialog open={showWalletModal} onOpenChange={setShowWalletModal}>

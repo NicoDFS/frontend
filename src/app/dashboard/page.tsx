@@ -56,6 +56,42 @@ import {
 import InternalWalletStatus from '@/components/wallet/InternalWalletStatus';
 import './dashboard.css';
 
+// TokenIcon component for dashboard tokens
+function TokenIcon({ symbol, size = 20 }: { symbol: string; size?: number }) {
+  const [imageError, setImageError] = useState(false);
+
+  // Use KLC logo for wKLC tokens
+  const getTokenIconPath = (symbol: string) => {
+    const lowerSymbol = symbol.toLowerCase();
+    if (lowerSymbol === 'wklc') {
+      return '/tokens/klc.png';
+    }
+    return `/tokens/${lowerSymbol}.png`;
+  };
+
+  if (imageError) {
+    return (
+      <div
+        className="rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold"
+        style={{ width: size, height: size, fontSize: size * 0.4 }}
+      >
+        {symbol.charAt(0)}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={getTokenIconPath(symbol)}
+      alt={symbol}
+      width={size}
+      height={size}
+      className="rounded-full"
+      onError={() => setImageError(true)}
+    />
+  );
+}
+
 // GraphQL queries and mutations
 const SEND_TRANSACTION_MUTATION = `
   mutation SendTransaction($input: SendTransactionInput!) {
@@ -564,7 +600,7 @@ export default function DashboardPage() {
                         <CardHeader className="wallet-header">
                           <div className="flex justify-between items-start">
                             <CardTitle className="text-lg">KalyChain Wallet</CardTitle>
-                            <div className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                            <div className="text-xs bg-blue-500/20 text-blue-300 px-2 py-1 rounded-full border border-blue-500/30">
                               Chain ID: {wallet.chainId}
                             </div>
                           </div>
@@ -574,25 +610,26 @@ export default function DashboardPage() {
                         </CardHeader>
                         <CardContent>
                           <Tabs defaultValue="balance" className="w-full">
-                            <TabsList className="mb-4">
-                              <TabsTrigger value="balance">Balance</TabsTrigger>
-                              <TabsTrigger value="transactions">Transactions</TabsTrigger>
+                            <TabsList className="mb-4 bg-slate-800/50 border-slate-700">
+                              <TabsTrigger value="balance" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">Balance</TabsTrigger>
+                              <TabsTrigger value="transactions" className="data-[state=active]:bg-blue-600 data-[state=active]:text-white">Transactions</TabsTrigger>
                             </TabsList>
 
                             <TabsContent value="balance">
                               <div>
-                                <div className="text-sm text-slate-500 mb-1">Balance</div>
-                                <div className="wallet-balance">
-                                  {wallet.balance ? formatBalance(wallet.balance.klc) : '0'} KLC
+                                <div className="text-sm text-slate-400 mb-1">Balance</div>
+                                <div className="wallet-balance flex items-center gap-2">
+                                  <TokenIcon symbol="KLC" size={24} />
+                                  <span>{wallet.balance ? formatBalance(wallet.balance.klc) : '0'} KLC</span>
                                 </div>
 
                                 {wallet.balance && wallet.balance.tokens.length > 0 && (
                                   <div className="token-list">
-                                    <div className="text-sm text-slate-500 mb-2">Tokens</div>
+                                    <div className="text-sm text-slate-400 mb-2">Tokens</div>
                                     {wallet.balance.tokens.map((token, index) => (
                                       <div key={index} className="token-item">
                                         <div className="token-icon">
-                                          {token.symbol.charAt(0)}
+                                          <TokenIcon symbol={token.symbol} size={32} />
                                         </div>
                                         <div className="token-details">
                                           <div className="token-symbol">{token.symbol}</div>
@@ -607,11 +644,11 @@ export default function DashboardPage() {
 
                             <TabsContent value="transactions">
                               <div className="transactions-list">
-                                <div className="text-sm text-slate-500 mb-2">Recent Transactions</div>
+                                <div className="text-sm text-slate-400 mb-2">Recent Transactions</div>
                                 {wallet.transactions && wallet.transactions.length > 0 ? (
                                   <div className="space-y-3">
                                     {wallet.transactions.map((tx) => (
-                                      <div key={tx.id} className="transaction-item border rounded-md p-3">
+                                      <div key={tx.id} className="transaction-item border border-slate-700 bg-slate-800/30 rounded-md p-3">
                                         <div className="flex justify-between items-start mb-2">
                                           <div className="flex items-center">
                                             {tx.type === 'SEND' ? (
@@ -621,7 +658,7 @@ export default function DashboardPage() {
                                             ) : (
                                               <RefreshCw className="h-4 w-4 text-blue-500 mr-2" />
                                             )}
-                                            <span className="font-medium">
+                                            <span className="font-medium text-white">
                                               {tx.type === 'SEND' ? 'Sent' : tx.type === 'RECEIVE' ? 'Received' : tx.type}
                                             </span>
                                           </div>
@@ -633,34 +670,34 @@ export default function DashboardPage() {
                                             ) : (
                                               <XCircle className="h-4 w-4 text-red-500 mr-1" />
                                             )}
-                                            <span className="text-xs">
+                                            <span className="text-xs text-slate-300">
                                               {tx.status}
                                             </span>
                                           </div>
                                         </div>
 
                                         <div className="text-sm mb-1">
-                                          <span className="text-slate-500 mr-1">Amount:</span>
-                                          <span className="font-medium">
+                                          <span className="text-slate-400 mr-1">Amount:</span>
+                                          <span className="font-medium text-white">
                                             {formatBalance(tx.amount)} {tx.tokenSymbol || 'KLC'}
                                           </span>
                                         </div>
 
                                         {tx.type === 'SEND' && tx.toAddress && (
                                           <div className="text-sm mb-1">
-                                            <span className="text-slate-500 mr-1">To:</span>
-                                            <span className="font-mono text-xs">{formatAddress(tx.toAddress)}</span>
+                                            <span className="text-slate-400 mr-1">To:</span>
+                                            <span className="font-mono text-xs text-slate-300">{formatAddress(tx.toAddress)}</span>
                                           </div>
                                         )}
 
                                         {tx.type === 'RECEIVE' && (
                                           <div className="text-sm mb-1">
-                                            <span className="text-slate-500 mr-1">From:</span>
-                                            <span className="font-mono text-xs">{formatAddress(tx.fromAddress)}</span>
+                                            <span className="text-slate-400 mr-1">From:</span>
+                                            <span className="font-mono text-xs text-slate-300">{formatAddress(tx.fromAddress)}</span>
                                           </div>
                                         )}
 
-                                        <div className="text-xs text-slate-500">
+                                        <div className="text-xs text-slate-400">
                                           {new Date(tx.timestamp).toLocaleString()}
                                         </div>
 
@@ -670,7 +707,7 @@ export default function DashboardPage() {
                                               href={`https://kalyscan.io/tx/${tx.hash}`}
                                               target="_blank"
                                               rel="noopener noreferrer"
-                                              className="text-xs text-blue-600 flex items-center hover:underline"
+                                              className="text-xs text-blue-400 flex items-center hover:underline hover:text-blue-300"
                                             >
                                               View on Explorer
                                               <ExternalLink className="h-3 w-3 ml-1" />
@@ -681,7 +718,7 @@ export default function DashboardPage() {
                                     ))}
                                   </div>
                                 ) : (
-                                  <div className="text-center py-4 text-slate-500">
+                                  <div className="text-center py-4 text-slate-400">
                                     No transactions found
                                   </div>
                                 )}
@@ -709,18 +746,18 @@ export default function DashboardPage() {
                                   Send
                                 </Button>
                               </DialogTrigger>
-                              <DialogContent>
+                              <DialogContent className="export-dialog-content bg-slate-900 border-slate-700 text-white">
                                 <DialogHeader>
-                                  <DialogTitle>Send Assets</DialogTitle>
-                                  <DialogDescription>
+                                  <DialogTitle className="text-white">Send Assets</DialogTitle>
+                                  <DialogDescription className="text-slate-400">
                                     Send KLC or tokens from your wallet to another address.
                                   </DialogDescription>
                                 </DialogHeader>
 
                                 {sendError && (
-                                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 flex items-start gap-2">
-                                    <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
-                                    <p className="text-sm text-red-700">{sendError}</p>
+                                  <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3 mb-4 flex items-start gap-2">
+                                    <AlertCircle className="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" />
+                                    <p className="text-sm text-red-300">{sendError}</p>
                                   </div>
                                 )}
 
@@ -731,10 +768,10 @@ export default function DashboardPage() {
                                       value={sendAsset}
                                       onValueChange={setSendAsset}
                                     >
-                                      <SelectTrigger>
+                                      <SelectTrigger className="bg-slate-800 border-slate-600 text-white">
                                         <SelectValue placeholder="Select asset" />
                                       </SelectTrigger>
-                                      <SelectContent>
+                                      <SelectContent className="select-content">
                                         <SelectItem value="KLC">KLC (Native)</SelectItem>
                                         {wallet.balance?.tokens.map((token) => (
                                           <SelectItem key={token.symbol} value={token.symbol}>
@@ -756,6 +793,7 @@ export default function DashboardPage() {
                                       placeholder="0x..."
                                       autoComplete="off"
                                       spellCheck={false}
+                                      className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-400"
                                     />
                                   </div>
 
@@ -772,16 +810,16 @@ export default function DashboardPage() {
                                         step="0.000001"
                                         min="0"
                                         autoComplete="off"
-                                        className="pr-16"
+                                        className="pr-16 bg-slate-800 border-slate-600 text-white placeholder:text-slate-400"
                                       />
-                                      <div className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-500 pointer-events-none">
+                                      <div className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 pointer-events-none">
                                         {sendAsset}
                                       </div>
                                     </div>
 
                                     {wallet.balance && (
                                       <div className="flex justify-between mt-1">
-                                        <span className="text-xs text-slate-500">
+                                        <span className="text-xs text-slate-400">
                                           Available: {
                                             sendAsset === 'KLC'
                                               ? `${formatBalance(wallet.balance.klc)} KLC`
@@ -790,7 +828,7 @@ export default function DashboardPage() {
                                         </span>
                                         <button
                                           type="button"
-                                          className="text-xs text-blue-600 hover:underline"
+                                          className="text-xs text-blue-400 hover:underline hover:text-blue-300"
                                           onClick={() => {
                                             if (sendAsset === 'KLC') {
                                               setSendAmount(wallet.balance?.klc || '0');
@@ -816,8 +854,9 @@ export default function DashboardPage() {
                                       onChange={(e) => setSendPassword(e.target.value)}
                                       placeholder="Enter your wallet password"
                                       autoComplete="current-password"
+                                      className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-400"
                                     />
-                                    <p className="text-xs text-slate-500 mt-1">
+                                    <p className="text-xs text-slate-400 mt-1">
                                       Your password is required to sign the transaction
                                     </p>
                                   </div>
@@ -875,18 +914,18 @@ export default function DashboardPage() {
                                   Export
                                 </Button>
                               </DialogTrigger>
-                              <DialogContent className="export-dialog-content">
+                              <DialogContent className="export-dialog-content bg-slate-900 border-slate-700 text-white">
                                 <DialogHeader>
-                                  <DialogTitle>Export Wallet</DialogTitle>
-                                  <DialogDescription>
+                                  <DialogTitle className="text-white">Export Wallet</DialogTitle>
+                                  <DialogDescription className="text-slate-400">
                                     Enter your password to export this wallet's private key.
                                   </DialogDescription>
                                 </DialogHeader>
 
                                 {exportError && (
-                                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 flex items-start gap-2">
-                                    <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
-                                    <p className="text-sm text-red-700">{exportError}</p>
+                                  <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3 mb-4 flex items-start gap-2">
+                                    <AlertCircle className="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" />
+                                    <p className="text-sm text-red-300">{exportError}</p>
                                   </div>
                                 )}
 
@@ -898,6 +937,7 @@ export default function DashboardPage() {
                                     value={exportPassword}
                                     onChange={(e) => setExportPassword(e.target.value)}
                                     placeholder="Enter your wallet password"
+                                    className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-400"
                                   />
                                 </div>
 
@@ -913,10 +953,10 @@ export default function DashboardPage() {
                                 ) : (
                                   <div className="mt-4">
                                     <Label>Your Private Key</Label>
-                                    <div className="keystore-display bg-yellow-50 border border-yellow-200 p-3 rounded-md text-sm font-mono break-all">
+                                    <div className="keystore-display bg-yellow-900/20 border border-yellow-500/30 p-3 rounded-md text-sm font-mono break-all text-yellow-200">
                                       {exportPrivateKey}
                                     </div>
-                                    <p className="text-xs text-amber-600 mt-2 mb-3">
+                                    <p className="text-xs text-amber-400 mt-2 mb-3">
                                       <AlertCircle className="h-3 w-3 inline-block mr-1" />
                                       Warning: Never share your private key with anyone. Anyone with your private key has full control of your wallet.
                                     </p>
@@ -954,18 +994,18 @@ export default function DashboardPage() {
                           <p className="create-wallet-text">Create New Wallet</p>
                         </Card>
                       </DialogTrigger>
-                      <DialogContent>
+                      <DialogContent className="!bg-slate-900 !border-slate-700 text-white">
                         <DialogHeader>
-                          <DialogTitle>Create New Wallet</DialogTitle>
-                          <DialogDescription>
+                          <DialogTitle className="text-white">Create New Wallet</DialogTitle>
+                          <DialogDescription className="text-slate-400">
                             Create a new KalyChain wallet. Your password will be used to encrypt the private key.
                           </DialogDescription>
                         </DialogHeader>
 
                         {createWalletError && (
-                          <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 flex items-start gap-2">
-                            <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
-                            <p className="text-sm text-red-700">{createWalletError}</p>
+                          <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-3 mb-4 flex items-start gap-2">
+                            <AlertCircle className="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" />
+                            <p className="text-sm text-red-300">{createWalletError}</p>
                           </div>
                         )}
 
@@ -977,8 +1017,9 @@ export default function DashboardPage() {
                             value={createWalletPassword}
                             onChange={(e) => setCreateWalletPassword(e.target.value)}
                             placeholder="Enter a secure password (min 8 characters)"
+                            className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-400"
                           />
-                          <p className="text-xs text-slate-500 mt-1">
+                          <p className="text-xs text-slate-400 mt-1">
                             This password will be used to encrypt your wallet's private key.
                             Make sure to use a strong password and keep it safe.
                           </p>
@@ -1001,10 +1042,10 @@ export default function DashboardPage() {
                 </TabsContent>
 
                 <TabsContent value="account">
-                  <Card>
+                  <Card className="wallet-card">
                     <CardHeader>
-                      <CardTitle>Account Information</CardTitle>
-                      <CardDescription>
+                      <CardTitle className="text-white">Account Information</CardTitle>
+                      <CardDescription className="text-slate-400">
                         Your personal account details
                       </CardDescription>
                     </CardHeader>

@@ -1,6 +1,6 @@
 'use client'
 
-import { ReactNode } from 'react'
+import { ReactNode, useEffect } from 'react'
 import { WagmiProvider } from 'wagmi'
 import { RainbowKitProvider } from '@rainbow-me/rainbowkit'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -25,15 +25,22 @@ const queryClient = new QueryClient({
       refetchOnReconnect: false,
     },
   },
-  logger: {
-    log: () => {},
-    warn: () => {},
-    error: () => {},
-  },
 })
 
 function WalletProvidersClient({ children }: WalletProvidersClientProps) {
   const isHydrated = useHydration()
+
+  // Initialize internal wallet state on client side
+  useEffect(() => {
+    if (isHydrated) {
+      // Dynamically import and initialize internal wallet to avoid SSR issues
+      import('@/connectors/internalWallet').then(({ internalWalletUtils }) => {
+        internalWalletUtils.initialize()
+      }).catch(error => {
+        console.warn('Failed to initialize internal wallet:', error)
+      })
+    }
+  }, [isHydrated])
 
   // Return children without wallet providers during SSR
   if (!isHydrated) {

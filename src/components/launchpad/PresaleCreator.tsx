@@ -41,7 +41,8 @@ import { PRESALE_FACTORY_ABI, PRESALE_ABI, ERC20_ABI } from '@/config/abis';
 
 // Wagmi imports for contract interaction
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
-import { parseUnits, formatUnits, getContract, parseEther } from 'viem';
+import { parseUnits, formatUnits, getContract, parseEther, encodeFunctionData } from 'viem';
+import { internalWalletUtils } from '@/connectors/internalWallet';
 
 // GraphQL mutation for saving confirmed projects
 const SAVE_PROJECT_AFTER_DEPLOYMENT = `
@@ -113,9 +114,138 @@ interface LPLockSettings {
   recipient: string;           // LP token recipient address
 }
 
+// Helper function to check if using internal wallet
+const isUsingInternalWallet = (connector: any) => {
+  return connector?.id === 'kalyswap-internal';
+};
+
+// Helper function to prompt for password
+const promptForPassword = (): Promise<string | null> => {
+  return new Promise((resolve) => {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    modal.innerHTML = `
+      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <h3 class="text-lg font-semibold mb-4">Enter Wallet Password</h3>
+        <p class="text-sm text-gray-600 mb-4">Enter your internal wallet password to authorize this presale transaction.</p>
+        <input
+          type="password"
+          placeholder="Enter your wallet password"
+          class="w-full p-3 border rounded-lg mb-4 password-input"
+          autofocus
+        />
+        <div class="flex gap-2">
+          <button class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg confirm-btn">Confirm</button>
+          <button class="flex-1 px-4 py-2 bg-gray-200 rounded-lg cancel-btn">Cancel</button>
+        </div>
+      </div>
+    `;
+
+    const passwordInput = modal.querySelector('.password-input') as HTMLInputElement;
+    const confirmBtn = modal.querySelector('.confirm-btn') as HTMLButtonElement;
+    const cancelBtn = modal.querySelector('.cancel-btn') as HTMLButtonElement;
+
+    const handleConfirm = () => {
+      const password = passwordInput.value;
+      document.body.removeChild(modal);
+      resolve(password || null);
+    };
+
+    const handleCancel = () => {
+      document.body.removeChild(modal);
+      resolve(null);
+    };
+
+    confirmBtn.addEventListener('click', handleConfirm);
+    cancelBtn.addEventListener('click', handleCancel);
+    passwordInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') handleConfirm();
+    });
+
+    document.body.appendChild(modal);
+  });
+};
+
+// Helper function for internal wallet contract calls
+const executeContractCall = async (
+  connector: any,
+  contractAddress: string,
+  abi: any,
+  functionName: string,
+  args: any[],
+  value: string = '0',
+  gasLimit: string = '200000'
+): Promise<`0x${string}`> => {
+  if (isUsingInternalWallet(connector)) {
+    // For internal wallets, use direct GraphQL call
+    const internalWalletState = internalWalletUtils.getState();
+    if (!internalWalletState.activeWallet) {
+      throw new Error('No internal wallet connected');
+    }
+
+    // Get password from user
+    const password = await promptForPassword();
+    if (!password) {
+      throw new Error('Password required for transaction');
+    }
+
+    // Encode the function call
+    const functionData = encodeFunctionData({
+      abi,
+      functionName,
+      args,
+    });
+
+    // Make GraphQL call to backend
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      throw new Error('Authentication required');
+    }
+
+    const response = await fetch('/api/graphql', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        query: `
+          mutation SendContractTransaction($input: SendContractTransactionInput!) {
+            sendContractTransaction(input: $input) {
+              id
+              hash
+              status
+            }
+          }
+        `,
+        variables: {
+          input: {
+            walletId: internalWalletState.activeWallet.id,
+            toAddress: contractAddress,
+            value,
+            data: functionData,
+            password: password,
+            chainId: internalWalletState.activeWallet.chainId,
+            gasLimit
+          }
+        }
+      }),
+    });
+
+    const result = await response.json();
+    if (result.errors) {
+      throw new Error(result.errors[0].message);
+    }
+
+    return result.data.sendContractTransaction.hash;
+  } else {
+    throw new Error('This function should only be called for internal wallets');
+  }
+};
+
 export default function PresaleCreator() {
   // Wagmi hooks for wallet interaction
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, connector } = useAccount();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
 
@@ -188,9 +318,9 @@ export default function PresaleCreator() {
 
     try {
       const [decimals, symbol, name] = await Promise.all([
-        tokenContract.read.decimals(),
-        tokenContract.read.symbol(),
-        tokenContract.read.name(),
+        tokenContract.read.decimals([]),
+        tokenContract.read.symbol([]),
+        tokenContract.read.name([]),
       ]);
 
       return {
@@ -241,7 +371,7 @@ export default function PresaleCreator() {
 
     try {
       const allowance = await tokenContract.read.allowance([address, spenderAddress]);
-      return BigInt(allowance.toString());
+      return BigInt((allowance as bigint).toString());
     } catch (error) {
       throw new Error(`Failed to check token allowance: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
@@ -249,15 +379,86 @@ export default function PresaleCreator() {
 
   // Helper function to approve tokens
   const approveTokens = async (tokenAddress: string, spenderAddress: string, amount: bigint) => {
-    if (!walletClient || !address) throw new Error('Wallet not connected');
+    if (!address) throw new Error('Wallet not connected');
 
     try {
-      const hash = await walletClient.writeContract({
-        address: tokenAddress as `0x${string}`,
-        abi: ERC20_ABI,
-        functionName: 'approve',
-        args: [spenderAddress, amount],
-      });
+      let hash: `0x${string}`;
+
+      if (isUsingInternalWallet(connector)) {
+        // For internal wallets, use direct GraphQL call
+        const internalWalletState = internalWalletUtils.getState();
+        if (!internalWalletState.activeWallet) {
+          throw new Error('No internal wallet connected');
+        }
+
+        // Get password from user
+        const password = await promptForPassword();
+        if (!password) {
+          throw new Error('Password required for token approval transaction');
+        }
+
+        // Encode the approve function call
+        const functionData = encodeFunctionData({
+          abi: ERC20_ABI,
+          functionName: 'approve',
+          args: [spenderAddress, amount],
+        });
+
+        // Make GraphQL call to backend
+        const token = localStorage.getItem('auth_token');
+        if (!token) {
+          throw new Error('Authentication required');
+        }
+
+        const response = await fetch('/api/graphql', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            query: `
+              mutation SendContractTransaction($input: SendContractTransactionInput!) {
+                sendContractTransaction(input: $input) {
+                  id
+                  hash
+                  status
+                }
+              }
+            `,
+            variables: {
+              input: {
+                walletId: internalWalletState.activeWallet.id,
+                toAddress: tokenAddress,
+                value: '0',
+                data: functionData,
+                password: password,
+                chainId: internalWalletState.activeWallet.chainId,
+                gasLimit: '100000'
+              }
+            }
+          }),
+        });
+
+        const result = await response.json();
+        if (result.errors) {
+          throw new Error(result.errors[0].message);
+        }
+
+        hash = result.data.sendContractTransaction.hash;
+      } else {
+        // For external wallets, use the existing walletClient method
+        if (!walletClient) {
+          throw new Error('External wallet not available for transaction signing');
+        }
+
+        hash = await walletClient.writeContract({
+          address: tokenAddress as `0x${string}`,
+          abi: ERC20_ABI,
+          functionName: 'approve',
+          args: [spenderAddress, amount],
+        });
+      }
 
       // Wait for transaction confirmation
       const receipt = await publicClient!.waitForTransactionReceipt({ hash });
@@ -575,24 +776,105 @@ export default function PresaleCreator() {
         gasLimit = BigInt(3500000); // Fallback gas limit
       }
 
-      const hash = await walletClient.writeContract({
-        address: factoryAddress as `0x${string}`,
-        abi: PRESALE_FACTORY_ABI,
-        functionName: 'create',
-        args: [
-          contractParams.saleToken,
-          contractParams.baseToken,
-          [BigInt(contractParams.rates[0]), BigInt(contractParams.rates[1])],
-          [parseEther(contractParams.raises[0] || '0'), parseEther(contractParams.raises[1] || '0')],
-          parseEther(contractParams.softCap),
-          parseEther(contractParams.hardCap),
-          BigInt(contractParams.liquidityPercent),
-          BigInt(contractParams.presaleStart),
-          BigInt(contractParams.presaleEnd),
-        ],
-        value: creationFee,
-        gas: gasLimit,
-      });
+      let hash: `0x${string}`;
+
+      if (isUsingInternalWallet(connector)) {
+        // For internal wallets, use direct GraphQL call
+        const internalWalletState = internalWalletUtils.getState();
+        if (!internalWalletState.activeWallet) {
+          throw new Error('No internal wallet connected');
+        }
+
+        // Get password from user
+        const password = await promptForPassword();
+        if (!password) {
+          throw new Error('Password required for presale creation transaction');
+        }
+
+        // Encode the create function call
+        const functionData = encodeFunctionData({
+          abi: PRESALE_FACTORY_ABI,
+          functionName: 'create',
+          args: [
+            contractParams.saleToken,
+            contractParams.baseToken,
+            [BigInt(contractParams.rates[0]), BigInt(contractParams.rates[1])],
+            [parseEther(contractParams.raises[0] || '0'), parseEther(contractParams.raises[1] || '0')],
+            parseEther(contractParams.softCap),
+            parseEther(contractParams.hardCap),
+            BigInt(contractParams.liquidityPercent),
+            BigInt(contractParams.presaleStart),
+            BigInt(contractParams.presaleEnd),
+          ],
+        });
+
+        // Make GraphQL call to backend
+        const token = localStorage.getItem('auth_token');
+        if (!token) {
+          throw new Error('Authentication required');
+        }
+
+        const response = await fetch('/api/graphql', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            query: `
+              mutation SendContractTransaction($input: SendContractTransactionInput!) {
+                sendContractTransaction(input: $input) {
+                  id
+                  hash
+                  status
+                }
+              }
+            `,
+            variables: {
+              input: {
+                walletId: internalWalletState.activeWallet.id,
+                toAddress: factoryAddress,
+                value: creationFee.toString(),
+                data: functionData,
+                password: password,
+                chainId: internalWalletState.activeWallet.chainId,
+                gasLimit: gasLimit.toString()
+              }
+            }
+          }),
+        });
+
+        const result = await response.json();
+        if (result.errors) {
+          throw new Error(result.errors[0].message);
+        }
+
+        hash = result.data.sendContractTransaction.hash;
+      } else {
+        // For external wallets, use the existing walletClient method
+        if (!walletClient) {
+          throw new Error('External wallet not available for transaction signing');
+        }
+
+        hash = await walletClient.writeContract({
+          address: factoryAddress as `0x${string}`,
+          abi: PRESALE_FACTORY_ABI,
+          functionName: 'create',
+          args: [
+            contractParams.saleToken,
+            contractParams.baseToken,
+            [BigInt(contractParams.rates[0]), BigInt(contractParams.rates[1])],
+            [parseEther(contractParams.raises[0] || '0'), parseEther(contractParams.raises[1] || '0')],
+            parseEther(contractParams.softCap),
+            parseEther(contractParams.hardCap),
+            BigInt(contractParams.liquidityPercent),
+            BigInt(contractParams.presaleStart),
+            BigInt(contractParams.presaleEnd),
+          ],
+          value: creationFee,
+          gas: gasLimit,
+        });
+      }
 
       console.log(`📝 Transaction hash: ${hash}`);
       console.log('⏳ Waiting for transaction confirmation...');
@@ -653,13 +935,31 @@ export default function PresaleCreator() {
       const routerAddress = getContractAddress('ROUTER', DEFAULT_CHAIN_ID);
 
       try {
-        const setRouterHash = await walletClient.writeContract({
-          address: presaleAddress as `0x${string}`,
-          abi: PRESALE_ABI,
-          functionName: 'setRouter',
-          args: [routerAddress],
-          gas: BigInt(100000),
-        });
+        let setRouterHash: `0x${string}`;
+
+        if (isUsingInternalWallet(connector)) {
+          setRouterHash = await executeContractCall(
+            connector,
+            presaleAddress,
+            PRESALE_ABI,
+            'setRouter',
+            [routerAddress],
+            '0',
+            '100000'
+          );
+        } else {
+          if (!walletClient) {
+            throw new Error('External wallet not available for transaction signing');
+          }
+
+          setRouterHash = await walletClient.writeContract({
+            address: presaleAddress as `0x${string}`,
+            abi: PRESALE_ABI,
+            functionName: 'setRouter',
+            args: [routerAddress],
+            gas: BigInt(100000),
+          });
+        }
 
         await publicClient.waitForTransactionReceipt({ hash: setRouterHash });
         console.log('✅ Router address set successfully');
@@ -678,13 +978,31 @@ export default function PresaleCreator() {
       const lpLockSettings = formatLPLockSettings();
 
       try {
-        const setLockHash = await walletClient.writeContract({
-          address: presaleAddress as `0x${string}`,
-          abi: PRESALE_ABI,
-          functionName: 'setLPLockSettings',
-          args: [BigInt(lpLockSettings.lockDuration), lpLockSettings.recipient],
-          gas: BigInt(200000),
-        });
+        let setLockHash: `0x${string}`;
+
+        if (isUsingInternalWallet(connector)) {
+          setLockHash = await executeContractCall(
+            connector,
+            presaleAddress,
+            PRESALE_ABI,
+            'setLPLockSettings',
+            [BigInt(lpLockSettings.lockDuration), lpLockSettings.recipient],
+            '0',
+            '200000'
+          );
+        } else {
+          if (!walletClient) {
+            throw new Error('External wallet not available for transaction signing');
+          }
+
+          setLockHash = await walletClient.writeContract({
+            address: presaleAddress as `0x${string}`,
+            abi: PRESALE_ABI,
+            functionName: 'setLPLockSettings',
+            args: [BigInt(lpLockSettings.lockDuration), lpLockSettings.recipient],
+            gas: BigInt(200000),
+          });
+        }
 
         await publicClient.waitForTransactionReceipt({ hash: setLockHash });
         console.log(`✅ LP lock settings configured: ${lpLockSettings.lockDuration} seconds, recipient: ${lpLockSettings.recipient}`);

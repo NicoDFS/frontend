@@ -54,8 +54,6 @@ export function useKLCBalance(address?: string) {
   try {
     const balanceData = useBalance({
       address: address as `0x${string}`,
-      watch: true,
-      enabled: !!address,
     })
     wagmiBalance = balanceData.data
     wagmiLoading = balanceData.isLoading

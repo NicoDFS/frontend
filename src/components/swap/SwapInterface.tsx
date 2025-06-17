@@ -127,12 +127,12 @@ const KALYCHAIN_TOKENS: Token[] = [
 // Helper functions for wrap/unwrap detection
 const isWrapOperation = (fromToken: Token | null, toToken: Token | null): boolean => {
   if (!fromToken || !toToken) return false;
-  return fromToken.isNative && toToken.symbol === 'wKLC';
+  return (fromToken.isNative === true) && toToken.symbol === 'wKLC';
 };
 
 const isUnwrapOperation = (fromToken: Token | null, toToken: Token | null): boolean => {
   if (!fromToken || !toToken) return false;
-  return fromToken.symbol === 'wKLC' && toToken.isNative;
+  return fromToken.symbol === 'wKLC' && (toToken.isNative === true);
 };
 
 const isWrapOrUnwrapOperation = (fromToken: Token | null, toToken: Token | null): boolean => {
@@ -393,14 +393,14 @@ export default function SwapInterface() {
       const amountIn = parseUnits(inputAmount, fromToken.decimals);
 
       // Build path for swap
-      const path = fromToken.isNative
+      const path = (fromToken.isNative === true)
         ? [getContractAddress('WKLC', DEFAULT_CHAIN_ID), toToken.address]
-        : toToken.isNative
+        : (toToken.isNative === true)
         ? [fromToken.address, getContractAddress('WKLC', DEFAULT_CHAIN_ID)]
         : [fromToken.address, getContractAddress('WKLC', DEFAULT_CHAIN_ID), toToken.address];
 
       // Get amounts out
-      const amounts = await routerContract.read.getAmountsOut([amountIn, path]);
+      const amounts = await routerContract.read.getAmountsOut([amountIn, path]) as bigint[];
       const outputAmount = amounts[amounts.length - 1];
 
       return formatUnits(outputAmount, toToken.decimals);
@@ -550,6 +550,11 @@ export default function SwapInterface() {
       // Close confirmation modal when starting execution
       setShowConfirmationModal(false);
 
+      // Ensure tokens are not null (should be validated before this point)
+      if (!swapState.fromToken || !swapState.toToken) {
+        throw new Error('Tokens not selected');
+      }
+
       const routerAddress = getContractAddress('ROUTER', DEFAULT_CHAIN_ID);
       const amountIn = parseUnits(swapState.fromAmount, swapState.fromToken.decimals);
       const amountOutMin = parseUnits(swapState.toAmount, swapState.toToken.decimals);
@@ -562,9 +567,9 @@ export default function SwapInterface() {
       const deadline = BigInt(Math.floor(Date.now() / 1000) + (parseInt(swapState.deadline) * 60));
 
       // Build path for swap
-      const path = swapState.fromToken.isNative
+      const path = (swapState.fromToken.isNative === true)
         ? [getContractAddress('WKLC', DEFAULT_CHAIN_ID), swapState.toToken.address]
-        : swapState.toToken.isNative
+        : (swapState.toToken.isNative === true)
         ? [swapState.fromToken.address, getContractAddress('WKLC', DEFAULT_CHAIN_ID)]
         : [swapState.fromToken.address, getContractAddress('WKLC', DEFAULT_CHAIN_ID), swapState.toToken.address];
 
@@ -646,7 +651,7 @@ export default function SwapInterface() {
         });
 
         // Step 1: Approve token if not native
-        if (!swapState.fromToken.isNative) {
+        if (swapState.fromToken.isNative !== true) {
           console.log('📝 Approving token...');
 
           let approveHash: `0x${string}`;
@@ -680,7 +685,7 @@ export default function SwapInterface() {
         setCurrentStep('swapping');
         console.log('🔄 Executing swap...');
 
-        if (swapState.fromToken.isNative) {
+        if (swapState.fromToken.isNative === true) {
           // KLC to Token
           swapHash = await executeContractCall(
             routerAddress,
@@ -688,7 +693,7 @@ export default function SwapInterface() {
             [amountOutMinWithSlippage, path, address, deadline],
             amountIn
           );
-        } else if (swapState.toToken.isNative) {
+        } else if (swapState.toToken.isNative === true) {
           // Token to KLC
           swapHash = await executeContractCall(
             routerAddress,

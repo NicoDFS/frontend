@@ -66,8 +66,8 @@ export default function LiquidityForm({
   const [pairAddress, setPairAddress] = useState<string>('');
 
   // Simple approval state management
-  const [approvalA, setApprovalA] = useState<ApprovalState>(ApprovalState.NOT_APPROVED);
-  const [approvalB, setApprovalB] = useState<ApprovalState>(ApprovalState.NOT_APPROVED);
+  const [approvalA, setApprovalA] = useState<typeof ApprovalState[keyof typeof ApprovalState]>(ApprovalState.NOT_APPROVED);
+  const [approvalB, setApprovalB] = useState<typeof ApprovalState[keyof typeof ApprovalState]>(ApprovalState.NOT_APPROVED);
 
   // Use refs to store callback functions to prevent dependency issues
   const onAmountBChangeRef = useRef(onAmountBChange);

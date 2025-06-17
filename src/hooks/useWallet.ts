@@ -115,7 +115,7 @@ export function useWallet(): WalletState & WalletActions {
     isConnecting = accountData.isConnecting
     isReconnecting = accountData.isReconnecting
     connectExternal = connectData.connect
-    connectors = connectData.connectors
+    connectors = [...connectData.connectors]
     disconnectExternal = disconnectData.disconnect
     chainId = chainData
     switchChain = switchChainData.switchChain
@@ -134,7 +134,7 @@ export function useWallet(): WalletState & WalletActions {
   let externalBalance: any
   try {
     const balanceData = useBalance({
-      address: externalAddress,
+      address: externalAddress as `0x${string}` | undefined,
       query: {
         enabled: !!externalAddress && isExternalConnected,
       },
@@ -148,29 +148,61 @@ export function useWallet(): WalletState & WalletActions {
   // Internal wallet state
   const [internalWallet, setInternalWallet] = useState<InternalWallet | null>(null)
   const [walletType, setWalletType] = useState<WalletType | undefined>()
-  
-  // Determine current wallet state
-  const isConnected = isExternalConnected || !!internalWallet
-  const currentAddress = externalAddress || internalWallet?.address
-  const currentChainId = chainId || internalWallet?.chainId
+
+  // Get wagmi account data to check for internal wallet connections
+  let wagmiAddress: string | undefined
+  let wagmiIsConnected = false
+  let wagmiConnector: any
+  let wagmiChainId: number | undefined
+
+  try {
+    const accountData = useAccount()
+    wagmiAddress = accountData.address
+    wagmiIsConnected = accountData.isConnected
+    wagmiConnector = accountData.connector
+    wagmiChainId = accountData.chainId
+  } catch (error) {
+    // Wagmi not available
+  }
+
+  // Determine if connected via internal wallet through wagmi
+  const isInternalWalletConnected = wagmiIsConnected && wagmiConnector?.id === 'kalyswap-internal'
+
+  // Determine current wallet state - prioritize wagmi connection state
+  const isConnected = wagmiIsConnected || isExternalConnected || !!internalWallet
+  const currentAddress = wagmiAddress || externalAddress || internalWallet?.address
+  const currentChainId = wagmiChainId || chainId || internalWallet?.chainId
   
   // Get current balance (external or internal)
   const currentBalance = externalBalance || undefined // TODO: Add internal wallet balance fetching
   
-  // Load internal wallet from localStorage on mount
+  // Update wallet type based on connection state
   useEffect(() => {
-    const savedWallet = localStorage.getItem('active_internal_wallet')
-    if (savedWallet) {
-      try {
-        const wallet = JSON.parse(savedWallet)
-        setInternalWallet(wallet)
-        setWalletType('internal')
-      } catch (error) {
-        console.error('Error loading internal wallet:', error)
-        localStorage.removeItem('active_internal_wallet')
+    if (isInternalWalletConnected) {
+      setWalletType('internal')
+      // Load internal wallet details from connector
+      if (typeof window !== 'undefined') {
+        import('@/connectors/internalWallet').then(({ internalWalletUtils }) => {
+          const state = internalWalletUtils.getState()
+          if (state.activeWallet) {
+            setInternalWallet({
+              id: state.activeWallet.id,
+              address: state.activeWallet.address,
+              chainId: state.activeWallet.chainId,
+            })
+          }
+        }).catch(error => {
+          console.error('Error loading internal wallet state:', error)
+        })
       }
+    } else if (isExternalConnected) {
+      setWalletType('external')
+      setInternalWallet(null)
+    } else {
+      setWalletType(undefined)
+      setInternalWallet(null)
     }
-  }, [])
+  }, [isInternalWalletConnected, isExternalConnected, wagmiIsConnected, wagmiConnector])
   
   // Update wallet type when external wallet connects/disconnects
   useEffect(() => {
@@ -241,19 +273,69 @@ export function useWallet(): WalletState & WalletActions {
       disconnectExternal()
     }
 
-    // TODO: Fetch internal wallet details from API
-    // For now, simulate the wallet data
-    const wallet: InternalWallet = {
-      id: walletId,
-      address: '0x...', // Get from API
-      chainId: kalychain.id,
-    }
+    // Use the internal wallet connector's utility to select the wallet
+    const { internalWalletUtils } = await import('@/connectors/internalWallet')
+    internalWalletUtils.selectWallet(walletId)
 
-    setInternalWallet(wallet)
-    setWalletType('internal')
-    localStorage.setItem('active_internal_wallet', JSON.stringify(wallet))
+    // Update local state
+    const state = internalWalletUtils.getState()
+    if (state.activeWallet) {
+      setInternalWallet({
+        id: state.activeWallet.id,
+        address: state.activeWallet.address,
+        chainId: state.activeWallet.chainId,
+      })
+      setWalletType('internal')
+    }
   }, [isExternalConnected, disconnectExternal])
-  
+
+  // Helper function to prompt for password (same as swaps/pools pattern)
+  const promptForPassword = (): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const modal = document.createElement('div');
+      modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+      modal.innerHTML = `
+        <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+          <h3 class="text-lg font-semibold mb-4">Enter Wallet Password</h3>
+          <p class="text-sm text-gray-600 mb-4">Enter your internal wallet password to authorize this transaction.</p>
+          <input
+            type="password"
+            placeholder="Enter your wallet password"
+            class="w-full p-3 border rounded-lg mb-4 password-input"
+            autofocus
+          />
+          <div class="flex gap-2">
+            <button class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg confirm-btn">Confirm</button>
+            <button class="flex-1 px-4 py-2 bg-gray-200 rounded-lg cancel-btn">Cancel</button>
+          </div>
+        </div>
+      `;
+
+      const passwordInput = modal.querySelector('.password-input') as HTMLInputElement;
+      const confirmBtn = modal.querySelector('.confirm-btn') as HTMLButtonElement;
+      const cancelBtn = modal.querySelector('.cancel-btn') as HTMLButtonElement;
+
+      const handleConfirm = () => {
+        const password = passwordInput.value;
+        document.body.removeChild(modal);
+        resolve(password || null);
+      };
+
+      const handleCancel = () => {
+        document.body.removeChild(modal);
+        resolve(null);
+      };
+
+      confirmBtn.addEventListener('click', handleConfirm);
+      cancelBtn.addEventListener('click', handleCancel);
+      passwordInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleConfirm();
+      });
+
+      document.body.appendChild(modal);
+    });
+  };
+
   // Sign transaction
   const signTransaction = useCallback(async (transaction: any): Promise<string> => {
     if (walletType === 'external') {
@@ -294,9 +376,79 @@ export function useWallet(): WalletState & WalletActions {
         throw error;
       }
     } else if (walletType === 'internal') {
-      // For internal wallets, use the existing internal wallet system
-      // This is a placeholder - actual implementation would call the internal wallet API
-      throw new Error('Internal wallet transaction signing not implemented yet')
+      // For internal wallets, use the internal wallet connector's sendTransaction method
+      try {
+        console.log('🔐 Signing transaction with internal wallet:', {
+          type: typeof transaction,
+          keys: Object.keys(transaction || {}),
+          transaction
+        });
+
+        // Import internal wallet utils dynamically
+        const { internalWalletUtils } = await import('@/connectors/internalWallet');
+
+        // Get the internal wallet state
+        const internalWalletState = internalWalletUtils.getState();
+        if (!internalWalletState.activeWallet) {
+          throw new Error('No internal wallet connected');
+        }
+
+        // Get password from user (similar to swaps/pools pattern)
+        const password = await promptForPassword();
+        if (!password) {
+          throw new Error('Password required for transaction signing');
+        }
+
+        // Use the internal wallet GraphQL API (same pattern as swaps/pools)
+        const token = localStorage.getItem('auth_token');
+        if (!token) {
+          throw new Error('Authentication required');
+        }
+
+        // Prepare transaction input for GraphQL
+        const contractInput = {
+          walletId: internalWalletState.activeWallet.id,
+          toAddress: transaction.to,
+          value: transaction.value?.toString() || '0',
+          data: transaction.data || '0x',
+          password: password,
+          chainId: internalWalletState.activeWallet.chainId,
+          gasLimit: transaction.gasLimit?.toString() || '500000'
+        };
+
+        const response = await fetch('/api/graphql', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            query: `
+              mutation SendContractTransaction($input: SendContractTransactionInput!) {
+                sendContractTransaction(input: $input) {
+                  id
+                  hash
+                  status
+                }
+              }
+            `,
+            variables: { input: contractInput }
+          }),
+        });
+
+        const result = await response.json();
+        if (result.errors) {
+          throw new Error(result.errors[0].message);
+        }
+
+        const hash = result.data.sendContractTransaction.hash;
+
+        console.log('✅ Internal wallet transaction hash:', hash);
+        return hash;
+      } catch (error) {
+        console.error('❌ Internal wallet transaction failed:', error);
+        throw error;
+      }
     } else {
       throw new Error('No wallet connected')
     }

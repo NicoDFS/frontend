@@ -29,8 +29,7 @@ import {
   ArrowUpDown,
   Clock,
   ShoppingCart,
-  Send,
-  AlertTriangle
+  Send
 } from 'lucide-react';
 import TradingChart from '@/components/charts/TradingChart';
 import TransactionData from '@/components/swaps/TransactionData';
@@ -408,26 +407,7 @@ export default function SwapsPage() {
             {/* Right side - Trading controls */}
             <div className="trading-controls-container xl:col-span-1 space-y-6">
 
-              {/* Connection status */}
-              {!isConnected && (
-                <Card className="border-orange-200 bg-orange-50">
-                  <CardContent className="pt-6">
-                    <div className="flex items-center gap-2 text-orange-700">
-                      <AlertTriangle className="h-5 w-5" />
-                      <span className="font-medium">Wallet not connected</span>
-                    </div>
-                    <p className="text-sm text-orange-600 mt-1">
-                      Connect your wallet to start trading
-                    </p>
-                    <Button
-                      className="w-full mt-3"
-                      onClick={() => router.push('/login')}
-                    >
-                      Connect Wallet
-                    </Button>
-                  </CardContent>
-                </Card>
-              )}
+
 
               {/* Trading interface */}
               <Tabs value={activeTab} onValueChange={setActiveTab}>

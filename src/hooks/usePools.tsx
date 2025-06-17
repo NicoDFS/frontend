@@ -265,10 +265,10 @@ export function usePools() {
 
       // Get reserves and total supply
       const [reserves, totalSupply, token0Address, token1Address] = await Promise.all([
-        pairContract.read.getReserves(),
-        pairContract.read.totalSupply(),
-        pairContract.read.token0(),
-        pairContract.read.token1()
+        pairContract.read.getReserves([]),
+        pairContract.read.totalSupply([]),
+        pairContract.read.token0([]),
+        pairContract.read.token1([])
       ]);
 
       // Get token decimals for proper formatting
@@ -288,21 +288,24 @@ export function usePools() {
           client: publicClient,
         });
 
-        [token0Decimals, token1Decimals] = await Promise.all([
-          token0Contract.read.decimals(),
-          token1Contract.read.decimals()
+        const decimalsResults = await Promise.all([
+          token0Contract.read.decimals([]),
+          token1Contract.read.decimals([])
         ]);
+        token0Decimals = decimalsResults[0] as number;
+        token1Decimals = decimalsResults[1] as number;
       } catch (err) {
         console.warn('Could not fetch token decimals, using 18 as default');
       }
 
+      const reservesArray = reserves as [bigint, bigint, number];
       return {
-        address: pairAddress,
-        token0: token0Address,
-        token1: token1Address,
-        reserve0: formatUnits(reserves[0], token0Decimals),
-        reserve1: formatUnits(reserves[1], token1Decimals),
-        totalSupply: formatUnits(totalSupply, 18),
+        address: pairAddress as string,
+        token0: token0Address as string,
+        token1: token1Address as string,
+        reserve0: formatUnits(reservesArray[0], token0Decimals),
+        reserve1: formatUnits(reservesArray[1], token1Decimals),
+        totalSupply: formatUnits(totalSupply as bigint, 18),
         exists: true
       };
     } catch (err) {
@@ -564,7 +567,7 @@ export function usePools() {
       // Get pair address for LP token approval
       const factoryAddress = getContractAddress('FACTORY', DEFAULT_CHAIN_ID);
       const pairAddress = await publicClient.readContract({
-        address: factoryAddress,
+        address: factoryAddress as `0x${string}`,
         abi: FACTORY_ABI,
         functionName: 'getPair',
         args: [tokenA, tokenB]
@@ -577,7 +580,7 @@ export function usePools() {
       // Step 1: Approve LP tokens for router
       console.log('📝 Approving LP tokens for router...');
       const approveHash = await executeContractCall(
-        pairAddress,
+        pairAddress as string,
         'approve',
         [routerAddress, liquidityAmount],
         BigInt(0),

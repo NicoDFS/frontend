@@ -2,12 +2,11 @@
 // This hook provides bridge context and state management
 
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { 
-  ChainMap, 
-  ChainMetadata, 
-  MultiProtocolProvider, 
-  WarpCore,
-  IRegistry 
+import {
+  ChainMap,
+  ChainMetadata,
+  MultiProtocolProvider,
+  WarpCore
 } from '@hyperlane-xyz/sdk';
 import { bridgeChains } from '../../config/bridge/chains';
 import { warpRouteConfigs } from '../../config/bridge/warpRoutes';

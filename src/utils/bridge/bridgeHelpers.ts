@@ -34,7 +34,7 @@ export const bridgeHelpers = {
     try {
       return parseUnits(amount, decimals);
     } catch {
-      return 0n;
+      return BigInt(0);
     }
   },
 

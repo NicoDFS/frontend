@@ -173,7 +173,7 @@ export function TransactionReview({
             <div className="space-y-2">
               <h4 className="text-sm font-medium">Fee Breakdown</h4>
               <div className="space-y-1 text-sm">
-                {fees?.localQuote && fees.localQuote.amount > 0n && (
+                {fees?.localQuote && fees.localQuote.amount > BigInt(0) && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Local Gas (est.):</span>
                     <span>
@@ -181,7 +181,7 @@ export function TransactionReview({
                     </span>
                   </div>
                 )}
-                {fees?.interchainQuote && fees.interchainQuote.amount > 0n && (
+                {fees?.interchainQuote && fees.interchainQuote.amount > BigInt(0) && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Interchain Gas:</span>
                     <span>

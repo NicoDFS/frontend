@@ -83,9 +83,9 @@ export default function TokenSelectorModal({
 
       // Fetch token details
       const [name, symbol, decimals] = await Promise.all([
-        tokenContract.read.name(),
-        tokenContract.read.symbol(),
-        tokenContract.read.decimals(),
+        tokenContract.read.name([]),
+        tokenContract.read.symbol([]),
+        tokenContract.read.decimals([]),
       ]);
 
       // Create token object
@@ -154,7 +154,7 @@ export default function TokenSelectorModal({
     const [imageError, setImageError] = useState(false);
 
     return imageError ? (
-      <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-sm font-bold text-gray-600">
+      <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-sm font-bold text-white">
         {token.symbol.charAt(0)}
       </div>
     ) : (
@@ -169,28 +169,35 @@ export default function TokenSelectorModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md max-h-[80vh] p-0">
+      <DialogContent
+        className="max-w-md max-h-[80vh] p-0 bg-slate-900 border-slate-700 text-white"
+        style={{
+          backgroundColor: 'rgb(15 23 42)',
+          borderColor: 'rgb(51 65 85)',
+          backdropFilter: 'none'
+        }}
+      >
         {/* Header */}
         <DialogHeader className="p-6 pb-4">
-          <DialogTitle className="text-lg font-semibold">{title}</DialogTitle>
+          <DialogTitle className="text-lg font-semibold text-white">{title}</DialogTitle>
         </DialogHeader>
 
         {/* Search Input */}
         <div className="px-6 pb-4">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
               type="text"
               placeholder="Search name or paste address"
               value={searchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
-              className="pl-10 h-12 bg-gray-50 border-gray-200 rounded-xl"
+              className="pl-10 h-12 bg-slate-800 border-slate-600 text-white placeholder:text-slate-400 rounded-xl"
             />
           </div>
           
           {/* Custom token error */}
           {customTokenError && (
-            <div className="mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">
+            <div className="mt-2 text-sm text-red-300 bg-red-900/20 border border-red-500/30 p-2 rounded">
               {customTokenError}
             </div>
           )}
@@ -225,27 +232,27 @@ export default function TokenSelectorModal({
                   onClick={() => handleTokenSelect(token)}
                   disabled={isSelected}
                   className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors text-left ${
-                    isSelected 
-                      ? 'bg-blue-50 border border-blue-200 cursor-not-allowed' 
-                      : 'hover:bg-gray-50 border border-transparent'
+                    isSelected
+                      ? 'bg-blue-500/20 border border-blue-500/30 cursor-not-allowed'
+                      : 'hover:bg-slate-800/50 border border-transparent'
                   }`}
                 >
                   <div className="flex items-center space-x-3">
                     <TokenIcon token={token} />
                     <div>
-                      <div className="font-medium text-gray-900">{token.symbol}</div>
-                      <div className="text-sm text-gray-500">{token.name}</div>
+                      <div className="font-medium text-white">{token.symbol}</div>
+                      <div className="text-sm text-slate-400">{token.name}</div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-medium text-gray-900">{balance}</div>
+                    <div className="font-medium text-white">{balance}</div>
                   </div>
                 </button>
               );
             })}
             
             {filteredTokens.length === 0 && searchQuery && !isLoadingCustomToken && (
-              <div className="text-center py-8 text-gray-500">
+              <div className="text-center py-8 text-slate-400">
                 <p>No tokens found</p>
                 {isValidAddress(searchQuery) && (
                   <p className="text-sm mt-1">Invalid token address or network error</p>
@@ -256,15 +263,15 @@ export default function TokenSelectorModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-          <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
+        <div className="px-6 py-4 border-t border-slate-700 bg-slate-800/50">
+          <div className="flex items-center justify-center gap-2 text-sm text-slate-400">
             <span>📋</span>
             <span>KalySwap Tokenlist</span>
             <a
               href="https://github.com/KalyCoinProject/tokenlists"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-600 hover:text-blue-800 font-medium"
+              className="text-blue-400 hover:text-blue-300 font-medium"
             >
               Change
             </a>
