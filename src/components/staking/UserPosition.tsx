@@ -5,11 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { 
-  Coins, 
-  Gift, 
-  ArrowDownCircle, 
-  LogOut, 
+import {
+  Coins,
+  Gift,
+  ArrowDownCircle,
+  LogOut,
   Loader2,
   TrendingUp,
   Calendar
@@ -17,6 +17,7 @@ import {
 import { useStakingBalances, useStakingActions } from '@/hooks/staking';
 import { useWallet } from '@/hooks/useWallet';
 import { useToast } from '@/components/ui/toast';
+import '@/app/launchpad/launchpad.css';
 
 interface UserPositionProps {
   className?: string;
@@ -143,7 +144,9 @@ export default function UserPosition({ className }: UserPositionProps) {
     <Card className={`stake-position-card ${className}`}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-white">
-          <Coins className="h-5 w-5 text-blue-400" />
+          <div className="p-1 rounded-lg icon-bg-purple">
+            <Coins className="h-4 w-4" />
+          </div>
           Your Position
         </CardTitle>
       </CardHeader>

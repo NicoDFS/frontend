@@ -116,13 +116,13 @@ export default function StakePage() {
               <Card className="stake-how-it-works-card">
                 <CardContent className="p-6">
                   <h3 className="font-semibold text-white mb-4 flex items-center gap-2">
-                    <Info className="h-4 w-4 text-blue-400" />
+                    <Info className="h-4 w-4 text-amber-400" />
                     How Staking Works
                   </h3>
                   <div className="space-y-3 text-sm text-gray-300">
                     <div className="flex gap-3">
                       <div className="stake-step-number w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <span className="text-xs font-medium text-blue-400">1</span>
+                        <span className="text-xs font-medium text-amber-400">1</span>
                       </div>
                       <div>
                         <p className="font-medium text-white">Stake KLC</p>
@@ -131,7 +131,7 @@ export default function StakePage() {
                     </div>
                     <div className="flex gap-3">
                       <div className="stake-step-number w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <span className="text-xs font-medium text-blue-400">2</span>
+                        <span className="text-xs font-medium text-amber-400">2</span>
                       </div>
                       <div>
                         <p className="font-medium text-white">Earn Rewards</p>
@@ -140,7 +140,7 @@ export default function StakePage() {
                     </div>
                     <div className="flex gap-3">
                       <div className="stake-step-number w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <span className="text-xs font-medium text-blue-400">3</span>
+                        <span className="text-xs font-medium text-amber-400">3</span>
                       </div>
                       <div>
                         <p className="font-medium text-white">Claim & Withdraw</p>

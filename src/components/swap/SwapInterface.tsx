@@ -239,7 +239,7 @@ export default function SwapInterface() {
             autofocus
           />
           <div class="flex gap-2">
-            <button class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg confirm-btn">Confirm</button>
+            <button class="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg confirm-btn">Confirm</button>
             <button class="flex-1 px-4 py-2 bg-gray-200 rounded-lg cancel-btn">Cancel</button>
           </div>
         </div>
@@ -846,7 +846,7 @@ export default function SwapInterface() {
       <CardContent className="space-y-3">
         {/* Settings panel */}
         {showSettings && (
-          <div className="p-4 border rounded-lg bg-gray-900/50 backdrop-blur-sm border-blue-500/20">
+          <div className="p-4 border rounded-lg bg-gray-900/50 backdrop-blur-sm border-amber-500/30">
             <h4 className="font-medium mb-3 text-white">Transaction Settings</h4>
             <div className="space-y-3">
               <div>
@@ -894,7 +894,7 @@ export default function SwapInterface() {
                       const balance = getFormattedBalance(swapState.fromToken!.symbol);
                       handleFromAmountChange(balance);
                     }}
-                    className="h-6 px-2 text-xs font-medium text-blue-400 border-blue-400/30 hover:bg-blue-500/20 bg-blue-500/10"
+                    className="h-6 px-2 text-xs font-medium text-amber-400 border-amber-400/30 hover:bg-amber-500/20 bg-amber-500/10"
                   >
                     MAX
                   </Button>
@@ -997,8 +997,8 @@ export default function SwapInterface() {
 
         {/* Progress Display */}
         {isSwapping && (
-          <div className="flex items-start gap-3 p-4 bg-blue-900/20 border border-blue-500/30 rounded-lg">
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-400 mt-0.5 flex-shrink-0"></div>
+          <div className="flex items-start gap-3 p-4 bg-amber-900/20 border border-amber-500/30 rounded-lg">
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-amber-400 mt-0.5 flex-shrink-0"></div>
             <div className="flex-1">
               <h4 className="font-medium text-white mb-2">
                 Processing {
@@ -1010,22 +1010,22 @@ export default function SwapInterface() {
               <div className="space-y-2">
                 {/* Show approval step only for regular swaps and unwrap operations */}
                 {(!isWrapOperation(swapState.fromToken, swapState.toToken)) && (
-                  <div className={`flex items-center gap-2 text-sm ${currentStep === 'approving' ? 'text-blue-300 font-medium' : currentStep === 'swapping' || currentStep === 'complete' ? 'text-green-400' : 'text-gray-300'}`}>
+                  <div className={`flex items-center gap-2 text-sm ${currentStep === 'approving' ? 'text-amber-300 font-medium' : currentStep === 'swapping' || currentStep === 'complete' ? 'text-green-400' : 'text-gray-300'}`}>
                     {currentStep === 'swapping' || currentStep === 'complete' ? (
                       <CheckCircle className="h-4 w-4" />
                     ) : currentStep === 'approving' ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-amber-400"></div>
                     ) : (
                       <div className="h-4 w-4 rounded-full border-2 border-gray-400"></div>
                     )}
                     <span>1. Approve token</span>
                   </div>
                 )}
-                <div className={`flex items-center gap-2 text-sm ${currentStep === 'swapping' ? 'text-blue-300 font-medium' : currentStep === 'complete' ? 'text-green-400' : 'text-gray-300'}`}>
+                <div className={`flex items-center gap-2 text-sm ${currentStep === 'swapping' ? 'text-amber-300 font-medium' : currentStep === 'complete' ? 'text-green-400' : 'text-gray-300'}`}>
                   {currentStep === 'complete' ? (
                     <CheckCircle className="h-4 w-4" />
                   ) : currentStep === 'swapping' ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-amber-400"></div>
                   ) : (
                     <div className="h-4 w-4 rounded-full border-2 border-gray-400"></div>
                   )}

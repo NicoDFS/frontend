@@ -19,7 +19,11 @@ export function ClientOnlyConnectWallet({ className }: ClientOnlyConnectWalletPr
   // Show loading state during SSR
   if (!mounted) {
     return (
-      <Button variant="outline" size="sm" className={className} disabled>
+      <Button
+        size="sm"
+        className={`bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border-0 font-semibold ${className}`}
+        disabled
+      >
         <Wallet className="h-4 w-4 mr-2" />
         Connect
       </Button>

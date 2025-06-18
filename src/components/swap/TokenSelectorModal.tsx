@@ -170,10 +170,10 @@ export default function TokenSelectorModal({
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent
-        className="max-w-md max-h-[80vh] p-0 bg-slate-900 border-slate-700 text-white"
+        className="max-w-md max-h-[80vh] p-0 border-white/20 text-white"
         style={{
-          backgroundColor: 'rgb(15 23 42)',
-          borderColor: 'rgb(51 65 85)',
+          backgroundColor: '#0c0a09',
+          borderColor: 'rgba(255, 255, 255, 0.2)',
           backdropFilter: 'none'
         }}
       >

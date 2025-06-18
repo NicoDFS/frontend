@@ -15,23 +15,23 @@
 .dashboard-title {
   font-size: 2rem;
   font-weight: 700;
-  background: linear-gradient(to right, #3b82f6, #8b5cf6);
+  background: linear-gradient(to right, #f59e0b, #d97706);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   margin-bottom: 0.5rem;
 }
 
 .dashboard-subtitle {
-  color: #94a3b8;
+  color: #fef3c7;
   font-size: 1rem;
 }
 
 .wallet-card {
-  background: rgba(30, 58, 138, 0.1);
+  background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(30, 58, 138, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   transition: all 0.3s ease;
   color: white;
   overflow: hidden;
@@ -39,20 +39,21 @@
 
 .wallet-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 12px 40px rgba(30, 58, 138, 0.4);
+  border-color: rgba(245, 158, 11, 0.5);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
 }
 
 .wallet-header {
   padding: 1.5rem;
-  border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .wallet-address {
   font-family: monospace;
   font-size: 0.875rem;
-  color: #94a3b8;
-  background: rgba(30, 58, 138, 0.2);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  color: #fef3c7;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   padding: 0.5rem;
   border-radius: 0.5rem;
   overflow: hidden;
@@ -71,7 +72,7 @@
 
 .wallet-balance-usd {
   font-size: 0.875rem;
-  color: #94a3b8;
+  color: #fef3c7;
 }
 
 .token-list {
@@ -82,7 +83,7 @@
   display: flex;
   align-items: center;
   padding: 0.75rem 1rem;
-  border-bottom: 1px solid rgba(59, 130, 246, 0.2);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
   transition: background-color 0.2s ease;
 }
 
@@ -91,21 +92,21 @@
 }
 
 .token-item:hover {
-  background: rgba(30, 58, 138, 0.1);
+  background: rgba(245, 158, 11, 0.1);
 }
 
 .token-icon {
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
-  background: rgba(30, 58, 138, 0.2);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
   margin-right: 0.75rem;
   flex-shrink: 0;
-  color: #94a3b8;
+  color: #fef3c7;
   font-weight: 600;
 }
 
@@ -121,7 +122,7 @@
 
 .token-balance {
   font-size: 0.875rem;
-  color: #94a3b8;
+  color: #fef3c7;
 }
 
 .wallet-actions {
@@ -140,16 +141,16 @@
   border-radius: 0.5rem;
   font-weight: 500;
   font-size: 0.875rem;
-  background: rgba(30, 58, 138, 0.2);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   color: white;
   transition: all 0.2s ease;
   backdrop-filter: blur(8px);
 }
 
 .action-button:hover {
-  background: rgba(30, 58, 138, 0.3);
-  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(245, 158, 11, 0.2);
+  border-color: rgba(245, 158, 11, 0.4);
 }
 
 .create-wallet-card {
@@ -159,9 +160,9 @@
   justify-content: center;
   padding: 2rem;
   text-align: center;
-  border: 2px dashed rgba(59, 130, 246, 0.3);
+  border: 2px dashed rgba(255, 255, 255, 0.3);
   border-radius: 12px;
-  background: rgba(30, 58, 138, 0.1);
+  background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
   cursor: pointer;
   transition: all 0.3s ease;
@@ -169,41 +170,41 @@
 }
 
 .create-wallet-card:hover {
-  background: rgba(30, 58, 138, 0.2);
-  border-color: rgba(59, 130, 246, 0.5);
+  background: rgba(245, 158, 11, 0.2);
+  border-color: rgba(245, 158, 11, 0.5);
   transform: translateY(-2px);
 }
 
 .create-wallet-icon {
   width: 3rem;
   height: 3rem;
-  color: #94a3b8;
+  color: #fef3c7;
   margin-bottom: 1rem;
 }
 
 .create-wallet-text {
   font-weight: 500;
-  color: #94a3b8;
+  color: #fef3c7;
 }
 
 .export-dialog-content {
   max-width: 32rem;
-  background: rgba(30, 58, 138, 0.1);
+  background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   color: white;
 }
 
 .password-input {
   margin-top: 1rem;
-  background: rgba(30, 58, 138, 0.2);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   color: white;
   backdrop-filter: blur(8px);
 }
 
 .password-input::placeholder {
-  color: #94a3b8;
+  color: #fef3c7;
 }
 
 .export-actions {
@@ -214,8 +215,8 @@
 }
 
 .keystore-display {
-  background: rgba(30, 58, 138, 0.2);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   padding: 1rem;
   border-radius: 0.5rem;
   font-family: monospace;
@@ -223,7 +224,7 @@
   max-height: 10rem;
   overflow-y: auto;
   margin-top: 1rem;
-  color: #94a3b8;
+  color: #fef3c7;
   backdrop-filter: blur(8px);
 }
 
@@ -232,8 +233,8 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: rgba(30, 58, 138, 0.2);
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   color: white;
 }
 
@@ -243,15 +244,15 @@
 }
 
 .dashboard-container [role="dialog"] {
-  background: rgb(15 23 42) !important;
-  border: 1px solid rgb(51 65 85) !important;
+  background: rgb(28 25 23) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
   color: white !important;
 }
 
 .dashboard-container [role="listbox"],
 .dashboard-container [data-radix-select-content] {
-  background: rgb(30 41 59) !important;
-  border: 1px solid rgb(51 65 85) !important;
+  background: rgb(28 25 23) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
   color: white !important;
   backdrop-filter: none !important;
 }
@@ -261,7 +262,7 @@
 }
 
 .dashboard-container [role="option"]:hover {
-  background: rgba(59, 130, 246, 0.2) !important;
+  background: rgba(245, 158, 11, 0.2) !important;
 }
 
 @media (max-width: 768px) {

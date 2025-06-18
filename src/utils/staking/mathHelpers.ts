@@ -44,16 +44,16 @@ export const calcEndingTime = (timeStamp: bigint): number => {
 };
 
 /**
- * Format number to appropriate decimal places
+ * Format number to appropriate decimal places (max 6 decimals)
  * @param value - Number to format
- * @returns Formatted string with appropriate decimals
+ * @returns Formatted string with appropriate decimals (max 6)
  */
 export const toFixedDigits = (value: number): string => {
   if (value >= 10) {
-    return value.toFixed();
+    return value.toFixed(6);
   } else if (value < 10 && value >= 1) {
-    return value.toFixed(1);
-  } else return value.toFixed(2);
+    return value.toFixed(6);
+  } else return value.toFixed(6);
 };
 
 /**

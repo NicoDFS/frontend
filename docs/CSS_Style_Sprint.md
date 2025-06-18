@@ -1,175 +1,245 @@
-# 🎨 CSS/Style Sprint: KalySwap v3 Design System
+# KalySwap Frontend Color Theme Update Sprint
 
-## 📱 Design Analysis from Mobile App Screenshots
+## Overview
+The KalySwap frontend needs to be updated from the current blue theme to match the official landing page's dark amber theme exactly. The owner has specified that both the frontend app and landing page must have 100% matching colors and gradients.
 
-### **Color Palette Extracted:**
-- **Primary Blue**: `#1e3a8a` to `#3b82f6` (Deep blue gradient)
-- **Secondary Blue**: `#1e40af` to `#2563eb` (Medium blue gradient)  
-- **Accent Orange**: `#f59e0b` to `#fbbf24` (Golden orange gradient)
-- **Background**: `#0f172a` to `#1e293b` (Dark blue gradient)
-- **Card Background**: `rgba(30, 58, 138, 0.1)` (Semi-transparent blue)
-- **Text Primary**: `#ffffff` (White)
-- **Text Secondary**: `#94a3b8` (Light gray)
-- **Input Background**: `rgba(30, 58, 138, 0.2)` (Dark blue transparent)
+## Current State vs Target State
 
-### **Design Elements:**
-- **Gradients**: Prominent blue-to-darker-blue backgrounds
-- **Glass Morphism**: Semi-transparent cards with blur effects
-- **Rounded Corners**: 12px-16px border radius
-- **Shadows**: Subtle blue-tinted shadows
-- **Typography**: Clean, modern sans-serif
-- **Buttons**: Orange gradient for primary actions
+### Current Frontend Theme (Blue-based)
+- **Background**: `linear-gradient(135deg, #0f172a 0%, #1e293b 100%)` (blue gradient)
+- **Primary Colors**: Blue (`#3b82f6`, `rgba(59, 130, 246, 0.2)`)
+- **Cards**: `rgba(30, 58, 138, 0.1)` with blue borders
+- **Buttons**: Orange gradient (`#f59e0b` to `#fbbf24`)
+- **Borders**: `rgba(59, 130, 246, 0.2)` (blue)
 
-## 🎯 Implementation Strategy
+### Target Landing Page Theme (Dark Amber)
+- **Background**: `bg-gradient-to-br from-black via-stone-950 to-amber-900`
+- **Primary Colors**: Amber (`amber-400`, `amber-500`, `amber-600`)
+- **Cards**: `bg-white/10 backdrop-blur-md border-white/20`
+- **Buttons**: `bg-gradient-to-r from-amber-500 to-amber-600`
+- **Text**: White with `amber-100` for secondary text
+- **Borders**: `border-white/20`
 
-### **Phase 1: Core Design System (Priority 1)**
-1. **Create CSS Variables** for the color palette
-2. **Update Global Styles** with new background gradients
-3. **Redesign Card Components** with glass morphism
-4. **Update Button Styles** with orange gradients
+## Landing Page Color Analysis
 
-### **Phase 2: Component Updates (Priority 2)**
-1. **Navigation/Header** - Dark blue with glass effect
-2. **Swap Interface** - Glass cards with blue tints
-3. **Market Stats** - Enhanced with gradients
-4. **Trading Chart** - Dark theme integration
+### Key Colors from Landing Page:
+```css
+/* Backgrounds */
+background: bg-gradient-to-br from-black via-stone-950 to-amber-900
 
-### **Phase 3: Advanced Effects (Priority 3)**
-1. **Animations** - Smooth transitions
-2. **Hover Effects** - Subtle glow effects
-3. **Loading States** - Branded spinners
-4. **Responsive Design** - Mobile-first approach
+/* Cards */
+background: bg-white/10 backdrop-blur-md
+border: border-white/20
+hover: hover:border-amber-500/50
 
-## 📁 File Structure Plan
+/* Buttons Primary */
+background: bg-gradient-to-r from-amber-500 to-amber-600
+hover: hover:from-amber-600 hover:to-amber-700
 
+/* Buttons Secondary */
+background: bg-white/10 backdrop-blur-md
+border: border-white/20
+hover: hover:bg-white/20
+
+/* Text Colors */
+primary: text-white
+secondary: text-amber-100
+accent: text-amber-400
+muted: text-amber-100/80
+
+/* Dialogs */
+background: bg-stone-950
+border: border-white/20
+text: text-white
+
+/* Footer */
+background: bg-black
+title: bg-gradient-to-r from-amber-400 to-amber-600 (text gradient)
+links: text-amber-100/80
+hover: hover:text-amber-400
 ```
-frontend/src/styles/
-├── globals.css (Updated with design system)
-├── components/
-│   ├── cards.css (Glass morphism cards)
-│   ├── buttons.css (Orange gradient buttons)
-│   ├── inputs.css (Dark blue inputs)
-│   └── navigation.css (Header/nav styles)
-└── themes/
-    └── kalyswap-theme.css (Main theme variables)
-```
 
-## 🚀 Implementation Steps
+## Implementation Strategy
 
-### **Step 1: Design System Foundation**
-- [ ] Create CSS custom properties for colors
-- [ ] Set up gradient utilities
-- [ ] Define typography scale
-- [ ] Create spacing system
-
-### **Step 2: Component Library Updates**
-- [ ] Update shadcn/ui components with custom theme
-- [ ] Create glass morphism card variants
-- [ ] Design orange gradient buttons
-- [ ] Style form inputs with dark theme
-
-### **Step 3: Page-Specific Styling**
-- [ ] Swap page background gradient
-- [ ] Chart container styling
-- [ ] Market stats enhancement
-- [ ] Transaction history styling
-
-### **Step 4: Interactive Elements**
-- [ ] Hover animations
-- [ ] Loading states
-- [ ] Transition effects
-- [ ] Mobile responsiveness
-
-## 🎨 CSS Custom Properties
+### Phase 1: Core CSS Variables Update
+Update `frontend/src/app/globals.css` root variables:
 
 ```css
 :root {
-  /* Primary Colors */
-  --primary-blue-start: #1e3a8a;
-  --primary-blue-end: #3b82f6;
-  --secondary-blue-start: #1e40af;
-  --secondary-blue-end: #2563eb;
-  
-  /* Accent Colors */
-  --accent-orange-start: #f59e0b;
-  --accent-orange-end: #fbbf24;
-  
-  /* Background */
-  --bg-gradient-start: #0f172a;
-  --bg-gradient-end: #1e293b;
-  
-  /* Glass Morphism */
-  --glass-bg: rgba(30, 58, 138, 0.1);
-  --glass-border: rgba(59, 130, 246, 0.2);
-  
-  /* Text */
-  --text-primary: #ffffff;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  /* Main background - black to amber gradient */
+  --background: #000000;
+  --foreground: #ffffff;
+
+  /* Cards - white/10 with white borders */
+  --card: rgba(255, 255, 255, 0.1);
+  --card-foreground: #ffffff;
+
+  /* Popover/dropdown styling */
+  --popover: rgba(255, 255, 255, 0.1);
+  --popover-foreground: #ffffff;
+
+  /* Primary - amber gradient */
+  --primary: #f59e0b; /* amber-500 */
+  --primary-foreground: #ffffff;
+
+  /* Secondary - white/10 */
+  --secondary: rgba(255, 255, 255, 0.1);
+  --secondary-foreground: #ffffff;
+
+  /* Borders - white/20 */
+  --border: rgba(255, 255, 255, 0.2);
+
+  /* Input fields - white/10 */
+  --input: rgba(255, 255, 255, 0.1);
+
+  /* Accent - amber */
+  --accent: #fbbf24; /* amber-400 */
+  --accent-foreground: #000000;
 }
 ```
 
-## 📋 Component Priority List
+### Phase 2: Background Gradient Update
+```css
+body {
+  background: linear-gradient(135deg, #000000 0%, #1c1917 50%, #92400e 100%);
+  /* Equivalent to: from-black via-stone-950 to-amber-900 */
+}
+```
 
-### **High Priority (Immediate Impact)**
-1. **Background Gradient** - Overall app feel
-2. **Card Components** - Glass morphism effect
-3. **Primary Buttons** - Orange gradient
-4. **Navigation** - Dark blue theme
+### Phase 3: Component-Specific Updates
 
-### **Medium Priority (User Experience)**
-1. **Form Inputs** - Dark theme styling
-2. **Market Stats** - Enhanced presentation
-3. **Chart Container** - Dark theme integration
-4. **Loading States** - Branded animations
+#### Cards
+```css
+.card {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
 
-### **Low Priority (Polish)**
-1. **Hover Effects** - Subtle interactions
-2. **Transitions** - Smooth animations
-3. **Mobile Optimizations** - Touch-friendly
-4. **Accessibility** - WCAG compliance
+.card:hover {
+  border-color: rgba(245, 158, 11, 0.5); /* amber-500/50 */
+}
+```
 
-## 🔧 Technical Considerations
+#### Buttons
+```css
+/* Primary Buttons - Amber Gradient */
+.btn-primary {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  /* from-amber-500 to-amber-600 */
+}
 
-### **CSS Framework Integration**
-- **Tailwind CSS**: Extend with custom utilities
-- **shadcn/ui**: Override component styles
-- **CSS Modules**: For component-specific styles
+.btn-primary:hover {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  /* from-amber-600 to-amber-700 */
+}
 
-### **Performance Optimization**
-- **CSS Variables**: Dynamic theming
-- **Minimal CSS**: Remove unused styles
-- **Critical CSS**: Above-the-fold optimization
+/* Secondary Buttons - White/10 */
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+}
 
-### **Browser Compatibility**
-- **Modern Browsers**: CSS Grid, Flexbox, Custom Properties
-- **Fallbacks**: For older browser support
-- **Progressive Enhancement**: Core functionality first
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+```
 
-## 📊 Success Metrics
+#### Inputs
+```css
+.input {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(8px);
+}
 
-### **Visual Quality**
-- [ ] Matches mobile app design language
-- [ ] Consistent color usage across components
-- [ ] Professional glass morphism effects
-- [ ] Smooth animations and transitions
+.input:focus {
+  border-color: #f59e0b; /* amber-500 */
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+}
+```
 
-### **User Experience**
-- [ ] Improved visual hierarchy
-- [ ] Better contrast and readability
-- [ ] Intuitive interactive elements
-- [ ] Mobile-responsive design
+### Phase 4: Dialog Components
+Update all dialog components to use solid backgrounds like the landing page:
 
-### **Technical Performance**
-- [ ] Fast loading times
-- [ ] Smooth animations (60fps)
-- [ ] Accessible design (WCAG AA)
-- [ ] Cross-browser compatibility
+```css
+/* Force solid background for all dialogs */
+[data-radix-dialog-content] {
+  background: #1c1917 !important; /* stone-950 */
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  backdrop-filter: none !important;
+}
+```
 
-## 🎯 Next Steps
+## Files to Update
 
-1. **Review and Approve** this sprint plan
-2. **Start with Phase 1** - Core design system
-3. **Implement incrementally** - Test each component
-4. **Gather feedback** - Iterate based on results
-5. **Deploy gradually** - Feature flags for rollout
+### Core CSS Files:
+1. `frontend/src/app/globals.css` - Main CSS variables and base styles
+2. `frontend/src/app/swaps/swaps.css` - Swap page specific styles
+3. `frontend/src/app/pools/pools.css` - Pools page specific styles
+4. `frontend/src/app/launchpad/launchpad.css` - Launchpad page specific styles
+5. `frontend/src/app/dashboard/dashboard.css` - Dashboard page specific styles
+6. `frontend/src/app/bridge/bridge.css` - Bridge page specific styles
+7. `frontend/src/app/stake/stake.css` - Staking page specific styles
+
+### Dialog Components Needing Updates:
+1. `frontend/src/components/swap/TokenSelectorModal.tsx` ✅ (Already updated)
+2. `frontend/src/components/pools/RemoveLiquidityModal.tsx`
+3. `frontend/src/components/pools/TokenSelector.tsx`
+4. `frontend/src/components/swap/SwapConfirmationModal.tsx`
+5. `frontend/src/components/wallet/ConnectWallet.tsx`
+
+## Color Reference
+
+### Tailwind Amber Colors:
+- `amber-50`: #fffbeb
+- `amber-100`: #fef3c7
+- `amber-200`: #fde68a
+- `amber-300`: #fcd34d
+- `amber-400`: #fbbf24
+- `amber-500`: #f59e0b
+- `amber-600`: #d97706
+- `amber-700`: #b45309
+- `amber-800`: #92400e
+- `amber-900`: #78350f
+
+### Stone Colors:
+- `stone-50`: #fafaf9
+- `stone-100`: #f5f5f4
+- `stone-200`: #e7e5e4
+- `stone-300`: #d6d3d1
+- `stone-400`: #a8a29e
+- `stone-500`: #78716c
+- `stone-600`: #57534e
+- `stone-700`: #44403c
+- `stone-800`: #292524
+- `stone-900`: #1c1917
+- `stone-950`: #0c0a09
+
+## Implementation Notes
+
+1. **Maintain Functionality**: Only update colors, don't change component structure
+2. **Consistent Branding**: All colors must match the landing page exactly
+3. **Glass Morphism**: Keep backdrop-blur effects but with white/10 backgrounds
+4. **Gradients**: Use amber gradients instead of blue/orange combinations
+5. **Text Hierarchy**: White for primary, amber-100 for secondary, amber-400 for accents
+
+## Testing Checklist
+
+After implementation, verify:
+- [ ] All pages match landing page color scheme
+- [ ] Dialog backgrounds are solid (not transparent)
+- [ ] Button gradients use amber colors
+- [ ] Card backgrounds use white/10 with white/20 borders
+- [ ] Text is readable with proper contrast
+- [ ] Hover states use amber colors
+- [ ] All components maintain functionality
+
+## Current Status
+
+- ✅ TokenSelectorModal dialog background fixed (solid dark background)
+- ⏳ Awaiting full color scheme implementation
+- ⏳ Need to update all CSS files with amber theme
+- ⏳ Need to update remaining dialog components

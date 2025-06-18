@@ -11,6 +11,7 @@ import { Coins, ArrowUpCircle, ArrowDownCircle, Loader2 } from 'lucide-react';
 import { useStakingBalances, useStakingActions } from '@/hooks/staking';
 import { useWallet } from '@/hooks/useWallet';
 import { useToast } from '@/components/ui/toast';
+import '@/app/launchpad/launchpad.css';
 
 // Simple TokenIcon component for KLC
 function TokenIcon({ symbol, size = 24 }: { symbol: string; size?: number }) {
@@ -170,7 +171,9 @@ export default function StakingForm({ className }: StakingFormProps) {
     <Card className={`stake-form-card ${className}`}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-white">
-          <Coins className="h-5 w-5 text-blue-400" />
+          <div className="p-1 rounded-lg icon-bg-blue">
+            <Coins className="h-4 w-4" />
+          </div>
           Stake KLC
         </CardTitle>
       </CardHeader>

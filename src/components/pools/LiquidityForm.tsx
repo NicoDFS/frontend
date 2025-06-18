@@ -337,7 +337,7 @@ export default function LiquidityForm({
           </div>
           <span className="font-medium">{tokenA.symbol}</span>
         </div>
-        <div className="text-gray-400">
+        <div className="text-amber-400 bg-amber-500/20 rounded-full p-1">
           <Plus className="h-4 w-4" />
         </div>
         <div className="flex items-center space-x-2">
@@ -346,7 +346,7 @@ export default function LiquidityForm({
           </div>
           <span className="font-medium">{tokenB.symbol}</span>
         </div>
-        <div className="text-xs bg-gray-100 px-2 py-1 rounded">0.3%</div>
+        <div className="text-xs bg-amber-500/20 text-amber-200 px-2 py-1 rounded border border-amber-500/30">0.3%</div>
       </div>
 
       {/* Market Price */}
@@ -429,8 +429,8 @@ export default function LiquidityForm({
 
           {/* Plus Icon */}
           <div className="flex justify-center">
-            <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center">
-              <Plus className="h-4 w-4 text-gray-600" />
+            <div className="w-8 h-8 bg-amber-500/20 border border-amber-500/30 rounded-full flex items-center justify-center">
+              <Plus className="h-4 w-4 text-amber-400" />
             </div>
           </div>
 

@@ -57,30 +57,40 @@ export function ConnectWallet({ children, className }: ConnectWalletProps) {
         <Dialog open={showWalletModal} onOpenChange={setShowWalletModal}>
           <DialogTrigger asChild>
             {children || (
-              <Button variant="outline" size="sm">
+              <Button
+                size="sm"
+                className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border-0 font-semibold"
+              >
                 <Wallet className="h-4 w-4 mr-2" />
                 Connect Wallet
               </Button>
             )}
           </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Wallet className="h-5 w-5" />
+          <DialogContent
+            className="sm:max-w-md border-white/20"
+            style={{ backgroundColor: '#0c0a09' }}
+          >
+            <DialogHeader className="bg-stone-900 -m-6 mb-2 p-6 rounded-t-lg">
+              <DialogTitle className="flex items-center gap-2" style={{ color: '#fef3c7' }}>
+                <Wallet className="h-5 w-5" style={{ color: '#fef3c7' }} />
                 Connect Your Wallet
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
+            <div className="space-y-4 px-2">
               {/* External Wallets Section */}
-              <Card>
+              <Card className="bg-white/10 backdrop-blur-[10px] border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.3)]">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <ExternalLink className="h-4 w-4" />
+                  <CardTitle className="text-base flex items-center gap-2 text-amber-100">
+                    <img
+                      src="/icons/metamask.png"
+                      alt="MetaMask"
+                      className="h-4 w-4"
+                    />
                     External Wallets
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm text-gray-600 mb-4">
+                  <p className="text-sm text-amber-100 mb-4">
                     Connect your existing wallet (MetaMask, WalletConnect, etc.)
                   </p>
                   <ConnectButton.Custom>
@@ -90,10 +100,14 @@ export function ConnectWallet({ children, className }: ConnectWalletProps) {
                           setShowWalletModal(false)
                           setTimeout(() => openConnectModal(), 100)
                         }}
-                        className="w-full"
+                        className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border-0"
                         disabled={connectModalOpen}
                       >
-                        <ExternalLink className="h-4 w-4 mr-2" />
+                        <img
+                          src="/icons/metamask.png"
+                          alt="MetaMask"
+                          className="h-4 w-4 mr-2"
+                        />
                         Connect External Wallet
                       </Button>
                     )}
@@ -102,21 +116,25 @@ export function ConnectWallet({ children, className }: ConnectWalletProps) {
               </Card>
 
               {/* Internal Wallets Section */}
-              <Card>
+              <Card className="bg-white/10 backdrop-blur-[10px] border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.3)]">
                 <CardHeader className="pb-3">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Zap className="h-4 w-4" />
+                  <CardTitle className="text-base flex items-center gap-2 text-amber-100">
+                    <img
+                      src="/icons/KalySwapLogo.png"
+                      alt="KalySwap"
+                      className="h-4 w-4"
+                    />
                     KalySwap Wallets
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm text-gray-600 mb-4">
+                  <p className="text-sm text-amber-100 mb-4">
                     Use your KalySwap internal wallet or create a new one
                   </p>
                   <div className="space-y-2">
                     <Button
                       variant="outline"
-                      className="w-full"
+                      className="w-full border-amber-500/50 text-amber-100 hover:bg-amber-500/10 hover:border-amber-400"
                       onClick={async () => {
                         try {
                           // Use our internal wallet connector directly
@@ -128,12 +146,16 @@ export function ConnectWallet({ children, className }: ConnectWalletProps) {
                         }
                       }}
                     >
-                      <Zap className="h-4 w-4 mr-2" />
+                      <img
+                        src="/icons/KalySwapLogo.png"
+                        alt="KalySwap"
+                        className="h-4 w-4 mr-2"
+                      />
                       Use Internal Wallet
                     </Button>
                     <Button
                       variant="ghost"
-                      className="w-full text-sm"
+                      className="w-full text-sm text-amber-200 hover:text-amber-100 hover:bg-amber-500/10"
                       onClick={() => {
                         setShowWalletModal(false)
                         router.push('/dashboard')
@@ -159,7 +181,10 @@ export function ConnectWalletButton({ className }: { className?: string }) {
   try {
     return (
       <ConnectWallet className={className}>
-        <Button variant="outline" size="sm">
+        <Button
+          size="sm"
+          className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border-0 font-semibold"
+        >
           <Wallet className="h-4 w-4 mr-2" />
           Connect
         </Button>
@@ -168,7 +193,11 @@ export function ConnectWalletButton({ className }: { className?: string }) {
   } catch (error) {
     // Fallback if wallet providers are not available
     return (
-      <Button variant="outline" size="sm" className={className} disabled>
+      <Button
+        size="sm"
+        className={`bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border-0 font-semibold ${className}`}
+        disabled
+      >
         <Wallet className="h-4 w-4 mr-2" />
         Connect
       </Button>

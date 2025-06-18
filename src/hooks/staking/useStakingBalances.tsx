@@ -26,18 +26,18 @@ export function useStakingBalances(userAddress?: string) {
   const address = userAddress || walletAddress
   const stakingData = useStakingUserData(address)
   
-  // Formatted balances
-  const klcBalanceFormatted = stakingData.klcBalanceFormatted
-  const stakedBalanceFormatted = formatEther(stakingData.stakedBalance)
-  const earnedRewardsFormatted = formatEther(stakingData.earnedRewards)
-  const totalStakedFormatted = formatEther(stakingData.totalStaked)
+  // Formatted balances with 6 decimal limit
+  const klcBalanceFormatted = toFixedDigits(Number(formatEther(stakingData.klcBalance)))
+  const stakedBalanceFormatted = toFixedDigits(Number(formatEther(stakingData.stakedBalance)))
+  const earnedRewardsFormatted = toFixedDigits(Number(formatEther(stakingData.earnedRewards)))
+  const totalStakedFormatted = toFixedDigits(Number(formatEther(stakingData.totalStaked)))
 
-  // Display-friendly formatted values
+  // Display-friendly formatted values (already formatted with 6 decimals)
   const displayBalances = {
-    klcBalance: toFixedDigits(Number(klcBalanceFormatted)),
-    stakedBalance: toFixedDigits(Number(stakedBalanceFormatted)),
-    earnedRewards: toFixedDigits(Number(earnedRewardsFormatted)),
-    totalStaked: toFixedDigits(Number(totalStakedFormatted)),
+    klcBalance: klcBalanceFormatted,
+    stakedBalance: stakedBalanceFormatted,
+    earnedRewards: earnedRewardsFormatted,
+    totalStaked: totalStakedFormatted,
     apr: stakingData.apr.toFixed(1),
   }
 

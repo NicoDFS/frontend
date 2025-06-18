@@ -133,7 +133,7 @@ export default function PoolList({ onAddLiquidity }: PoolListProps) {
           size="sm"
           disabled={loading}
           className="flex items-center space-x-2 bg-gray-900/30 text-white hover:bg-gray-800/50"
-          style={{ borderColor: 'rgba(59, 130, 246, 0.2)' }}
+          style={{ borderColor: 'rgba(245, 158, 11, 0.3)' }}
         >
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           <span>Refresh</span>
@@ -151,7 +151,7 @@ export default function PoolList({ onAddLiquidity }: PoolListProps) {
                 placeholder="Search pools by token name or symbol..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 bg-gray-900/30 text-white border-gray-600 placeholder:text-gray-400"
+                className="pl-10 bg-white/10 backdrop-blur-sm text-white border-white/20 placeholder:text-amber-200/70 focus:border-amber-500/50 focus:bg-white/15"
               />
             </div>
 
@@ -160,7 +160,7 @@ export default function PoolList({ onAddLiquidity }: PoolListProps) {
               variant="outline"
               onClick={() => setShowFilters(!showFilters)}
               className="flex items-center space-x-2 bg-gray-900/30 text-white hover:bg-gray-800/50"
-              style={{ borderColor: 'rgba(59, 130, 246, 0.2)' }}
+              style={{ borderColor: 'rgba(245, 158, 11, 0.3)' }}
             >
               <Filter className="h-4 w-4" />
               <span>Filters</span>
@@ -179,7 +179,7 @@ export default function PoolList({ onAddLiquidity }: PoolListProps) {
                   size="sm"
                   onClick={() => setShowOnlyUserPools(false)}
                   className={!showOnlyUserPools ? 'continue-button' : 'bg-gray-900/30 text-white hover:bg-gray-800/50'}
-                  style={showOnlyUserPools ? { borderColor: 'rgba(59, 130, 246, 0.2)' } : {}}
+                  style={showOnlyUserPools ? { borderColor: 'rgba(245, 158, 11, 0.3)' } : {}}
                 >
                   All Pools ({allPools.length})
                 </Button>
@@ -189,7 +189,7 @@ export default function PoolList({ onAddLiquidity }: PoolListProps) {
                   size="sm"
                   onClick={() => setShowOnlyUserPools(true)}
                   className={`flex items-center space-x-1 ${showOnlyUserPools ? 'continue-button' : 'bg-gray-900/30 text-white hover:bg-gray-800/50'}`}
-                  style={!showOnlyUserPools ? { borderColor: 'rgba(59, 130, 246, 0.2)' } : {}}
+                  style={!showOnlyUserPools ? { borderColor: 'rgba(245, 158, 11, 0.3)' } : {}}
                 >
                   <span>My Pools ({userPoolsCount})</span>
                 </Button>
@@ -204,7 +204,7 @@ export default function PoolList({ onAddLiquidity }: PoolListProps) {
                   size="sm"
                   onClick={() => handleSortChange('liquidity')}
                   className={`flex items-center space-x-1 ${sortBy === 'liquidity' ? 'continue-button' : 'bg-gray-900/30 text-white hover:bg-gray-800/50'}`}
-                  style={sortBy !== 'liquidity' ? { borderColor: 'rgba(59, 130, 246, 0.2)' } : {}}
+                  style={sortBy !== 'liquidity' ? { borderColor: 'rgba(245, 158, 11, 0.3)' } : {}}
                 >
                   <span>Liquidity</span>
                   {getSortIcon('liquidity')}
@@ -215,7 +215,7 @@ export default function PoolList({ onAddLiquidity }: PoolListProps) {
                   size="sm"
                   onClick={() => handleSortChange('name')}
                   className={`flex items-center space-x-1 ${sortBy === 'name' ? 'continue-button' : 'bg-gray-900/30 text-white hover:bg-gray-800/50'}`}
-                  style={sortBy !== 'name' ? { borderColor: 'rgba(59, 130, 246, 0.2)' } : {}}
+                  style={sortBy !== 'name' ? { borderColor: 'rgba(245, 158, 11, 0.3)' } : {}}
                 >
                   <span>Name</span>
                   {getSortIcon('name')}
@@ -293,7 +293,7 @@ export default function PoolList({ onAddLiquidity }: PoolListProps) {
                     onClick={() => setSearchTerm('')}
                     variant="outline"
                     className="bg-gray-900/30 text-white hover:bg-gray-800/50"
-                    style={{ borderColor: 'rgba(59, 130, 246, 0.2)' }}
+                    style={{ borderColor: 'rgba(245, 158, 11, 0.3)' }}
                   >
                     Clear Search
                   </Button>
@@ -303,7 +303,7 @@ export default function PoolList({ onAddLiquidity }: PoolListProps) {
                     onClick={() => setShowOnlyUserPools(false)}
                     variant="outline"
                     className="bg-gray-900/30 text-white hover:bg-gray-800/50"
-                    style={{ borderColor: 'rgba(59, 130, 246, 0.2)' }}
+                    style={{ borderColor: 'rgba(245, 158, 11, 0.3)' }}
                   >
                     View All Pools
                   </Button>

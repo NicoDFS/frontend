@@ -20,7 +20,7 @@ function BridgeTipCard() {
   return (
     <Card className="w-100 p-2 sm:w-[31rem]">
       <CardContent className="pt-2">
-        <h2 className="text-blue-600 font-semibold">Bridge Your Tokens with KalyBridge!</h2>
+        <h2 className="font-semibold" style={{ color: '#f59e0b' }}>Bridge Your Tokens with KalyBridge!</h2>
         <div className="flex items-end justify-between">
           <p className="mt-1 max-w-[75%] text-xs text-gray-600">
             Warp Routes make it safe and easy to bridge your tokens to and from KalyChain, Arbitrum,

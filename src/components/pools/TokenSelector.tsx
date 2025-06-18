@@ -188,23 +188,23 @@ export default function TokenSelector({
       <DialogTrigger asChild>
         <Button
           variant="outline"
-          className="token-selector-button w-full justify-between h-12 px-4"
+          className="w-full justify-between h-12 px-4 bg-slate-800 border-slate-600 text-white hover:bg-amber-500/20 hover:border-amber-500/40 transition-all duration-200"
         >
           {selectedToken ? (
             <div className="flex items-center space-x-3">
               <div className="flex items-center">
                 <TokenIcon token={selectedToken} />
               </div>
-              <span className="font-medium">{selectedToken.symbol}</span>
+              <span className="font-medium text-white">{selectedToken.symbol}</span>
             </div>
           ) : (
-            <span className="text-gray-400">{placeholder}</span>
+            <span className="text-slate-400">{placeholder}</span>
           )}
-          <ChevronDown className="h-4 w-4 text-gray-400" />
+          <ChevronDown className="h-4 w-4 text-slate-400" />
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-md bg-gray-900 border-gray-600">
+      <DialogContent className="max-w-md" style={{ background: '#1c1917', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
         <DialogHeader>
           <DialogTitle className="text-white">Select a token</DialogTitle>
         </DialogHeader>
@@ -212,12 +212,12 @@ export default function TokenSelector({
         <div className="space-y-4">
           {/* Search Input */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input
               placeholder="Search name or paste address"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 bg-gray-800 text-white border-gray-600 placeholder:text-gray-400"
+              className="pl-10 h-12 bg-slate-800 text-white border-slate-600 placeholder:text-slate-400 rounded-xl"
             />
           </div>
 
@@ -232,7 +232,7 @@ export default function TokenSelector({
                     variant="outline"
                     size="sm"
                     onClick={() => handleTokenSelect(token)}
-                    className="h-8 px-3 text-xs flex items-center gap-1 bg-gray-800 text-white border-gray-600 hover:bg-gray-700"
+                    className="h-8 px-3 text-xs flex items-center gap-1 bg-slate-800 text-white border-slate-600 hover:bg-amber-500/20 hover:border-amber-500/40 transition-all duration-200"
                     disabled={excludeToken?.address.toLowerCase() === token.address.toLowerCase()}
                   >
                     <div className="flex items-center">
@@ -251,7 +251,7 @@ export default function TokenSelector({
           <div className="max-h-80 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-amber-500"></div>
               </div>
             ) : allTokens.length > 0 ? (
               <div className="space-y-1">
@@ -259,7 +259,7 @@ export default function TokenSelector({
                   <button
                     key={token.address}
                     onClick={() => handleTokenSelect(token)}
-                    className="token-list-item w-full flex items-center space-x-3 p-3 rounded-lg transition-colors text-left"
+                    className="w-full flex items-center space-x-3 p-3 rounded-lg transition-all duration-200 text-left hover:bg-amber-500/10 hover:border-amber-500/20 border border-transparent"
                     disabled={excludeToken?.address.toLowerCase() === token.address.toLowerCase()}
                   >
                     <div className="flex items-center">
@@ -267,13 +267,13 @@ export default function TokenSelector({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="font-medium text-white">{token.symbol}</div>
-                      <div className="text-sm text-gray-300 truncate">{token.name}</div>
+                      <div className="text-sm truncate" style={{ color: '#fef3c7' }}>{token.name}</div>
                     </div>
                   </button>
                 ))}
               </div>
             ) : !searchQuery || !isAddress(searchQuery) ? (
-              <div className="text-center py-8 text-gray-400">
+              <div className="text-center py-8 text-slate-400">
                 <p>No tokens found</p>
                 {searchQuery && (
                   <p className="text-sm mt-1">Try a different search term or paste a token address</p>

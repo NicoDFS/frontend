@@ -10,68 +10,68 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* KalySwap Mobile App Color System */
+  /* KalySwap Dark Amber Theme - Matching Landing Page */
   --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 15, 23, 42;
-  --background-end-rgb: 30, 41, 59;
+  --background-start-rgb: 0, 0, 0;
+  --background-end-rgb: 146, 64, 14;
   --radius: 0.75rem;
 
-  /* Main background gradient from mobile app */
-  --background: #0f172a;
+  /* Main background - black to amber gradient */
+  --background: #000000;
   --foreground: #ffffff;
 
-  /* Glass morphism cards with blue tint */
-  --card: rgba(30, 58, 138, 0.1);
+  /* Cards - white/10 with white borders */
+  --card: rgba(255, 255, 255, 0.1);
   --card-foreground: #ffffff;
 
   /* Popover/dropdown styling */
-  --popover: rgba(30, 58, 138, 0.15);
+  --popover: rgba(255, 255, 255, 0.1);
   --popover-foreground: #ffffff;
 
-  /* Orange gradient for primary actions (Connect, Swap buttons) */
+  /* Primary - amber gradient */
   --primary: #f59e0b;
   --primary-foreground: #ffffff;
 
-  /* Blue gradient for secondary actions */
-  --secondary: rgba(30, 64, 175, 0.2);
+  /* Secondary - white/10 */
+  --secondary: rgba(255, 255, 255, 0.1);
   --secondary-foreground: #ffffff;
 
   /* Muted elements */
-  --muted: rgba(30, 58, 138, 0.1);
-  --muted-foreground: #94a3b8;
+  --muted: rgba(255, 255, 255, 0.1);
+  --muted-foreground: #fef3c7;
 
-  /* Accent color (orange) */
-  --accent: #f59e0b;
-  --accent-foreground: #ffffff;
+  /* Accent - amber */
+  --accent: #fbbf24;
+  --accent-foreground: #000000;
 
   /* Destructive actions */
   --destructive: #ef4444;
 
-  /* Borders with blue tint */
-  --border: rgba(59, 130, 246, 0.2);
+  /* Borders - white/20 */
+  --border: rgba(255, 255, 255, 0.2);
 
-  /* Input fields with dark blue background */
-  --input: rgba(30, 58, 138, 0.2);
+  /* Input fields - white/10 */
+  --input: rgba(255, 255, 255, 0.1);
 
-  /* Focus ring */
-  --ring: #3b82f6;
+  /* Focus ring - amber */
+  --ring: #f59e0b;
 
-  /* Chart colors */
-  --chart-1: #3b82f6;
+  /* Chart colors - amber theme */
+  --chart-1: #f59e0b;
   --chart-2: #10b981;
-  --chart-3: #f59e0b;
-  --chart-4: #8b5cf6;
+  --chart-3: #fbbf24;
+  --chart-4: #d97706;
   --chart-5: #ef4444;
 
-  /* Sidebar colors */
-  --sidebar: rgba(30, 58, 138, 0.1);
+  /* Sidebar colors - amber theme */
+  --sidebar: rgba(255, 255, 255, 0.1);
   --sidebar-foreground: #ffffff;
-  --sidebar-primary: #3b82f6;
+  --sidebar-primary: #f59e0b;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: rgba(30, 64, 175, 0.2);
+  --sidebar-accent: rgba(255, 255, 255, 0.1);
   --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: rgba(59, 130, 246, 0.2);
-  --sidebar-ring: #3b82f6;
+  --sidebar-border: rgba(255, 255, 255, 0.2);
+  --sidebar-ring: #f59e0b;
 }
 
 @layer utilities {
@@ -163,7 +163,7 @@
 
   body {
     @apply text-foreground;
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    background: linear-gradient(135deg, #000000 0%, #1c1917 50%, #92400e 100%);
     background-attachment: fixed;
     min-height: 100vh;
   }
@@ -172,32 +172,45 @@
 /* KalySwap Component Styling - Mobile App Design */
 @layer components {
 
-  /* Enhanced Card Components with Glass Morphism */
+  /* Enhanced Card Components with Glass Morphism - Amber Theme */
   .card {
-    background: rgba(30, 58, 138, 0.1);
+    background: rgba(28, 25, 23, 0.9);
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(59, 130, 246, 0.2);
-    box-shadow: 0 8px 32px rgba(30, 58, 138, 0.3);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     transition: all 0.3s ease;
   }
 
   .card:hover {
-    box-shadow: 0 12px 40px rgba(30, 58, 138, 0.4);
+    border-color: rgba(245, 158, 11, 0.5);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
     transform: translateY(-2px);
   }
 
-  /* Ensure all Card components use consistent blue borders */
+  /* Ensure all Card components use consistent amber borders */
   [data-slot="card"],
   .card,
   .bg-card {
-    border-color: rgba(59, 130, 246, 0.2) !important;
+    border-color: rgba(245, 158, 11, 0.3) !important;
+    background: rgba(28, 25, 23, 0.9) !important;
   }
 
-  /* Primary Buttons - Orange Gradient (Connect Wallet, Swap, Send) */
+  /* Force solid backgrounds for ALL Select dropdowns globally */
+  [data-radix-select-content],
+  [data-radix-select-viewport],
+  [data-radix-popper-content-wrapper] > div,
+  div[role="listbox"] {
+    background: #1c1917 !important;
+    border: 1px solid rgba(245, 158, 11, 0.3) !important;
+    backdrop-filter: none !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8) !important;
+  }
+
+  /* Primary Buttons - Amber Gradient */
   .btn-primary,
   button[class*="bg-primary"],
   .button:not(.button-secondary):not(.button-outline) {
-    background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
     color: white;
     font-weight: 600;
     border: none;
@@ -206,7 +219,7 @@
 
   .btn-primary:hover,
   button[class*="bg-primary"]:hover {
-    background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
+    background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
     box-shadow: 0 8px 25px rgba(245, 158, 11, 0.4);
     transform: translateY(-1px);
   }
@@ -216,32 +229,33 @@
     transform: translateY(0);
   }
 
-  /* Secondary Buttons - Blue Gradient */
+  /* Secondary Buttons - White/10 */
   .btn-secondary,
   button[class*="bg-secondary"] {
-    background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%);
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
     color: white;
     font-weight: 600;
-    border: none;
     transition: all 0.2s ease;
   }
 
   .btn-secondary:hover,
   button[class*="bg-secondary"]:hover {
-    background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
-    box-shadow: 0 8px 25px rgba(30, 64, 175, 0.4);
+    background: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 25px rgba(255, 255, 255, 0.1);
     transform: translateY(-1px);
   }
 
-  /* Input Fields - Dark Blue Glass Effect */
+  /* Input Fields - White/10 Glass Effect */
   .input,
   input[type="text"],
   input[type="number"],
   input[type="email"],
   input[type="password"],
   textarea {
-    background: rgba(30, 58, 138, 0.2);
-    border: 1px solid rgba(59, 130, 246, 0.2);
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     color: white;
     backdrop-filter: blur(8px);
     transition: all 0.2s ease;
@@ -250,47 +264,47 @@
   .input:focus,
   input:focus,
   textarea:focus {
-    border-color: #3b82f6;
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-    background: rgba(30, 58, 138, 0.3);
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+    background: rgba(255, 255, 255, 0.15);
   }
 
   .input::placeholder,
   input::placeholder,
   textarea::placeholder {
-    color: #94a3b8;
+    color: #fef3c7;
   }
 
   /* Tab Components */
   .tabs-list {
-    background: rgba(30, 58, 138, 0.15);
+    background: rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(8px);
-    border: 1px solid rgba(59, 130, 246, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.2);
   }
 
   .tabs-trigger {
-    color: #94a3b8;
+    color: #fef3c7;
     transition: all 0.2s ease;
   }
 
   .tabs-trigger[data-state="active"] {
-    background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%);
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
     color: white;
-    box-shadow: 0 4px 12px rgba(30, 64, 175, 0.3);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
   }
 
   /* Select Components */
   .select-trigger {
-    background: rgba(30, 58, 138, 0.2);
-    border: 1px solid rgba(59, 130, 246, 0.2);
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     color: white;
     backdrop-filter: blur(8px);
   }
 
   .select-content {
-    background: rgba(30, 58, 138, 0.15);
+    background: rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(12px);
-    border: 1px solid rgba(59, 130, 246, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.2);
   }
 
   .select-item {
@@ -299,22 +313,22 @@
   }
 
   .select-item:hover {
-    background: rgba(59, 130, 246, 0.2);
+    background: rgba(245, 158, 11, 0.2);
   }
 
   /* Labels */
   .label {
-    color: #94a3b8;
+    color: #fef3c7;
     font-weight: 500;
   }
 
   /* Loading Spinners */
   .animate-spin {
-    border-color: rgba(59, 130, 246, 0.3);
-    border-top-color: #3b82f6;
+    border-color: rgba(245, 158, 11, 0.3);
+    border-top-color: #f59e0b;
   }
 
-  /* Connection Warning Card - Orange Theme */
+  /* Connection Warning Card - Amber Theme */
   .border-orange-200 {
     border-color: rgba(245, 158, 11, 0.3) !important;
   }
@@ -333,13 +347,13 @@
     color: #fbbf24 !important;
   }
 
-  /* Gray text to light colors for dark theme */
+  /* Gray text to amber colors for dark theme */
   .text-gray-500 {
-    color: #94a3b8 !important;
+    color: #fef3c7 !important;
   }
 
   .text-gray-600 {
-    color: #94a3b8 !important;
+    color: #fef3c7 !important;
   }
 
   .text-gray-700 {
@@ -361,7 +375,7 @@
 
   /* Coming soon sections */
   .text-center .opacity-50 {
-    color: #94a3b8;
+    color: #fef3c7;
   }
 
   /* Fix token symbol readability */
@@ -377,13 +391,13 @@
     color: white !important;
   }
 
-  /* Chart background fix - make it match the dark theme */
+  /* Chart background fix - make it match the amber theme */
   .trading-chart-wrapper .bg-white,
   .chart-container .bg-white,
   [class*="bg-white"] {
-    background: rgba(30, 58, 138, 0.1) !important;
+    background: rgba(255, 255, 255, 0.1) !important;
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(59, 130, 246, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.2);
   }
 
   /* Chart text colors */
@@ -416,7 +430,14 @@
 
   /* Fix placeholder text */
   ::placeholder {
-    color: #94a3b8 !important;
+    color: #fef3c7 !important;
     opacity: 1;
+  }
+
+  /* Force solid background for all dialogs - Amber Theme */
+  [data-radix-dialog-content] {
+    background: #0c0a09 !important; /* stone-950 */
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    backdrop-filter: none !important;
   }
 }

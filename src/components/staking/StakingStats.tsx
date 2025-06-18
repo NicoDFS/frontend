@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Coins, TrendingUp, Clock, Users } from 'lucide-react';
 import { useStakingBalances } from '@/hooks/staking';
 import { useWallet } from '@/hooks/useWallet';
+import '@/app/launchpad/launchpad.css';
 
 interface StakingStatsProps {
   className?: string;
@@ -59,32 +60,28 @@ export default function StakingStats({ className }: StakingStatsProps) {
       value: isLoading ? 'Loading...' : `${totalStakedFormatted} KLC`,
       icon: Users,
       description: 'Total KLC staked in the pool',
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50'
+      iconBgClass: 'icon-bg-blue'
     },
     {
       title: 'Current APR',
       value: isLoading ? 'Loading...' : `${apr.toFixed(2)}%`,
       icon: TrendingUp,
       description: 'Annual percentage rate',
-      color: 'text-green-600',
-      bgColor: 'bg-green-50'
+      iconBgClass: 'icon-bg-green'
     },
     {
       title: 'Days Remaining',
       value: isLoading ? 'Loading...' : `${daysRemaining} days`,
       icon: Clock,
       description: 'Until reward period ends',
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-50'
+      iconBgClass: 'icon-bg-orange'
     },
     {
       title: 'Your Stake',
       value: isLoading ? 'Loading...' : `${stakedBalanceFormatted} KLC`,
       icon: Coins,
       description: hasStakedBalance ? `${poolSharePercentage.toFixed(4)}% of pool` : 'No stake yet',
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50'
+      iconBgClass: 'icon-bg-purple'
     }
   ];
 
@@ -99,8 +96,8 @@ export default function StakingStats({ className }: StakingStatsProps) {
               <CardTitle className="text-sm font-medium text-gray-300">
                 {stat.title}
               </CardTitle>
-              <div className="p-2 rounded-lg bg-blue-500/20 border border-blue-500/30">
-                <IconComponent className="h-4 w-4 text-blue-400" />
+              <div className={`p-2 rounded-lg ${stat.iconBgClass}`}>
+                <IconComponent className="h-4 w-4" />
               </div>
             </CardHeader>
             <CardContent>

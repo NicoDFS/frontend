@@ -130,11 +130,11 @@ export default function RemoveLiquidityModal({ isOpen, onClose, pool }: RemoveLi
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md !bg-slate-900 backdrop-blur-md border-blue-500/20" style={{ backgroundColor: 'rgb(15 23 42 / 0.95)' }}>
+      <DialogContent className="sm:max-w-md !bg-stone-950 backdrop-blur-md border-white/20">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between text-white">
             Remove Liquidity
-            <Button variant="ghost" size="sm" onClick={onClose} className="text-white hover:bg-gray-800/50">
+            <Button variant="ghost" size="sm" onClick={onClose} className="text-white hover:bg-white/10">
               <X className="h-4 w-4" />
             </Button>
           </DialogTitle>
@@ -142,7 +142,7 @@ export default function RemoveLiquidityModal({ isOpen, onClose, pool }: RemoveLi
 
         <div className="space-y-4">
           {/* Amount Selection */}
-          <Card className="!bg-slate-800 backdrop-blur-sm border-blue-500/20" style={{ backgroundColor: 'rgb(30 41 59 / 0.9)' }}>
+          <Card className="!bg-white/10 backdrop-blur-sm border-white/20">
             <CardContent className="p-4">
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -170,7 +170,7 @@ export default function RemoveLiquidityModal({ isOpen, onClose, pool }: RemoveLi
                   <Button
                     variant="outline"
                     size="sm"
-                    className="flex-1 border-blue-500/20 text-white hover:bg-blue-500/20"
+                    className="flex-1 border-white/20 text-white hover:bg-white/20"
                     onClick={() => setPercentage(25)}
                   >
                     25%
@@ -178,7 +178,7 @@ export default function RemoveLiquidityModal({ isOpen, onClose, pool }: RemoveLi
                   <Button
                     variant="outline"
                     size="sm"
-                    className="flex-1 border-blue-500/20 text-white hover:bg-blue-500/20"
+                    className="flex-1 border-white/20 text-white hover:bg-white/20"
                     onClick={() => setPercentage(50)}
                   >
                     50%
@@ -186,7 +186,7 @@ export default function RemoveLiquidityModal({ isOpen, onClose, pool }: RemoveLi
                   <Button
                     variant="outline"
                     size="sm"
-                    className="flex-1 border-blue-500/20 text-white hover:bg-blue-500/20"
+                    className="flex-1 border-white/20 text-white hover:bg-white/20"
                     onClick={() => setPercentage(75)}
                   >
                     75%
@@ -194,7 +194,7 @@ export default function RemoveLiquidityModal({ isOpen, onClose, pool }: RemoveLi
                   <Button
                     variant="outline"
                     size="sm"
-                    className="flex-1 border-blue-500/20 text-white hover:bg-blue-500/20"
+                    className="flex-1 border-white/20 text-white hover:bg-white/20"
                     onClick={() => setPercentage(100)}
                   >
                     MAX
@@ -210,7 +210,7 @@ export default function RemoveLiquidityModal({ isOpen, onClose, pool }: RemoveLi
           </div>
 
           {/* Output Amounts */}
-          <Card className="!bg-slate-800 backdrop-blur-sm border-blue-500/20" style={{ backgroundColor: 'rgb(30 41 59 / 0.9)' }}>
+          <Card className="!bg-white/10 backdrop-blur-sm border-white/20">
             <CardContent className="p-4">
               <div className="space-y-3">
                 {/* Token A */}
@@ -226,7 +226,7 @@ export default function RemoveLiquidityModal({ isOpen, onClose, pool }: RemoveLi
 
                 {/* Plus Icon */}
                 <div className="flex justify-center">
-                  <Plus className="h-4 w-4 text-blue-400" />
+                  <Plus className="h-4 w-4 text-amber-400" />
                 </div>
 
                 {/* Token B */}
@@ -245,7 +245,7 @@ export default function RemoveLiquidityModal({ isOpen, onClose, pool }: RemoveLi
 
           {/* Price Information */}
           {pool.reserve0 && pool.reserve1 && (
-            <div className="text-xs text-gray-300 space-y-1 px-2">
+            <div className="text-xs space-y-1 px-2" style={{ color: '#fef3c7' }}>
               <div className="flex justify-between">
                 <span>Price:</span>
                 <span>

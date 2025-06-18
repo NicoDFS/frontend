@@ -49,7 +49,11 @@ interface LaunchpadOverview {
   error?: string;
 }
 
-export default function Overview() {
+interface OverviewProps {
+  onSwitchToPresale?: () => void;
+}
+
+export default function Overview({ onSwitchToPresale }: OverviewProps) {
   const [overview, setOverview] = useState<LaunchpadOverview | null>(null);
   const [projects, setProjects] = useState<LaunchpadProject[]>([]);
   const [loading, setLoading] = useState(true);
@@ -320,7 +324,12 @@ export default function Overview() {
               <Coins className="h-12 w-12 empty-state-icon" />
               <h3 className="text-lg font-medium text-white mb-2">No projects yet</h3>
               <p className="text-gray-300 mb-6">Be the first to launch a project on our platform!</p>
-              <Button className="bg-blue-600 hover:bg-blue-700 text-white">Create Your First Project</Button>
+              <Button
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={onSwitchToPresale}
+              >
+                Create Your First Project
+              </Button>
             </div>
           ) : (
             <div className="space-y-4">

@@ -262,16 +262,16 @@ export default function SignupPage() {
               </div>
 
               {/* Security Warning and Acknowledgment */}
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+              <div className="wallet-info">
                 <div className="flex items-start gap-3">
-                  <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                  <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
                   <div className="flex-1">
-                    <h4 className="font-semibold text-amber-800 mb-2">Important Security Notice</h4>
-                    <p className="text-sm text-amber-700 mb-3">
+                    <h4 className="wallet-info-title mb-2">Important Security Notice</h4>
+                    <p className="wallet-info-text mb-3">
                       <strong>We do not offer password recovery</strong> to maintain the highest level of wallet security.
                       If you lose your password, you will permanently lose access to your wallet and funds.
                     </p>
-                    <p className="text-sm text-amber-700 mb-4">
+                    <p className="wallet-info-text mb-4">
                       Please save your password in a secure location such as a password manager or write it down and store it safely.
                     </p>
                     <div className="flex items-start gap-3">
@@ -284,7 +284,7 @@ export default function SignupPage() {
                         className="form-checkbox mt-1"
                         required
                       />
-                      <label htmlFor="securityAcknowledged" className="text-sm text-amber-800 font-medium">
+                      <label htmlFor="securityAcknowledged" className="wallet-info-title text-sm font-medium">
                         I understand that password recovery is not available and I am responsible for keeping my password safe
                       </label>
                     </div>

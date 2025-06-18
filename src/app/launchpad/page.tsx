@@ -20,6 +20,10 @@ export default function LaunchpadPage() {
   const [activeTab, setActiveTab] = useState('overview');
   const router = useRouter();
 
+  const handleSwitchToPresale = () => {
+    setActiveTab('presale');
+  };
+
   return (
     <MainLayout>
       <div className="min-h-screen py-8 launchpad-container">
@@ -79,7 +83,7 @@ export default function LaunchpadPage() {
                 </TabsList>
 
                 <TabsContent value="overview" className="mt-0">
-                  <Overview />
+                  <Overview onSwitchToPresale={handleSwitchToPresale} />
                 </TabsContent>
 
                 <TabsContent value="token-creator" className="mt-0">

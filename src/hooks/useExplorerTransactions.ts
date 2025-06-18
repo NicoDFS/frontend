@@ -152,10 +152,13 @@ export function useExplorerTransactions({
 
     try {
       console.log('Fetching transactions from KalyScan API...');
-      
-      // Fetch transactions from KalyScan API
+
+      // If userAddress is provided, fetch transactions for that specific address
+      // Otherwise, fetch router transactions for general trading activity
+      const targetAddress = userAddress || ROUTER_ADDRESS;
+
       const response = await fetch(
-        `https://kalyscan.io/api/v2/addresses/${ROUTER_ADDRESS}/transactions?filter=to%20%7C%20from&limit=${limit}`,
+        `https://kalyscan.io/api/v2/addresses/${targetAddress}/transactions?filter=to%20%7C%20from&limit=${limit}`,
         {
           headers: {
             'accept': 'application/json'
@@ -168,11 +171,10 @@ export function useExplorerTransactions({
       }
 
       const data: KalyScanResponse = await response.json();
-      console.log(`Fetched ${data.items.length} transactions from KalyScan`);
+      console.log(`Fetched ${data.items.length} transactions from KalyScan for ${targetAddress}`);
 
       // Transform KalyScan data to our format
       const transformedTransactions: ExplorerTransaction[] = data.items
-        .filter(tx => tx.to.hash.toLowerCase() === ROUTER_ADDRESS.toLowerCase()) // Only transactions TO the router
         .map(tx => {
           const tokenPair = tx.raw_input ? decodeSwapInput(tx.raw_input, tx.method) || undefined : undefined;
           return {
@@ -189,9 +191,10 @@ export function useExplorerTransactions({
           };
         });
 
-      // Filter for user transactions if userAddress is provided
-      const filteredTransactions = userAddress
-        ? transformedTransactions.filter(tx => 
+      // If we're fetching router transactions but have a userAddress, filter for user transactions
+      // If we're fetching user transactions directly, no additional filtering needed
+      const filteredTransactions = userAddress && targetAddress === ROUTER_ADDRESS
+        ? transformedTransactions.filter(tx =>
             tx.from.toLowerCase() === userAddress.toLowerCase()
           )
         : transformedTransactions;

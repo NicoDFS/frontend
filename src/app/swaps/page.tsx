@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import MainLayout from '@/components/layout/MainLayout';
 import {
@@ -35,6 +35,7 @@ import TradingChart from '@/components/charts/TradingChart';
 import TransactionData from '@/components/swaps/TransactionData';
 import SwapInterfaceWrapper from '@/components/swap/SwapInterfaceWrapper';
 import { useDexMarketStats, formatTokenPrice, formatPriceChange } from '@/hooks/usePriceData';
+import { useWallet } from '@/hooks/useWallet';
 import './swaps.css';
 
 // Token interface based on KalyChain official tokenlist
@@ -146,9 +147,10 @@ interface SwapState {
 export default function SwapsPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('swap');
-  const [isConnected, setIsConnected] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [userAddress, setUserAddress] = useState<string | null>(null);
+
+  // Use wallet hook to get connection status and address
+  const { isConnected, address: userAddress } = useWallet();
 
   // Get real-time DEX market stats
   const {
@@ -180,24 +182,7 @@ export default function SwapsPage() {
     recipient: ''
   });
 
-  // Check wallet connection on mount
-  // TODO: Replace with Rainbow Kit wallet connection
-  useEffect(() => {
-    const checkConnection = async () => {
-      try {
-        const token = localStorage.getItem('auth_token');
-        if (token) {
-          setIsConnected(true);
-          // TODO: Get actual wallet address from Rainbow Kit
-          // setUserAddress(address);
-        }
-      } catch (error) {
-        console.error('Error checking wallet connection:', error);
-      }
-    };
-
-    checkConnection();
-  }, []);
+  // Wallet connection is now handled by useWallet hook
 
   // Handle token swap in the swap interface
   const handleSwapTokens = () => {
@@ -437,11 +422,11 @@ export default function SwapsPage() {
                   </CardContent>
                 </Card>
 
-                <TabsContent value="swap" className="mt-6">
+                <TabsContent value="swap" className="mt-1">
                   <SwapInterfaceWrapper />
                 </TabsContent>
 
-                <TabsContent value="limit" className="mt-6">
+                <TabsContent value="limit" className="mt-1">
                   <Card>
                     <CardContent className="pt-6">
                       <div className="text-center py-8 text-gray-500">
@@ -453,7 +438,7 @@ export default function SwapsPage() {
                   </Card>
                 </TabsContent>
 
-                <TabsContent value="send" className="mt-6">
+                <TabsContent value="send" className="mt-1">
                   <Card>
                     <CardContent className="pt-6 space-y-4">
                       <TokenSelector
@@ -504,7 +489,7 @@ export default function SwapsPage() {
                   </Card>
                 </TabsContent>
 
-                <TabsContent value="buy" className="mt-6">
+                <TabsContent value="buy" className="mt-1">
                   <Card>
                     <CardContent className="pt-6">
                       <div className="text-center py-8 text-gray-500">

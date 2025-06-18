@@ -311,6 +311,7 @@ export function useDexMarketStats(): DexMarketStats {
   const [totalLiquidity, setTotalLiquidity] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   // Create provider instance
   const getProvider = useCallback(() => {
@@ -336,7 +337,10 @@ export function useDexMarketStats(): DexMarketStats {
   // Fetch DEX data from contracts
   const fetchDexData = useCallback(async () => {
     try {
-      setIsLoading(true);
+      // Only show loading spinner on initial load, not on subsequent refreshes
+      if (isInitialLoad) {
+        setIsLoading(true);
+      }
       setError(null);
 
       const provider = getProvider();
@@ -401,9 +405,13 @@ export function useDexMarketStats(): DexMarketStats {
       console.error('Error fetching DEX data:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch DEX data');
     } finally {
-      setIsLoading(false);
+      // Only update loading state on initial load
+      if (isInitialLoad) {
+        setIsLoading(false);
+        setIsInitialLoad(false);
+      }
     }
-  }, [getProvider]);
+  }, [getProvider, isInitialLoad]);
 
   // Initial fetch and periodic updates
   useEffect(() => {

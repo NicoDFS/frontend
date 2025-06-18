@@ -168,7 +168,16 @@ export default function LoginPage() {
 
                 <Button
                   type="submit"
-                  className="w-full h-12 bg-gradient-to-r from-blue-600 to-violet-600 hover:from-blue-700 hover:to-violet-700 text-white font-medium"
+                  className="w-full h-12 text-white font-medium border border-amber-500/30 backdrop-blur-sm shadow-lg transition-all duration-200"
+                  style={{
+                    background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.8) 0%, rgba(217, 119, 6, 0.8) 100%)',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(245, 158, 11, 0.8) 0%, rgba(217, 119, 6, 0.8) 100%)';
+                  }}
                   disabled={loading}
                 >
                   {loading ? 'Signing in...' : 'Sign in'}
@@ -178,9 +187,9 @@ export default function LoginPage() {
 
 
               <CardFooter className="flex justify-center border-t mt-8 pt-6">
-                <p className="text-slate-600">
+                <p style={{ color: '#fef3c7' }}>
                   Don't have an account?{' '}
-                  <Link href="/signup" className="text-blue-600 hover:text-blue-800 font-medium">
+                  <Link href="/signup" className="font-medium" style={{ color: '#f59e0b' }}>
                     Sign up
                   </Link>
                 </p>
