@@ -222,7 +222,7 @@ async function testFarmingContracts() {
             console.log(`      - Weight: ${weight.toString()}`)
             console.log(`      - KLC Liquidity: ${ethers.utils.formatEther(klcLiquidity)} KLC`)
           } catch (registryError) {
-            console.log(`   ❌ Error checking pool registry: ${registryError.message}`)
+            console.log(`   ❌ Error checking pool registry: ${registryError instanceof Error ? registryError.message : String(registryError)}`)
           }
         }
 

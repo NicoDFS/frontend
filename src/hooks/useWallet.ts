@@ -293,20 +293,21 @@ export function useWallet(): WalletState & WalletActions {
   const promptForPassword = (): Promise<string | null> => {
     return new Promise((resolve) => {
       const modal = document.createElement('div');
-      modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+      modal.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[9999]';
+      modal.style.pointerEvents = 'auto';
       modal.innerHTML = `
-        <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-          <h3 class="text-lg font-semibold mb-4">Enter Wallet Password</h3>
-          <p class="text-sm text-gray-600 mb-4">Enter your internal wallet password to authorize this transaction.</p>
+        <div class="bg-stone-900 border border-amber-500/30 rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl" style="pointer-events: auto;">
+          <h3 class="text-lg font-semibold mb-4 text-white">Enter Wallet Password</h3>
+          <p class="text-sm text-gray-300 mb-4">Enter your internal wallet password to authorize this transaction.</p>
           <input
             type="password"
             placeholder="Enter your wallet password"
-            class="w-full p-3 border rounded-lg mb-4 password-input"
+            class="w-full p-3 border border-slate-600 bg-slate-800 text-white rounded-lg mb-4 password-input focus:outline-none focus:ring-2 focus:ring-amber-500"
             autofocus
           />
           <div class="flex gap-2">
-            <button class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg confirm-btn">Confirm</button>
-            <button class="flex-1 px-4 py-2 bg-gray-200 rounded-lg cancel-btn">Cancel</button>
+            <button class="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg confirm-btn transition-colors">Confirm</button>
+            <button class="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg cancel-btn transition-colors">Cancel</button>
           </div>
         </div>
       `;
@@ -326,13 +327,35 @@ export function useWallet(): WalletState & WalletActions {
         resolve(null);
       };
 
-      confirmBtn.addEventListener('click', handleConfirm);
-      cancelBtn.addEventListener('click', handleCancel);
-      passwordInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleConfirm();
+      // Prevent event bubbling to avoid conflicts with other modals
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          handleCancel();
+        }
+        e.stopPropagation();
       });
 
+      confirmBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleConfirm();
+      });
+
+      cancelBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleCancel();
+      });
+
+      passwordInput.addEventListener('keypress', (e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') handleConfirm();
+        if (e.key === 'Escape') handleCancel();
+      });
+
+      // Force focus and ensure it's interactive
       document.body.appendChild(modal);
+      setTimeout(() => {
+        passwordInput.focus();
+      }, 100);
     });
   };
 

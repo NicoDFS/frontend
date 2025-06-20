@@ -76,7 +76,7 @@ export class ContractEncoder {
       const decoded = this.liquidityManagerInterface.parseTransaction({ data })
       return {
         name: decoded.name,
-        args: decoded.args
+        args: Array.from(decoded.args)
       }
     } catch (error) {
       console.error('Error decoding liquidity manager call:', error)
@@ -89,7 +89,7 @@ export class ContractEncoder {
       const decoded = this.treasuryVesterInterface.parseTransaction({ data })
       return {
         name: decoded.name,
-        args: decoded.args
+        args: Array.from(decoded.args)
       }
     } catch (error) {
       console.error('Error decoding treasury vester call:', error)

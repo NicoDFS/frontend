@@ -66,6 +66,9 @@ export default function StakingModal({
       setIsStaking(true)
       setError(null)
 
+      // Close modal before starting transaction (same pattern as SwapInterface)
+      onDismiss()
+
       // Convert amount to BigNumber (assuming 18 decimals for LP tokens)
       const amountBN = BigNumber.from(
         Math.floor(parseFloat(amount) * Math.pow(10, 18)).toString()
@@ -100,25 +103,22 @@ export default function StakingModal({
         setTxHash(stakeHash)
         console.log('✅ Staking transaction submitted:', stakeHash)
 
-        // Don't call onSuccess immediately - wait for user to close modal
-        // The data will be refreshed when they return to the page
+        // Call onSuccess to refresh data since modal is already closed
+        if (onSuccess) {
+          onSuccess()
+        }
 
         // Reset form after successful transaction
-        setTimeout(() => {
-          setAmount('')
-          setTxHash(null)
-          // Call onSuccess when closing modal after successful transaction
-          if (onSuccess) {
-            onSuccess()
-          }
-          onDismiss()
-        }, 3000)
+        setAmount('')
+        setTxHash(null)
       } else {
-        setError('Staking failed. Please try again.')
+        throw new Error('Staking failed. Please try again.')
       }
     } catch (err) {
       console.error('Staking error:', err)
-      setError(err instanceof Error ? err.message : 'Failed to stake tokens')
+      // Since modal is closed, we can't show the error in the modal
+      // Could be improved with toast notifications or other error handling
+      alert(err instanceof Error ? err.message : 'Failed to stake tokens')
     } finally {
       setIsStaking(false)
     }

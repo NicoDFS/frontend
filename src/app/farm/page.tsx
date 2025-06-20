@@ -48,7 +48,7 @@ export default function FarmPage() {
           const desc = sortBy?.field === field ? !sortBy?.desc : true
           setSortBy({ field, desc })
         }}
-        className="flex items-center gap-1 text-amber-400 hover:text-amber-300"
+        className="flex items-center gap-1 text-white hover:text-amber-300"
       >
         {label}
         {sortBy?.field === field && (
@@ -159,7 +159,7 @@ export default function FarmPage() {
 
               {/* Sort Controls */}
               <div className="flex items-center gap-2">
-                <span className="text-slate-400 text-sm">Sort by:</span>
+                <span className="text-sm" style={{ color: '#fef3c7' }}>Sort by:</span>
                 {getSortField('Liquidity', 'totalStakedInUsd')}
               </div>
             </div>

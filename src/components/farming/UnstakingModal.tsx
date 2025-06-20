@@ -16,7 +16,8 @@ export default function UnstakingModal({
   isOpen,
   onDismiss,
   stakingInfo,
-  version
+  version,
+  onSuccess
 }: UnstakingModalProps) {
   const [amount, setAmount] = useState('')
   const [isUnstaking, setIsUnstaking] = useState(false)
@@ -63,6 +64,9 @@ export default function UnstakingModal({
       setIsUnstaking(true)
       setError(null)
 
+      // Close modal before starting transaction (same pattern as SwapInterface)
+      onDismiss()
+
       // Convert amount to BigNumber (assuming 18 decimals for LP tokens)
       const amountBN = BigNumber.from(
         Math.floor(parseFloat(amount) * Math.pow(10, 18)).toString()
@@ -74,22 +78,28 @@ export default function UnstakingModal({
       
       if (hash) {
         setTxHash(hash)
+        console.log('✅ Unstaking transaction submitted:', hash)
+
+        // Call onSuccess to refresh data since modal is already closed
+        if (onSuccess) {
+          onSuccess()
+        }
+
         // Reset form after successful transaction
-        setTimeout(() => {
-          setAmount('')
-          setTxHash(null)
-          onDismiss()
-        }, 3000)
+        setAmount('')
+        setTxHash(null)
       } else {
-        setError('Transaction failed. Please try again.')
+        throw new Error('Transaction failed. Please try again.')
       }
     } catch (err) {
       console.error('Unstaking error:', err)
-      setError(err instanceof Error ? err.message : 'Failed to unstake tokens')
+      // Since modal is closed, we can't show the error in the modal
+      // Could be improved with toast notifications or other error handling
+      alert(err instanceof Error ? err.message : 'Failed to unstake tokens')
     } finally {
       setIsUnstaking(false)
     }
-  }, [amount, stakingInfo.stakingRewardAddress, unstakeLPTokens, validateAmount, onDismiss, version])
+  }, [amount, stakingInfo.stakingRewardAddress, unstakeLPTokens, validateAmount, onDismiss, onSuccess, version])
 
   const handleClose = useCallback(() => {
     if (!isUnstaking) {

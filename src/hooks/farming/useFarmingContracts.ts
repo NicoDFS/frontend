@@ -34,7 +34,7 @@ interface WhitelistedPool {
 }
 
 export function useFarmingContracts() {
-  const { chainId, signTransaction } = useWallet()
+  const { chainId, signTransaction, walletType } = useWallet()
 
   // Contract addresses for KalyChain
   const LIQUIDITY_POOL_MANAGER_V2_ADDRESS = '0xe83e7ede1358FA87e5039CF8B1cffF383Bc2896A'
@@ -45,6 +45,62 @@ export function useFarmingContracts() {
     // Use KalyChain RPC for reading contract data
     return new ethers.providers.JsonRpcProvider('https://rpc.kalychain.io/rpc')
   }, [])
+
+  // Helper function to check if using internal wallet
+  const isUsingInternalWallet = useCallback(() => {
+    return walletType === 'internal'
+  }, [walletType])
+
+  // Helper function to prompt for password (same pattern as SwapInterface)
+  const promptForPassword = (): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const modal = document.createElement('div');
+      modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]';
+      modal.innerHTML = `
+        <div class="bg-stone-900 border border-amber-500/30 rounded-lg p-6 max-w-md w-full mx-4 shadow-2xl">
+          <h3 class="text-lg font-semibold mb-4 text-white">Enter Wallet Password</h3>
+          <p class="text-sm text-gray-300 mb-4">Enter your internal wallet password to authorize this farming transaction.</p>
+          <input
+            type="password"
+            placeholder="Enter your wallet password"
+            class="w-full p-3 border border-slate-600 bg-slate-800 text-white rounded-lg mb-4 password-input focus:outline-none focus:ring-2 focus:ring-amber-500"
+            autofocus
+          />
+          <div class="flex gap-2">
+            <button class="flex-1 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg confirm-btn transition-colors">Confirm</button>
+            <button class="flex-1 px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg cancel-btn transition-colors">Cancel</button>
+          </div>
+        </div>
+      `;
+
+      const passwordInput = modal.querySelector('.password-input') as HTMLInputElement;
+      const confirmBtn = modal.querySelector('.confirm-btn') as HTMLButtonElement;
+      const cancelBtn = modal.querySelector('.cancel-btn') as HTMLButtonElement;
+
+      const handleConfirm = () => {
+        const password = passwordInput.value;
+        document.body.removeChild(modal);
+        resolve(password || null);
+      };
+
+      const handleCancel = () => {
+        document.body.removeChild(modal);
+        resolve(null);
+      };
+
+      confirmBtn.addEventListener('click', handleConfirm);
+      cancelBtn.addEventListener('click', handleCancel);
+      passwordInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleConfirm();
+        if (e.key === 'Escape') handleCancel();
+      });
+
+      document.body.appendChild(modal);
+      setTimeout(() => {
+        passwordInput.focus();
+      }, 100);
+    });
+  };
 
   const getLiquidityPoolManagerContract = useCallback(() => {
     const provider = getProvider()
@@ -57,6 +113,85 @@ export function useFarmingContracts() {
     if (!provider) return null
     return new Contract(TREASURY_VESTER_ADDRESS, treasuryVesterABI, provider)
   }, [getProvider])
+
+  // Helper function to execute contract calls with proper internal wallet handling (same pattern as SwapInterface)
+  const executeContractCall = async (contractAddress: string, functionName: string, args: any[], value?: bigint, abi: any[] | string[] = stakingRewardsABI) => {
+    if (isUsingInternalWallet()) {
+      // For internal wallets, use direct GraphQL call like SwapInterface
+      const { internalWalletUtils } = await import('@/connectors/internalWallet');
+      const internalWalletState = internalWalletUtils.getState();
+      if (!internalWalletState.activeWallet) {
+        throw new Error('No internal wallet connected');
+      }
+
+      // Get password from user
+      const password = await promptForPassword();
+      if (!password) {
+        throw new Error('Password required for transaction signing');
+      }
+
+      // Encode the function data
+      const provider = getProvider();
+      const contract = new ethers.Contract(contractAddress, abi, provider);
+      const data = contract.interface.encodeFunctionData(functionName, args);
+
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        throw new Error('Authentication required');
+      }
+
+      // Call backend directly like SwapInterface does
+      const response = await fetch('/api/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          query: `
+            mutation SendContractTransaction($input: SendContractTransactionInput!) {
+              sendContractTransaction(input: $input) {
+                id
+                hash
+                status
+              }
+            }
+          `,
+          variables: {
+            input: {
+              walletId: internalWalletState.activeWallet.id,
+              toAddress: contractAddress,
+              value: value?.toString() || '0',
+              data: data,
+              password: password,
+              chainId: internalWalletState.activeWallet.chainId,
+              gasLimit: '500000'
+            }
+          }
+        }),
+      });
+
+      const result = await response.json();
+      if (result.errors) {
+        throw new Error(result.errors[0].message);
+      }
+
+      return result.data.sendContractTransaction.hash;
+    } else {
+      // For external wallets, use the existing signTransaction method
+      const provider = getProvider();
+      const contract = new ethers.Contract(contractAddress, abi, provider);
+      const data = contract.interface.encodeFunctionData(functionName, args);
+
+      const tx = {
+        to: contractAddress,
+        data,
+        value: value?.toString() || '0'
+      };
+
+      return await signTransaction(tx);
+    }
+  };
 
   const getWhitelistedPools = useCallback(async (): Promise<WhitelistedPool[]> => {
     try {
@@ -361,39 +496,21 @@ export function useFarmingContracts() {
 
   const claimVestedRewards = useCallback(async (): Promise<string | null> => {
     try {
-      if (!signTransaction) return null
-
-      const contract = getTreasuryVesterContract()
-      if (!contract) return null
-
       console.log('Claiming vested rewards from TreasuryVester')
 
-      // Encode the claim() function call
-      const data = ContractEncoder.encodeClaim()
-
-      // Get provider for gas estimation
-      const provider = getProvider()
-
-      // Estimate gas and get gas price
-      const [gasLimit, gasPrice] = await Promise.all([
-        estimateContractGas(provider, TREASURY_VESTER_ADDRESS, data),
-        getCurrentGasPrice(provider)
-      ])
-
-      const tx = {
-        to: TREASURY_VESTER_ADDRESS,
-        data,
-        value: '0',
-        gasLimit: gasLimit.toString(),
-        gasPrice: gasPrice.toString()
-      }
-
-      return await signTransaction(tx)
+      // Use the new executeContractCall helper
+      return await executeContractCall(
+        TREASURY_VESTER_ADDRESS,
+        'claim',
+        [],
+        BigInt(0),
+        treasuryVesterABI
+      )
     } catch (error) {
       console.error('Error claiming vested rewards:', error)
       return null
     }
-  }, [getTreasuryVesterContract, signTransaction, getProvider])
+  }, [executeContractCall])
 
   const calculateAndDistribute = useCallback(async (): Promise<string | null> => {
     try {
@@ -438,40 +555,27 @@ export function useFarmingContracts() {
     amount: BigNumber
   ): Promise<string | null> => {
     try {
-      if (!signTransaction) return null
-
-      const provider = getProvider()
-      if (!provider) return null
-
-      // Create ERC20 contract instance for the LP token
-      const lpTokenContract = new ethers.Contract(
-        lpTokenAddress,
-        [
-          'function approve(address spender, uint256 amount) external returns (bool)',
-        ],
-        provider
-      )
-
-      const encodedData = lpTokenContract.interface.encodeFunctionData('approve', [stakingRewardAddress, amount])
-
       console.log('Approving LP tokens:', {
         lpTokenAddress,
         stakingRewardAddress,
         amount: amount.toString()
       })
 
-      const tx = {
-        to: lpTokenAddress,
-        data: encodedData,
-        value: '0'
-      }
-
-      return await signTransaction(tx)
+      // Use the new executeContractCall helper
+      return await executeContractCall(
+        lpTokenAddress,
+        'approve',
+        [stakingRewardAddress, amount],
+        BigInt(0),
+        [
+          'function approve(address spender, uint256 amount) external returns (bool)',
+        ]
+      )
     } catch (error) {
       console.error('Error approving LP tokens:', error)
       return null
     }
-  }, [signTransaction, getProvider])
+  }, [executeContractCall])
 
   // Stake LP tokens using stakeWithPermit (combines approval + staking in one tx)
   const stakeLPTokensWithPermit = useCallback(async (
@@ -577,7 +681,7 @@ export function useFarmingContracts() {
       console.error('Error staking LP tokens with permit:', error)
       return null
     }
-  }, [signTransaction, getProvider])
+  }, [executeContractCall, getProvider])
 
   // Fallback stake method (requires separate approval)
   const stakeLPTokens = useCallback(async (
@@ -586,39 +690,26 @@ export function useFarmingContracts() {
     version: number = 2
   ): Promise<string | null> => {
     try {
-      if (!signTransaction) return null
-
-      const provider = getProvider()
-      if (!provider) return null
-
-      // Create contract instance for the specific staking reward contract
-      const stakingContract = new ethers.Contract(
-        stakingRewardAddress,
-        [
-          'function stake(uint256 amount) external',
-        ],
-        provider
-      )
-
-      const encodedData = stakingContract.interface.encodeFunctionData('stake', [amount])
-
       console.log('Staking LP tokens (fallback method):', {
         stakingRewardAddress,
         amount: amount.toString()
       })
 
-      const tx = {
-        to: stakingRewardAddress,
-        data: encodedData,
-        value: '0'
-      }
-
-      return await signTransaction(tx)
+      // Use the new executeContractCall helper
+      return await executeContractCall(
+        stakingRewardAddress,
+        'stake',
+        [amount],
+        BigInt(0),
+        [
+          'function stake(uint256 amount) external',
+        ]
+      )
     } catch (error) {
       console.error('Error staking LP tokens:', error)
       return null
     }
-  }, [signTransaction, getProvider])
+  }, [executeContractCall])
 
   // Unstake LP tokens from a specific staking reward contract
   const unstakeLPTokens = useCallback(async (
@@ -627,42 +718,28 @@ export function useFarmingContracts() {
     version: number = 2
   ): Promise<string | null> => {
     try {
-      if (!signTransaction) return null
-
-      const provider = getProvider()
-      if (!provider) return null
-
-      // Create contract instance for the specific staking reward contract
-      const stakingContract = new ethers.Contract(
-        stakingRewardAddress,
-        [
-          'function withdraw(uint256 amount) external',
-          'function exit() external', // For withdrawing all + claiming rewards
-        ],
-        provider
-      )
-
-      // For now, use withdraw method
-      const encodedData = stakingContract.interface.encodeFunctionData('withdraw', [amount])
-
       console.log('Unstaking LP tokens:', {
         stakingRewardAddress,
         amount: amount.toString(),
         version
       })
 
-      const tx = {
-        to: stakingRewardAddress,
-        data: encodedData,
-        value: '0'
-      }
-
-      return await signTransaction(tx)
+      // Use the new executeContractCall helper
+      return await executeContractCall(
+        stakingRewardAddress,
+        'withdraw',
+        [amount],
+        BigInt(0),
+        [
+          'function withdraw(uint256 amount) external',
+          'function exit() external', // For withdrawing all + claiming rewards
+        ]
+      )
     } catch (error) {
       console.error('Error unstaking LP tokens:', error)
       return null
     }
-  }, [signTransaction, getProvider])
+  }, [executeContractCall])
 
   return {
     getStakingInfo,
