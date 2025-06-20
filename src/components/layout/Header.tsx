@@ -108,6 +108,17 @@ export default function Header() {
               >
                 Stake
               </Link>
+              <Link
+                href="/farm"
+                className={`text-sm font-semibold transition-all duration-200 px-3 py-2 rounded-md ${
+                  pathname === '/farm'
+                    ? 'text-white bg-amber-500/20 border border-amber-500/30 shadow-lg'
+                    : 'hover:text-white hover:bg-white/10'
+                }`}
+                style={{ color: pathname === '/farm' ? undefined : '#fef3c7' }}
+              >
+                Farm
+              </Link>
             </nav>
           </div>
 
@@ -228,6 +239,18 @@ export default function Header() {
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Stake
+              </Link>
+              <Link
+                href="/farm"
+                className={`text-sm font-semibold transition-all duration-200 px-3 py-2 rounded-md ${
+                  pathname === '/farm'
+                    ? 'text-white bg-amber-500/20 border border-amber-500/30 shadow-lg'
+                    : 'hover:text-white hover:bg-white/10'
+                }`}
+                style={{ color: pathname === '/farm' ? undefined : '#fef3c7' }}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                Farm
               </Link>
 
               <div className="pt-3 border-t border-slate-700/50 flex flex-col space-y-3">

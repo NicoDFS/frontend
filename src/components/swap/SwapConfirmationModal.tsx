@@ -101,23 +101,23 @@ export default function SwapConfirmationModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md p-0">
+      <DialogContent className="!bg-stone-900 !border-amber-500/30 text-white max-w-md p-0" style={{ backgroundColor: '#1c1917', borderColor: 'rgba(245, 158, 11, 0.3)' }}>
         {/* Header */}
         <DialogHeader className="p-6 pb-4">
-          <DialogTitle className="text-lg font-semibold">Confirm Swap</DialogTitle>
+          <DialogTitle className="text-xl font-bold text-white">Confirm Swap</DialogTitle>
         </DialogHeader>
 
         <div className="px-6 pb-6 space-y-4">
           {/* Swap Summary */}
           <div className="text-center space-y-3">
-            <div className="text-sm text-gray-300">You're swapping</div>
+            <div className="text-sm" style={{ color: '#fef3c7' }}>You're swapping</div>
             
             {/* From Token */}
-            <div className="flex items-center justify-center gap-3 p-3 bg-gray-900/30 border border-gray-600/30 rounded-lg">
+            <div className="flex items-center justify-center gap-3 p-3 bg-stone-800/80 border border-amber-500/30 rounded-lg">
               {fromToken && <TokenIcon token={fromToken} />}
               <div>
                 <div className="font-semibold text-lg text-white">{fromAmount} {fromToken?.symbol}</div>
-                <div className="text-sm text-gray-300">{fromToken?.name}</div>
+                <div className="text-sm" style={{ color: '#fef3c7' }}>{fromToken?.name}</div>
               </div>
             </div>
 
@@ -127,11 +127,11 @@ export default function SwapConfirmationModal({
             </div>
 
             {/* To Token */}
-            <div className="flex items-center justify-center gap-3 p-3 bg-gray-900/30 border border-gray-600/30 rounded-lg">
+            <div className="flex items-center justify-center gap-3 p-3 bg-stone-800/80 border border-amber-500/30 rounded-lg">
               {toToken && <TokenIcon token={toToken} />}
               <div>
                 <div className="font-semibold text-lg text-white">~{toAmount} {toToken?.symbol}</div>
-                <div className="text-sm text-gray-300">{toToken?.name}</div>
+                <div className="text-sm" style={{ color: '#fef3c7' }}>{toToken?.name}</div>
               </div>
             </div>
           </div>
@@ -143,7 +143,7 @@ export default function SwapConfirmationModal({
             <div className="space-y-2 text-sm">
               {/* Exchange Rate */}
               <div className="flex justify-between">
-                <span className="text-gray-300">Exchange Rate</span>
+                <span style={{ color: '#fef3c7' }}>Exchange Rate</span>
                 <span className="font-medium text-white">
                   1 {fromToken?.symbol} = {getExchangeRate()} {toToken?.symbol}
                 </span>
@@ -151,7 +151,7 @@ export default function SwapConfirmationModal({
 
               {/* Minimum Received */}
               <div className="flex justify-between">
-                <span className="text-gray-300">Minimum Received</span>
+                <span style={{ color: '#fef3c7' }}>Minimum Received</span>
                 <span className="font-medium text-white">
                   {calculateMinimumReceived()} {toToken?.symbol}
                 </span>
@@ -160,7 +160,7 @@ export default function SwapConfirmationModal({
               {/* Price Impact */}
               {priceImpact && (
                 <div className="flex justify-between">
-                  <span className="text-gray-300">Price Impact</span>
+                  <span style={{ color: '#fef3c7' }}>Price Impact</span>
                   <span className={`font-medium ${priceImpactStyling.color}`}>
                     {parseFloat(priceImpact) < 0.01 ? '<0.01%' : `${parseFloat(priceImpact).toFixed(2)}%`}
                   </span>
@@ -169,14 +169,14 @@ export default function SwapConfirmationModal({
 
               {/* Slippage Tolerance */}
               <div className="flex justify-between">
-                <span className="text-gray-300">Slippage Tolerance</span>
+                <span style={{ color: '#fef3c7' }}>Slippage Tolerance</span>
                 <span className="font-medium text-white">{slippage}%</span>
               </div>
 
               {/* Network Fee */}
               {estimatedGas && (
                 <div className="flex justify-between">
-                  <span className="text-gray-300">Network Fee</span>
+                  <span style={{ color: '#fef3c7' }}>Network Fee</span>
                   <span className="font-medium text-white">~{estimatedGas} KLC</span>
                 </div>
               )}
@@ -194,7 +194,7 @@ export default function SwapConfirmationModal({
                      priceImpactSeverity === 'high' ? 'High Price Impact' :
                      'Price Impact Warning'}
                   </div>
-                  <div className="text-gray-600 mt-1">
+                  <div className="text-gray-300 mt-1">
                     {priceImpactWarning}
                   </div>
                 </div>
@@ -204,12 +204,12 @@ export default function SwapConfirmationModal({
 
           {/* High Slippage Warning */}
           {parseFloat(slippage) > 5 && (
-            <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200">
+            <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
               <div className="flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 mt-0.5 text-yellow-600" />
+                <AlertTriangle className="h-4 w-4 mt-0.5 text-yellow-400" />
                 <div className="text-sm">
-                  <div className="font-medium text-yellow-600">High Slippage</div>
-                  <div className="text-gray-600 mt-1">
+                  <div className="font-medium text-yellow-400">High Slippage</div>
+                  <div className="text-yellow-300 mt-1">
                     Your slippage tolerance is high. You may receive significantly less than expected.
                   </div>
                 </div>
@@ -220,21 +220,20 @@ export default function SwapConfirmationModal({
           {/* Action Buttons */}
           <div className="flex gap-3 pt-2">
             <Button
-              variant="outline"
               onClick={onClose}
               disabled={isLoading}
-              className="flex-1"
+              className="flex-1 bg-stone-700 hover:bg-stone-600 text-white border-amber-500/30"
             >
               Back
             </Button>
             <Button
               onClick={onConfirm}
               disabled={isLoading}
-              className="flex-1"
+              className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white"
             >
               {isLoading ? (
                 <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   Confirming...
                 </div>
               ) : (
