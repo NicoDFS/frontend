@@ -21,7 +21,7 @@ export default function ClaimRewardModal({
   const [txHash, setTxHash] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const { claimVestedRewards } = useFarmingContracts()
+  const { claimStakingRewards } = useFarmingContracts()
 
   const pairName = `${stakingInfo.tokens[0].symbol}-${stakingInfo.tokens[1].symbol}`
   const hasRewards = stakingInfo.earnedAmount.greaterThan('0')
@@ -41,7 +41,13 @@ export default function ClaimRewardModal({
       // Close modal before starting transaction (same pattern as SwapInterface)
       onDismiss()
 
-      const hash = await claimVestedRewards()
+      // Get the staking contract address from stakingInfo
+      const stakingContractAddress = stakingInfo.stakingRewardAddress
+      if (!stakingContractAddress) {
+        throw new Error('Staking contract address not found')
+      }
+
+      const hash = await claimStakingRewards(stakingContractAddress)
       
       if (hash) {
         setTxHash(hash)
@@ -62,7 +68,7 @@ export default function ClaimRewardModal({
     } finally {
       setIsClaiming(false)
     }
-  }, [hasRewards, hasExtraRewards, claimVestedRewards, onDismiss])
+  }, [hasRewards, hasExtraRewards, claimStakingRewards, stakingInfo.stakingRewardAddress, onDismiss])
 
   const handleClose = useCallback(() => {
     if (!isClaiming) {
@@ -74,7 +80,7 @@ export default function ClaimRewardModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="bg-slate-800 border-slate-700 text-white max-w-md">
+      <DialogContent className="!bg-stone-900 !border-amber-500/30 text-white max-w-md" style={{ backgroundColor: '#1c1917', borderColor: 'rgba(245, 158, 11, 0.3)' }}>
         <DialogHeader>
           <div className="flex items-center justify-between">
             <DialogTitle className="text-xl font-bold flex items-center gap-2">

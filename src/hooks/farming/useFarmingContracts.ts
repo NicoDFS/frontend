@@ -512,6 +512,29 @@ export function useFarmingContracts() {
     }
   }, [executeContractCall])
 
+  // Claim rewards from a specific staking reward contract
+  const claimStakingRewards = useCallback(async (
+    stakingRewardAddress: string
+  ): Promise<string | null> => {
+    try {
+      console.log('Claiming staking rewards from:', stakingRewardAddress)
+
+      // Use the new executeContractCall helper
+      return await executeContractCall(
+        stakingRewardAddress,
+        'getReward',
+        [],
+        BigInt(0),
+        [
+          'function getReward() external',
+        ]
+      )
+    } catch (error) {
+      console.error('Error claiming staking rewards:', error)
+      return null
+    }
+  }, [executeContractCall])
+
   const calculateAndDistribute = useCallback(async (): Promise<string | null> => {
     try {
       if (!signTransaction) return null
@@ -748,6 +771,7 @@ export function useFarmingContracts() {
     addLiquidityToPool,
     removeLiquidityFromPool,
     claimVestedRewards,
+    claimStakingRewards,
     calculateAndDistribute,
     approveLPTokens,
     stakeLPTokens,
