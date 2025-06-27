@@ -118,6 +118,7 @@ const ME_QUERY = `
           tokens {
             symbol
             balance
+            address
           }
         }
         transactions(limit: 10) {
@@ -163,6 +164,7 @@ const EXPORT_WALLET_QUERY = `
 interface Token {
   symbol: string;
   balance: string;
+  address: string;
 }
 
 interface WalletBalance {
@@ -455,7 +457,10 @@ export default function DashboardPage() {
 
       // Check if sending token and if balance is sufficient
       if (sendAsset !== 'KLC' && wallet.balance) {
-        const token = wallet.balance.tokens.find(t => t.symbol === sendAsset);
+        // sendAsset could be either a symbol or an address, find the token
+        const token = wallet.balance.tokens.find(t =>
+          t.symbol === sendAsset || t.address === sendAsset
+        );
 
         if (!token) {
           setSendError(`No ${sendAsset} tokens found in wallet`);
@@ -466,7 +471,7 @@ export default function DashboardPage() {
         const amount = parseFloat(sendAmount);
 
         if (amount > balance) {
-          setSendError(`Insufficient ${sendAsset} balance`);
+          setSendError(`Insufficient ${token.symbol} balance`);
           return;
         }
       }
@@ -774,7 +779,7 @@ export default function DashboardPage() {
                                       <SelectContent className="select-content">
                                         <SelectItem value="KLC">KLC (Native)</SelectItem>
                                         {wallet.balance?.tokens.map((token) => (
-                                          <SelectItem key={token.symbol} value={token.symbol}>
+                                          <SelectItem key={token.address} value={token.address}>
                                             {token.symbol}
                                           </SelectItem>
                                         ))}
@@ -823,7 +828,12 @@ export default function DashboardPage() {
                                           Available: {
                                             sendAsset === 'KLC'
                                               ? `${formatBalance(wallet.balance.klc)} KLC`
-                                              : `${formatBalance(wallet.balance.tokens.find(t => t.symbol === sendAsset)?.balance || '0')} ${sendAsset}`
+                                              : (() => {
+                                                  const token = wallet.balance?.tokens.find(t =>
+                                                    t.symbol === sendAsset || t.address === sendAsset
+                                                  );
+                                                  return `${formatBalance(token?.balance || '0')} ${token?.symbol || sendAsset}`;
+                                                })()
                                           }
                                         </span>
                                         <button
@@ -833,7 +843,9 @@ export default function DashboardPage() {
                                             if (sendAsset === 'KLC') {
                                               setSendAmount(wallet.balance?.klc || '0');
                                             } else {
-                                              const token = wallet.balance?.tokens.find(t => t.symbol === sendAsset);
+                                              const token = wallet.balance?.tokens.find(t =>
+                                                t.symbol === sendAsset || t.address === sendAsset
+                                              );
                                               setSendAmount(token?.balance || '0');
                                             }
                                           }}

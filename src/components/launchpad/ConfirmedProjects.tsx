@@ -20,7 +20,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 
-// GraphQL query for confirmed projects
+// GraphQL query for confirmed projects (both presales and fairlaunches)
 const GET_CONFIRMED_PROJECTS = `
   query GetConfirmedProjects($limit: Int, $offset: Int) {
     confirmedProjects(limit: $limit, offset: $offset) {
@@ -46,6 +46,34 @@ const GET_CONFIRMED_PROJECTS = `
       lpLockDuration
       contractAddress
       transactionHash
+      blockNumber
+      deployedAt
+      createdAt
+      user {
+        id
+        username
+      }
+    }
+    confirmedFairlaunches(limit: $limit, offset: $offset) {
+      id
+      name
+      description
+      websiteUrl
+      whitepaperUrl
+      githubUrl
+      discordUrl
+      telegramUrl
+      twitterUrl
+      additionalSocialUrl
+      contractAddress
+      saleToken
+      baseToken
+      buybackRate
+      sellingAmount
+      softCap
+      liquidityPercent
+      fairlaunchStart
+      fairlaunchEnd
       blockNumber
       deployedAt
       createdAt
@@ -119,7 +147,29 @@ export default function ConfirmedProjects() {
         throw new Error(result.errors[0].message);
       }
 
-      setProjects(result.data.confirmedProjects || []);
+      // Combine presales and fairlaunches into unified list
+      const presales = (result.data.confirmedProjects || []).map((project: any) => ({
+        ...project,
+        type: 'presale',
+        startTime: project.presaleStart,
+        endTime: project.presaleEnd
+      }));
+
+      const fairlaunches = (result.data.confirmedFairlaunches || []).map((fairlaunch: any) => ({
+        ...fairlaunch,
+        type: 'fairlaunch',
+        startTime: fairlaunch.fairlaunchStart,
+        endTime: fairlaunch.fairlaunchEnd,
+        hardCap: fairlaunch.sellingAmount, // Use sellingAmount as hardCap equivalent
+        tokenRate: fairlaunch.buybackRate, // Use buybackRate as tokenRate equivalent
+        lpLockDuration: '0' // Fairlaunches don't have LP lock
+      }));
+
+      const allProjects = [...presales, ...fairlaunches].sort((a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
+      setProjects(allProjects);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch projects');
       console.error('Error fetching confirmed projects:', err);
@@ -228,30 +278,47 @@ export default function ConfirmedProjects() {
                     <h3 className="text-lg font-semibold text-white">{project.name}</h3>
                     <p className="text-sm text-gray-400">by {project.user.username}</p>
                   </div>
-                  <Badge className="badge-successful">Confirmed</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge className={`${
+                      project.type === 'fairlaunch'
+                        ? 'bg-purple-500/20 text-purple-400 border-purple-500/30'
+                        : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                    }`}>
+                      {project.type === 'fairlaunch' ? 'Fairlaunch' : 'Presale'}
+                    </Badge>
+                    <Badge className="badge-successful">Confirmed</Badge>
+                  </div>
                 </div>
 
                 <p className="text-gray-300">{project.description}</p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm text-gray-300">
                   <div>
-                    <span className="font-medium text-white">Soft Cap:</span> {project.softCap} {project.baseToken === '0x0000000000000000000000000000000000000000' ? 'KLC' : 'Token'}
+                    <span className="font-medium text-white">Soft Cap:</span> {project.softCap} KLC
                   </div>
                   <div>
-                    <span className="font-medium text-white">Hard Cap:</span> {project.hardCap} {project.baseToken === '0x0000000000000000000000000000000000000000' ? 'KLC' : 'Token'}
+                    <span className="font-medium text-white">Hard Cap:</span> {project.hardCap} KLC
+                  </div>
+                  {project.tokenRate && (
+                    <div>
+                      <span className="font-medium text-white">Token Rate:</span> {project.tokenRate}
+                    </div>
+                  )}
+                  <div>
+                    <span className="font-medium text-white">
+                      {project.type === 'fairlaunch' ? 'Fairlaunch Start:' : 'Presale Start:'}
+                    </span> {formatDate(project.startTime)}
                   </div>
                   <div>
-                    <span className="font-medium text-white">Token Rate:</span> {project.tokenRate}
+                    <span className="font-medium text-white">
+                      {project.type === 'fairlaunch' ? 'Fairlaunch End:' : 'Presale End:'}
+                    </span> {formatDate(project.endTime)}
                   </div>
-                  <div>
-                    <span className="font-medium text-white">Presale Start:</span> {formatDate(project.presaleStart)}
-                  </div>
-                  <div>
-                    <span className="font-medium text-white">Presale End:</span> {formatDate(project.presaleEnd)}
-                  </div>
-                  <div>
-                    <span className="font-medium text-white">LP Lock:</span> {project.lpLockDuration} days
-                  </div>
+                  {project.type === 'presale' && project.lpLockDuration && (
+                    <div>
+                      <span className="font-medium text-white">LP Lock:</span> {project.lpLockDuration} days
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-4 text-xs text-gray-400">

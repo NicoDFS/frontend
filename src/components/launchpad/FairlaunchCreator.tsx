@@ -25,7 +25,8 @@ import {
   Github,
   MessageCircle,
   Send,
-  Twitter
+  Twitter,
+  Building
 } from 'lucide-react';
 
 // Contract configuration imports
@@ -41,6 +42,14 @@ import { FAIRLAUNCH_FACTORY_ABI, FAIRLAUNCH_ABI, ERC20_ABI } from '@/config/abis
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 import { parseUnits, formatUnits, getContract, parseEther, encodeFunctionData } from 'viem';
 import { internalWalletUtils } from '@/connectors/internalWallet';
+
+// Auth hook for checking login status
+import { useAuth } from '@/hooks/useAuth';
+
+// React DatePicker for cross-browser datetime support
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
+import '@/styles/datepicker-dark.css';
 
 // GraphQL mutation for saving confirmed fairlaunch projects
 const SAVE_FAIRLAUNCH_AFTER_DEPLOYMENT = `
@@ -234,6 +243,9 @@ const executeContractCall = async (
 };
 
 export default function FairlaunchCreator() {
+  // Auth hook for checking login status
+  const { isAuthenticated, isLoading: authLoading, user } = useAuth();
+
   // Wagmi hooks for wallet interaction
   const { address, isConnected, connector } = useAccount();
   const publicClient = usePublicClient();
@@ -894,6 +906,53 @@ export default function FairlaunchCreator() {
     return new Date(dateString).toLocaleString();
   };
 
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-400"></div>
+        <span className="ml-3 text-gray-300">Checking authentication...</span>
+      </div>
+    );
+  }
+
+  // Show login required message if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <Card className="form-card">
+        <CardContent className="p-8 text-center">
+          <div className="flex flex-col items-center space-y-4">
+            <div className="p-4 bg-amber-500/20 rounded-full">
+              <Building className="h-8 w-8 text-amber-400" />
+            </div>
+            <h3 className="text-xl font-semibold text-white">Account Required</h3>
+            <p className="text-gray-300 max-w-md">
+              You need to create an account and be logged in to create fairlaunches. This helps us provide better support and enables future features like KYC verification.
+            </p>
+            <div className="flex gap-3 mt-6">
+              <Button
+                onClick={() => window.location.href = '/login'}
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+              >
+                Login to Your Account
+              </Button>
+              <Button
+                onClick={() => window.location.href = '/register'}
+                variant="outline"
+                className="border-amber-500/30 text-amber-400 hover:bg-amber-500/20"
+              >
+                Create Account
+              </Button>
+            </div>
+            <p className="text-sm text-gray-400 mt-4">
+              Don't worry - you can still use your MetaMask wallet to sign transactions after logging in.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Fairlaunch Info */}
@@ -1230,24 +1289,40 @@ export default function FairlaunchCreator() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="fairlaunchStart" className="text-gray-300">Fairlaunch Start *</Label>
-                <Input
-                  id="fairlaunchStart"
-                  type="datetime-local"
-                  value={formData.fairlaunchStart}
-                  onChange={(e) => handleInputChange('fairlaunchStart', e.target.value)}
-                  className="h-12 form-input"
+                <Label className="text-gray-300">Fairlaunch Start *</Label>
+                <DatePicker
+                  selected={formData.fairlaunchStart ? new Date(formData.fairlaunchStart) : null}
+                  onChange={(date) => {
+                    if (date) {
+                      handleInputChange('fairlaunchStart', date.toISOString());
+                    }
+                  }}
+                  showTimeSelect
+                  timeFormat="HH:mm"
+                  timeIntervals={15}
+                  dateFormat="MMMM d, yyyy h:mm aa"
+                  className="h-12 w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  placeholderText="Select Date and Time"
+                  minDate={new Date()}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="fairlaunchEnd" className="text-gray-300">Fairlaunch End *</Label>
-                <Input
-                  id="fairlaunchEnd"
-                  type="datetime-local"
-                  value={formData.fairlaunchEnd}
-                  onChange={(e) => handleInputChange('fairlaunchEnd', e.target.value)}
-                  className="h-12 form-input"
+                <Label className="text-gray-300">Fairlaunch End *</Label>
+                <DatePicker
+                  selected={formData.fairlaunchEnd ? new Date(formData.fairlaunchEnd) : null}
+                  onChange={(date) => {
+                    if (date) {
+                      handleInputChange('fairlaunchEnd', date.toISOString());
+                    }
+                  }}
+                  showTimeSelect
+                  timeFormat="HH:mm"
+                  timeIntervals={15}
+                  dateFormat="MMMM d, yyyy h:mm aa"
+                  className="h-12 w-full px-3 py-2 bg-gray-800/50 border border-gray-600 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  placeholderText="Select Date and Time"
+                  minDate={formData.fairlaunchStart ? new Date(formData.fairlaunchStart) : new Date()}
                 />
               </div>
             </div>

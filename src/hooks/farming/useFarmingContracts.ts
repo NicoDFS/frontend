@@ -165,7 +165,7 @@ export function useFarmingContracts() {
               data: data,
               password: password,
               chainId: internalWalletState.activeWallet.chainId,
-              gasLimit: '500000'
+              gasLimit: '800000'
             }
           }
         }),

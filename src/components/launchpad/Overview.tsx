@@ -4,37 +4,41 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  TrendingUp, 
-  Users, 
-  Coins, 
-  DollarSign, 
+import {
+  TrendingUp,
+  Users,
+  Coins,
+  DollarSign,
   Calendar,
   ExternalLink,
   Clock,
-  Target
+  Target,
+  CheckCircle,
+  Globe,
+  FileText,
+  Github,
+  MessageCircle,
+  Send,
+  Twitter,
+  Link as LinkIcon
 } from 'lucide-react';
+import Link from 'next/link';
 
 interface LaunchpadProject {
   id: string;
   name: string;
-  tokenAddress: string;
-  startTime: string;
-  endTime: string;
+  contractAddress: string;
+  saleToken: string;
+  baseToken: string;
   hardCap: string;
   softCap: string;
-  status: string;
-  type: string;
-  creator: string;
-  saleToken: {
-    id: string;
-    name: string;
-    symbol: string;
-    address: string;
-  };
-  totalRaised: string;
-  totalParticipants: number;
+  presaleStart: string;
+  presaleEnd: string;
   createdAt: string;
+  user: {
+    id: string;
+    username: string;
+  };
 }
 
 interface LaunchpadOverview {
@@ -118,7 +122,7 @@ export default function Overview({ onSwitchToPresale }: OverviewProps) {
         throw new Error(overviewResult.errors[0].message);
       }
 
-      // Fetch all projects
+      // Fetch all projects (both presales and fairlaunches)
       const projectsResponse = await fetch('/api/graphql', {
         method: 'POST',
         headers: {
@@ -126,27 +130,62 @@ export default function Overview({ onSwitchToPresale }: OverviewProps) {
         },
         body: JSON.stringify({
           query: `
-            query LaunchpadProjects {
-              launchpadProjects {
+            query AllConfirmedProjects {
+              confirmedProjects {
                 id
                 name
-                tokenAddress
-                startTime
-                endTime
+                description
+                websiteUrl
+                whitepaperUrl
+                githubUrl
+                discordUrl
+                telegramUrl
+                twitterUrl
+                additionalSocialUrl
+                contractAddress
+                saleToken
+                baseToken
                 hardCap
                 softCap
-                status
-                type
-                creator
-                saleToken {
-                  id
-                  name
-                  symbol
-                  address
-                }
-                totalRaised
-                totalParticipants
+                tokenRate
+                presaleStart
+                presaleEnd
+                lpLockDuration
+                blockNumber
+                deployedAt
                 createdAt
+                user {
+                  id
+                  username
+                }
+              }
+              confirmedFairlaunches {
+                id
+                name
+                description
+                websiteUrl
+                whitepaperUrl
+                githubUrl
+                discordUrl
+                telegramUrl
+                twitterUrl
+                additionalSocialUrl
+                contractAddress
+                saleToken
+                baseToken
+                buybackRate
+                sellingAmount
+                softCap
+                liquidityPercent
+                fairlaunchStart
+                fairlaunchEnd
+                blockNumber
+                deployedAt
+                createdAt
+                user {
+                  id
+                  username
+                }
               }
             }
           `
@@ -158,8 +197,30 @@ export default function Overview({ onSwitchToPresale }: OverviewProps) {
         throw new Error(projectsResult.errors[0].message);
       }
 
+      // Combine presales and fairlaunches into unified list
+      const presales = (projectsResult.data.confirmedProjects || []).map((project: any) => ({
+        ...project,
+        type: 'presale',
+        startTime: project.presaleStart,
+        endTime: project.presaleEnd
+      }));
+
+      const fairlaunches = (projectsResult.data.confirmedFairlaunches || []).map((fairlaunch: any) => ({
+        ...fairlaunch,
+        type: 'fairlaunch',
+        startTime: fairlaunch.fairlaunchStart,
+        endTime: fairlaunch.fairlaunchEnd,
+        hardCap: fairlaunch.sellingAmount, // Use sellingAmount as hardCap equivalent
+        tokenRate: fairlaunch.buybackRate, // Use buybackRate as tokenRate equivalent
+        lpLockDuration: '0' // Fairlaunches don't have LP lock
+      }));
+
+      const allProjects = [...presales, ...fairlaunches].sort((a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
       setOverview(overviewResult.data.launchpadOverview);
-      setProjects(projectsResult.data.launchpadProjects || []);
+      setProjects(allProjects);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch launchpad data');
       console.error('Error fetching launchpad data:', err);
@@ -168,9 +229,9 @@ export default function Overview({ onSwitchToPresale }: OverviewProps) {
       setOverview({
         totalProjects: 12,
         activeProjects: 3,
-        totalTokensCreated: 45,
-        totalFundsRaised: '2,450,000',
-        totalParticipants: 1250,
+        totalTokensCreated: 9, // Completed projects
+        totalFundsRaised: '4', // This month's projects
+        totalParticipants: 4, // This month's projects
         totalFeesCollected: '125,000',
         recentProjects: [],
         lastUpdated: new Date().toISOString()
@@ -182,7 +243,56 @@ export default function Overview({ onSwitchToPresale }: OverviewProps) {
   };
 
   const formatDate = (timestamp: string) => {
-    return new Date(parseInt(timestamp) * 1000).toLocaleDateString();
+    return new Date(timestamp).toLocaleDateString();
+  };
+
+  const formatAddress = (address: string) => {
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
+
+  const getSocialLinks = (project: any) => {
+    const links = [];
+    if (project.websiteUrl) links.push({ icon: Globe, url: project.websiteUrl, label: 'Website' });
+    if (project.whitepaperUrl) links.push({ icon: FileText, url: project.whitepaperUrl, label: 'Whitepaper' });
+    if (project.githubUrl) links.push({ icon: Github, url: project.githubUrl, label: 'GitHub' });
+    if (project.discordUrl) links.push({ icon: MessageCircle, url: project.discordUrl, label: 'Discord' });
+    if (project.telegramUrl) links.push({ icon: Send, url: project.telegramUrl, label: 'Telegram' });
+    if (project.twitterUrl) links.push({ icon: Twitter, url: project.twitterUrl, label: 'Twitter' });
+    if (project.additionalSocialUrl) links.push({ icon: LinkIcon, url: project.additionalSocialUrl, label: 'Social' });
+    return links;
+  };
+
+  const calculateProjectStatus = (project: any): string => {
+    const now = new Date().getTime();
+    const startTime = new Date(project.startTime).getTime();
+    const endTime = new Date(project.endTime).getTime();
+
+    if (now < startTime) {
+      return 'Pending';
+    } else if (now >= startTime && now <= endTime) {
+      return 'Active';
+    } else {
+      // Project has ended - would need contract data to determine if successful/failed
+      // For now, just show as ended
+      return 'Ended';
+    }
+  };
+
+  const getStatusBadgeClass = (status: string) => {
+    switch (status) {
+      case 'Active':
+        return 'bg-green-500/20 text-green-400 border-green-500/30';
+      case 'Successful':
+        return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+      case 'Failed':
+        return 'bg-red-500/20 text-red-400 border-red-500/30';
+      case 'Pending':
+        return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+      case 'Ended':
+        return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+      default:
+        return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -276,11 +386,11 @@ export default function Overview({ onSwitchToPresale }: OverviewProps) {
           <CardContent className="p-6">
             <div className="flex items-center">
               <div className="p-2 icon-bg-purple rounded-lg">
-                <DollarSign className="h-6 w-6" />
+                <CheckCircle className="h-6 w-6" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-300">Total Raised</p>
-                <p className="text-2xl font-bold text-white">${overview?.totalFundsRaised || '0'}</p>
+                <p className="text-sm font-medium text-gray-300">Completed Projects</p>
+                <p className="text-2xl font-bold text-white">{overview?.totalTokensCreated || 0}</p>
               </div>
             </div>
           </CardContent>
@@ -290,10 +400,10 @@ export default function Overview({ onSwitchToPresale }: OverviewProps) {
           <CardContent className="p-6">
             <div className="flex items-center">
               <div className="p-2 icon-bg-orange rounded-lg">
-                <Users className="h-6 w-6" />
+                <Calendar className="h-6 w-6" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-300">Participants</p>
+                <p className="text-sm font-medium text-gray-300">This Month's Projects</p>
                 <p className="text-2xl font-bold text-white">{overview?.totalParticipants || 0}</p>
               </div>
             </div>
@@ -333,45 +443,96 @@ export default function Overview({ onSwitchToPresale }: OverviewProps) {
             </div>
           ) : (
             <div className="space-y-4">
-              {projects.slice(0, 5).map((project) => (
-                <div key={project.id} className="project-card p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <h4 className="font-semibold text-white">{project.name}</h4>
-                        <Badge className={getTypeColor(project.type)}>
-                          {project.type}
-                        </Badge>
-                        <Badge className={getStatusColor(project.status)}>
-                          {project.status}
-                        </Badge>
+              {projects.slice(0, 5).map((project) => {
+                const projectStatus = calculateProjectStatus(project);
+                return (
+                  <div key={project.id} className="project-card p-6 space-y-4">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h4 className="text-lg font-semibold text-white">{project.name}</h4>
+                        <p className="text-sm text-gray-400">by {project.user.username}</p>
                       </div>
-                      <div className="flex items-center gap-6 text-sm text-gray-300">
-                        <div className="flex items-center gap-1">
-                          <Target className="h-4 w-4" />
-                          <span>Hard Cap: ${project.hardCap}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <DollarSign className="h-4 w-4" />
-                          <span>Raised: ${project.totalRaised || '0'}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Users className="h-4 w-4" />
-                          <span>{project.totalParticipants || 0} participants</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-4 w-4" />
-                          <span>Created: {formatDate(project.createdAt)}</span>
-                        </div>
+                      <div className="flex items-center gap-2">
+                        <Badge className={`${
+                          project.type === 'fairlaunch'
+                            ? 'bg-purple-500/20 text-purple-400 border-purple-500/30'
+                            : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                        }`}>
+                          {project.type === 'fairlaunch' ? 'Fairlaunch' : 'Presale'}
+                        </Badge>
+                        <Badge className={getStatusBadgeClass(projectStatus)}>
+                          {projectStatus}
+                        </Badge>
                       </div>
                     </div>
-                    <Button variant="outline" size="sm" className="border-blue-500/20 text-white hover:bg-blue-500/20">
-                      <ExternalLink className="h-4 w-4 mr-2" />
-                      View Details
-                    </Button>
+
+                    {project.description && (
+                      <p className="text-gray-300">{project.description}</p>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm text-gray-300">
+                      <div>
+                        <span className="font-medium text-white">Soft Cap:</span> {project.softCap} KLC
+                      </div>
+                      <div>
+                        <span className="font-medium text-white">Hard Cap:</span> {project.hardCap} KLC
+                      </div>
+                      {project.type === 'presale' && project.tokenRate && (
+                        <div>
+                          <span className="font-medium text-white">Token Rate:</span> {project.tokenRate}
+                        </div>
+                      )}
+                      <div>
+                        <span className="font-medium text-white">
+                          {project.type === 'fairlaunch' ? 'Fairlaunch Start:' : 'Presale Start:'}
+                        </span> {formatDate(project.startTime)}
+                      </div>
+                      <div>
+                        <span className="font-medium text-white">
+                          {project.type === 'fairlaunch' ? 'Fairlaunch End:' : 'Presale End:'}
+                        </span> {formatDate(project.endTime)}
+                      </div>
+                      {project.type === 'presale' && project.lpLockDuration && (
+                        <div>
+                          <span className="font-medium text-white">LP Lock:</span> {project.lpLockDuration} days
+                        </div>
+                      )}
+                    </div>
+
+                    {project.type === 'presale' && project.blockNumber && project.deployedAt && (
+                      <div className="flex items-center gap-4 text-xs text-gray-400">
+                        <div>Contract: {formatAddress(project.contractAddress)}</div>
+                        <div>Block: {project.blockNumber}</div>
+                        <div>Deployed: {formatDate(project.deployedAt)}</div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {getSocialLinks(project).map((link, index) => (
+                          <Button
+                            key={index}
+                            variant="outline"
+                            size="sm"
+                            className="border-blue-500/20 text-white hover:bg-blue-500/20"
+                            asChild
+                          >
+                            <a href={link.url} target="_blank" rel="noopener noreferrer">
+                              <link.icon className="h-4 w-4" />
+                            </a>
+                          </Button>
+                        ))}
+                      </div>
+                      <Button variant="outline" size="sm" className="border-blue-500/20 text-white hover:bg-blue-500/20" asChild>
+                        <Link href={`/launchpad/${project.contractAddress}`}>
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          View Details
+                        </Link>
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
