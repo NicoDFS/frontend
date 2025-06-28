@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { ArrowLeft, Plus, Minus, Gift, Zap, TrendingUp } from 'lucide-react'
 import Link from 'next/link'
 import { useWallet } from '@/hooks/useWallet'
-import { useFarmingData } from '@/hooks/farming/useFarmingData'
+import { useSingleFarmData } from '@/hooks/farming/useSingleFarmData'
 import { BigNumber } from 'ethers'
 import { formatNumber } from '@/lib/utils'
 import TokenPairDisplay from '@/components/farming/TokenPairDisplay'
@@ -32,32 +32,24 @@ export default function FarmManagePage() {
   const [showUnstakingModal, setShowUnstakingModal] = useState(false)
   const [showClaimRewardModal, setShowClaimRewardModal] = useState(false)
 
-  // Get farm data - use the SAME hook as the main farm page
+  // Get single farm data for this specific farm
   const {
-    stakingInfos,
+    stakingInfo,
     isLoading,
     error,
     refetch
-  } = useFarmingData()
+  } = useSingleFarmData(token0Symbol, token1Symbol, version)
 
-  // Find the specific farm for this token pair and version
-  const stakingInfo = stakingInfos.find(info => {
-    const token0Match = info.tokens[0].symbol.toLowerCase() === token0Symbol.toLowerCase()
-    const token1Match = info.tokens[1].symbol.toLowerCase() === token1Symbol.toLowerCase()
-    const token0Match2 = info.tokens[0].symbol.toLowerCase() === token1Symbol.toLowerCase()
-    const token1Match2 = info.tokens[1].symbol.toLowerCase() === token0Symbol.toLowerCase()
-
-    return (token0Match && token1Match) || (token0Match2 && token1Match2)
-  })
+  // stakingInfo is now directly returned from useSingleFarmData hook
 
   // Debug logging
-  console.log('🔍 Deposit page debug:', {
+  console.log('🔍 Individual farm page debug:', {
     token0Symbol,
     token1Symbol,
     version,
-    totalStakingInfos: stakingInfos.length,
-    availableFarms: stakingInfos.map(info => `${info.tokens[0].symbol}-${info.tokens[1].symbol}`),
     foundStakingInfo: !!stakingInfo,
+    isLoading,
+    error,
     stakingInfoData: stakingInfo ? {
       totalStakedInUsd: stakingInfo.totalStakedInUsd?.toFixed(6) || 'N/A',
       totalStakedSymbol: stakingInfo.totalStakedInUsd?.token.symbol || 'N/A',
@@ -270,7 +262,7 @@ export default function FarmManagePage() {
                     You need {pairName} LP tokens to participate in this farm
                   </p>
                 </div>
-                <Link href={`/pools/add/${token0Symbol.toLowerCase()}/${token1Symbol.toLowerCase()}`}>
+                <Link href={stakingInfo ? `/pools?tokenA=${stakingInfo.tokens[0].address}&tokenB=${stakingInfo.tokens[1].address}&tokenASymbol=${stakingInfo.tokens[0].symbol}&tokenBSymbol=${stakingInfo.tokens[1].symbol}` : '/pools'}>
                   <Button className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600">
                     <Plus className="w-4 h-4 mr-2" />
                     Add {pairName} Liquidity

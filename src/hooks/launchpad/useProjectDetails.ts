@@ -36,12 +36,16 @@ export interface ProjectData {
   sellingAmount?: string
   isWhitelist?: boolean
   referrer?: string
+  fairlaunchStart?: string
+  fairlaunchEnd?: string
+
+  // Project type (added during data processing)
+  type?: 'presale' | 'fairlaunch'
 
   // Subgraph fields (blockchain data)
   status?: 'Active' | 'Successful' | 'Failed' | 'Cancelled' | 'Pending'
   totalRaised?: string
   totalParticipants?: number
-  type?: 'presale' | 'fairlaunch'
   isFinalized?: boolean
 
   // Contract state fields (live data)
@@ -549,16 +553,27 @@ export function useProjectDetails(contractAddress: string): UseProjectDetailsRet
   }, [contractAddressRef.current, isHydrated, publicClient]) // Simple stable dependencies
 
   // Refetch function for manual updates
-  const refetch = useCallback(() => {
+  const refetch = useCallback(async () => {
     if (fetchProjectDataRef.current) {
-      fetchProjectDataRef.current(true)
+      await fetchProjectDataRef.current(true)
     }
+  }, [])
+
+  // Polling control functions (currently automatic polling is always active)
+  const startPolling = useCallback(() => {
+    // Polling is automatically started in useEffect
+  }, [])
+
+  const stopPolling = useCallback(() => {
+    // Polling is automatically managed in useEffect cleanup
   }, [])
 
   return {
     projectData,
     loading: loading && isInitialLoad, // Only show loading during initial load
     error,
-    refetch
+    refetch,
+    startPolling,
+    stopPolling
   }
 }

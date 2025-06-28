@@ -3,14 +3,14 @@ import { DoubleSideStaking, SingleSideStaking, FarmingConfig, Token } from '@/ty
 // KalyChain token addresses
 const KALYCHAIN_TOKENS = {
   WKLC: {
-    address: '0x4446Fc4eb47f2f6586f9fAAb68B3498F86C07521',
+    address: '0x069255299Bb729399f3CECaBdc73d15d3D10a2A3',
     symbol: 'WKLC',
     name: 'Wrapped KLC',
     decimals: 18,
     chainId: 3888
   } as Token,
   KSWAP: {
-    address: '0xc9BAA8cfdDe8E328787E29b4B078abf2DaDc2055',
+    address: '0xCC93b84cEed74Dc28c746b7697d6fA477ffFf65a',
     symbol: 'KSWAP',
     name: 'KalySwap Token',
     decimals: 18,
@@ -24,49 +24,42 @@ const KALYCHAIN_TOKENS = {
     chainId: 3888
   } as Token,
   USDC: {
-    address: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359',
+    address: '0x9cAb0c396cF0F4325913f2269a0b72BD4d46E3A9',
     symbol: 'USDC',
     name: 'USD Coin',
     decimals: 6,
     chainId: 3888
   } as Token,
-  BTC: {
-    address: '0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6',
-    symbol: 'BTC',
-    name: 'Bitcoin',
-    decimals: 8,
-    chainId: 3888
-  } as Token,
   WBTC: {
-    address: '0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6',
+    address: '0xaA77D4a26d432B82DB07F8a47B7f7F623fd92455',
     symbol: 'WBTC',
     name: 'Wrapped Bitcoin',
     decimals: 8,
     chainId: 3888
   } as Token,
   ETH: {
-    address: '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619',
+    address: '0xfdbB253753dDE60b11211B169dC872AaE672879b',
     symbol: 'ETH',
     name: 'Ethereum',
     decimals: 18,
     chainId: 3888
   } as Token,
   DAI: {
-    address: '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063',
+    address: '0x6E92CAC380F7A7B86f4163fad0df2F277B16Edc6',
     symbol: 'DAI',
     name: 'Dai Stablecoin',
     decimals: 18,
     chainId: 3888
   } as Token,
   POL: {
-    address: '0x455e53908C43b2D26a7c2a7730Cb3b953c8b6829',
+    address: '0x706C9a63d7c8b7Aaf85DDCca52654645f470E8Ac',
     symbol: 'POL',
     name: 'Polygon',
     decimals: 18,
     chainId: 3888
   } as Token,
   BNB: {
-    address: '0x3BA4c387f786bFEE076A58914F5Bd38d668B42c3',
+    address: '0x0e2318b62a096AC68ad2D7F37592CBf0cA9c4Ddb',
     symbol: 'BNB',
     name: 'Binance Coin',
     decimals: 18,

@@ -115,6 +115,10 @@ interface Project {
     id: string;
     username: string;
   };
+  // Properties added during mapping
+  type: 'presale' | 'fairlaunch';
+  startTime: string;
+  endTime: string;
 }
 
 export default function ConfirmedProjects() {

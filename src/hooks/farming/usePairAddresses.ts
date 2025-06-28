@@ -77,7 +77,7 @@ export function usePairAddresses() {
         { key: 'WKLC_USDT', tokenA: KALYCHAIN_TOKENS.WKLC.address, tokenB: KALYCHAIN_TOKENS.USDT.address },
         { key: 'KSWAP_USDT', tokenA: KALYCHAIN_TOKENS.KSWAP.address, tokenB: KALYCHAIN_TOKENS.USDT.address },
         { key: 'WKLC_USDC', tokenA: KALYCHAIN_TOKENS.WKLC.address, tokenB: KALYCHAIN_TOKENS.USDC.address },
-        { key: 'WKLC_BTC', tokenA: KALYCHAIN_TOKENS.WKLC.address, tokenB: KALYCHAIN_TOKENS.BTC.address },
+        { key: 'WKLC_WBTC', tokenA: KALYCHAIN_TOKENS.WKLC.address, tokenB: KALYCHAIN_TOKENS.WBTC.address },
         { key: 'WKLC_ETH', tokenA: KALYCHAIN_TOKENS.WKLC.address, tokenB: KALYCHAIN_TOKENS.ETH.address }
       ]
 

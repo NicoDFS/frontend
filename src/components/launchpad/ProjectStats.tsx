@@ -98,7 +98,7 @@ export default function ProjectStats({ projectData }: ProjectStatsProps) {
                   {formatTimeRemaining(projectData.timeRemaining || 0)}
                 </div>
                 <div className="text-xs text-gray-500">
-                  until {new Date(projectData.presaleEnd || projectData.fairlaunchEnd).toLocaleDateString()}
+                  until {new Date(projectData.presaleEnd || projectData.fairlaunchEnd || new Date()).toLocaleDateString()}
                 </div>
               </div>
             </div>

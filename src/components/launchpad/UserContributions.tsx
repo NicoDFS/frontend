@@ -63,9 +63,9 @@ export default function UserContributions({
   // Fetch user contribution data on mount
   useEffect(() => {
     if (isConnected && projectData.contractAddress && projectData.type) {
-      fetchUserContribution(projectData.contractAddress, projectData.type, projectData.finalized || false)
+      fetchUserContribution(projectData.contractAddress, projectData.type)
     }
-  }, [isConnected, projectData.contractAddress, projectData.type, projectData.finalized, fetchUserContribution])
+  }, [isConnected, projectData.contractAddress, projectData.type, fetchUserContribution])
 
   // Handle claim tokens
   const handleClaimTokens = async () => {

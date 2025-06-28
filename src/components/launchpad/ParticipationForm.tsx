@@ -112,10 +112,10 @@ export default function ParticipationForm({
         }
 
         // Fetch user's existing contribution
-        await fetchUserContribution(projectData.contractAddress, projectData.type)
+        await fetchUserContribution(projectData.contractAddress, projectData.type || 'presale')
 
         // Fetch contribution limits
-        const limits = await getContributionLimits(projectData.contractAddress, projectData.type)
+        const limits = await getContributionLimits(projectData.contractAddress, projectData.type || 'presale')
         setContributionLimits(limits)
       } catch (error) {
         console.error('Error fetching user data:', error)

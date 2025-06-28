@@ -39,6 +39,22 @@ interface LaunchpadProject {
     id: string;
     username: string;
   };
+  // Properties added during mapping
+  type: 'presale' | 'fairlaunch';
+  startTime: string;
+  endTime: string;
+  description?: string;
+  websiteUrl?: string;
+  whitepaperUrl?: string;
+  githubUrl?: string;
+  discordUrl?: string;
+  telegramUrl?: string;
+  twitterUrl?: string;
+  additionalSocialUrl?: string;
+  tokenRate?: string;
+  lpLockDuration?: string;
+  blockNumber?: number;
+  deployedAt?: string;
 }
 
 interface LaunchpadOverview {

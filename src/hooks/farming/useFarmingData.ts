@@ -8,6 +8,8 @@ import { formatUnits } from 'ethers/lib/utils'
 import { useFarmingContracts } from './useFarmingContracts'
 import { usePairAddresses } from './usePairAddresses'
 import { LP_FARMING_POOLS, DOUBLE_SIDE_STAKING } from '@/config/farming'
+import { batchFarmingCalls } from '@/utils/multicall'
+import { contractCache, CacheKeys, withCache } from '@/utils/contractCache'
 
 // Mock TokenAmount implementation with proper BigNumber handling
 class MockTokenAmount implements TokenAmount {

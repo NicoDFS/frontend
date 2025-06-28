@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Search, ChevronDown, ChevronUp, Zap, TrendingUp, ArrowLeft } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useWallet } from '@/hooks/useWallet'
-import { useFarmingData } from '@/hooks/farming/useFarmingData'
+import { useFarmingDataOptimized } from '@/hooks/farming/useFarmingDataOptimized'
 import FarmCard from '@/components/farming/FarmCard'
 import { formatNumber } from '@/lib/utils'
 
@@ -22,8 +22,8 @@ export default function FarmPage() {
   const [sortBy, setSortBy] = useState<{ field: string; desc: boolean }>({ field: 'totalStakedInUsd', desc: true })
   const [activeTab, setActiveTab] = useState('all')
 
-  // Fetch farming data using enhanced hook with LiquidityPoolManagerV2
-  const { stakingInfos, isLoading: stakingLoading } = useFarmingData()
+  // Fetch farming data using optimized multicall hook
+  const { stakingInfos, isLoading: stakingLoading, error, refetch } = useFarmingDataOptimized()
 
   // Debug logging
   console.log('🚜 Farm page data:', {
@@ -157,10 +157,27 @@ export default function FarmPage() {
                 />
               </div>
 
-              {/* Sort Controls */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm" style={{ color: '#fef3c7' }}>Sort by:</span>
-                {getSortField('Liquidity', 'totalStakedInUsd')}
+              {/* Sort Controls and Refresh */}
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm" style={{ color: '#fef3c7' }}>Sort by:</span>
+                  {getSortField('Liquidity', 'totalStakedInUsd')}
+                </div>
+
+                {/* Refresh Button */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={refetch}
+                  disabled={stakingLoading}
+                  className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+                >
+                  {stakingLoading ? (
+                    <div className="w-4 h-4 border-2 border-amber-400 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    'Refresh'
+                  )}
+                </Button>
               </div>
             </div>
 
@@ -186,9 +203,27 @@ export default function FarmPage() {
           </div>
 
           {/* Farm Cards */}
-          {poolsLoading || stakingLoading ? (
-            <div className="flex justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-400"></div>
+          {error ? (
+            <Card className="farm-card border-red-500/20">
+              <CardContent className="p-8 text-center">
+                <div className="text-red-400 mb-4">
+                  <TrendingUp className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                  <p className="font-medium">Failed to load farm data</p>
+                  <p className="text-sm text-red-300 mt-1">{error}</p>
+                </div>
+                <Button
+                  onClick={refetch}
+                  variant="outline"
+                  className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+                >
+                  Try Again
+                </Button>
+              </CardContent>
+            </Card>
+          ) : poolsLoading || stakingLoading ? (
+            <div className="flex flex-col items-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-400 mb-4"></div>
+              <p className="text-slate-400 text-sm">Loading farms with optimized multicall...</p>
             </div>
           ) : sortedPools.length === 0 ? (
             <Card className="farm-card">
