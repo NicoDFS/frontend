@@ -818,7 +818,10 @@ export default function DashboardPage() {
                                         className="pr-16 bg-slate-800 border-slate-600 text-white placeholder:text-slate-400"
                                       />
                                       <div className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 pointer-events-none">
-                                        {sendAsset}
+                                        {sendAsset === 'KLC' ? 'KLC' : (() => {
+                                          const token = wallet.balance?.tokens.find(t => t.address === sendAsset);
+                                          return token?.symbol || sendAsset;
+                                        })()}
                                       </div>
                                     </div>
 
