@@ -9,7 +9,7 @@ import { X, Minus, AlertCircle, CheckCircle } from 'lucide-react'
 import { UnstakingModalProps } from '@/types/farming'
 import { formatTokenAmount } from '@/lib/utils'
 import { useFarmingContracts } from '@/hooks/farming/useFarmingContracts'
-import { BigNumber } from 'ethers'
+import { BigNumber, ethers } from 'ethers'
 import TokenPairDisplay from './TokenPairDisplay'
 
 export default function UnstakingModal({
@@ -67,10 +67,8 @@ export default function UnstakingModal({
       // Close modal before starting transaction (same pattern as SwapInterface)
       onDismiss()
 
-      // Convert amount to BigNumber (assuming 18 decimals for LP tokens)
-      const amountBN = BigNumber.from(
-        Math.floor(parseFloat(amount) * Math.pow(10, 18)).toString()
-      )
+      // Convert amount to BigNumber (avoiding scientific notation for large numbers)
+      const amountBN = ethers.utils.parseEther(amount)
 
       // Use the staking reward contract address to unstake LP tokens
       const stakingRewardAddress = stakingInfo.stakingRewardAddress

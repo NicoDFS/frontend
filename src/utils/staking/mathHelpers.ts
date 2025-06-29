@@ -102,7 +102,13 @@ export const parseKLCAmount = (amount: string): bigint => {
   try {
     const ethAmount = parseFloat(amount);
     if (isNaN(ethAmount)) return BigInt(0);
-    return BigInt(Math.floor(ethAmount * 10 ** 18));
+
+    // Avoid scientific notation by using string manipulation for large numbers
+    const [integerPart, decimalPart = ''] = amount.split('.');
+    const paddedDecimal = decimalPart.padEnd(18, '0').slice(0, 18);
+    const weiString = integerPart + paddedDecimal;
+
+    return BigInt(weiString);
   } catch {
     return BigInt(0);
   }
