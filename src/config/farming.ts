@@ -128,9 +128,9 @@ const LP_FARMING_POOLS: { [key: string]: DoubleSideStaking } = {
   },
   KSWAP_USDT: {
     tokens: [KALYCHAIN_TOKENS.KSWAP, KALYCHAIN_TOKENS.USDT],
-    stakingRewardAddress: '0xD4B2B42663A095e5503d820Ad9291Df2B6BDa1fb', // Real staking contract
+    stakingRewardAddress: '0x13545afF650C1A1982F70B8e20BB689A1Da4A302', // Real staking contract
     version: 2,
-    pairAddress: '0xf5D0e9ff1D439D478f13b167E8260A1f98F2b793' // Discovered pair address
+    pairAddress: '0x0e520779287bb711c8E603cc85D532dAa7C55372' // Discovered pair address
   }
 }
 

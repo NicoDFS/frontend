@@ -18,7 +18,7 @@ const STAKING_CONTRACTS = [
   { address: '0xA3eB9877968DBe481B8D72797035D39CC9656733', name: 'WKLC/BNB' },
   { address: '0x3B7c8132B3253b9EBBdF08Eb849254eFFe22664b', name: 'WKLC/WBTC' },
   { address: '0xA9f1eB89452f825Bbc59007FAe13233953910582', name: 'KSWAP/WKLC' },
-  { address: '0xD4B2B42663A095e5503d820Ad9291Df2B6BDa1fb', name: 'KSWAP/USDT' }
+  { address: '0x13545afF650C1A1982F70B8e20BB689A1Da4A302', name: 'KSWAP/USDT' }
 ]
 
 // Known pair addresses to test (we'll discover more from staking contracts)
