@@ -34,7 +34,8 @@ import {
 import TradingChart from '@/components/charts/TradingChart';
 import TransactionData from '@/components/swaps/TransactionData';
 import SwapInterfaceWrapper from '@/components/swap/SwapInterfaceWrapper';
-import { useDexMarketStats, formatTokenPrice, formatPriceChange } from '@/hooks/usePriceData';
+import { formatTokenPrice, formatPriceChange } from '@/hooks/usePriceData';
+import { usePairMarketStats } from '@/hooks/usePairMarketStats';
 import { useWallet } from '@/hooks/useWallet';
 import './swaps.css';
 
@@ -47,6 +48,7 @@ interface Token {
   symbol: string;
   logoURI: string;
   balance?: string;
+  isNative?: boolean;
 }
 
 // Official KalyChain tokens from https://raw.githubusercontent.com/KalyCoinProject/tokenlists/main/kalyswap.tokenlist.json
@@ -58,7 +60,8 @@ const KALYCHAIN_TOKENS: Token[] = [
     decimals: 18,
     name: 'KalyCoin',
     symbol: 'KLC',
-    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x069255299Bb729399f3CECaBdc73d15d3D10a2A3/logo_24.png'
+    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x069255299Bb729399f3CECaBdc73d15d3D10a2A3/logo_24.png',
+    isNative: true
   },
   {
     chainId: 3888,
@@ -152,16 +155,6 @@ export default function SwapsPage() {
   // Use wallet hook to get connection status and address
   const { isConnected, address: userAddress } = useWallet();
 
-  // Get real-time DEX market stats
-  const {
-    klcPrice,
-    priceChange24h: klcChange,
-    volume24h,
-    totalLiquidity,
-    isLoading: dexStatsLoading,
-    error: dexStatsError
-  } = useDexMarketStats();
-
   // Swap state
   const [swapState, setSwapState] = useState<SwapState>({
     fromToken: KALYCHAIN_TOKENS[0], // KLC
@@ -171,6 +164,16 @@ export default function SwapsPage() {
     slippage: '0.5',
     deadline: '20'
   });
+
+  // Get real-time pair-specific market stats (after swapState is declared)
+  const {
+    price: pairPrice,
+    priceChange24h,
+    volume24h,
+    liquidity,
+    isLoading: pairStatsLoading,
+    error: pairStatsError
+  } = usePairMarketStats(swapState.fromToken, swapState.toToken);
 
   // Settings state
   const [showSettings, setShowSettings] = useState(false);
@@ -345,17 +348,7 @@ export default function SwapsPage() {
   // Handle amount input change
   const handleFromAmountChange = (value: string) => {
     setSwapState(prev => ({ ...prev, fromAmount: value }));
-
-    // In a real implementation, you would calculate the output amount
-    // based on the current exchange rate and liquidity from the DEX
-    if (value && !isNaN(parseFloat(value))) {
-      // Mock exchange rate calculation
-      const mockRate = swapState.fromToken?.symbol === 'KLC' ? 0.0003 : 3333;
-      const outputAmount = (parseFloat(value) * mockRate).toFixed(6);
-      setSwapState(prev => ({ ...prev, toAmount: outputAmount }));
-    } else {
-      setSwapState(prev => ({ ...prev, toAmount: '' }));
-    }
+    // Note: Quote calculation is handled by SwapInterface component using router contract
   };
 
   // Handle swap execution
@@ -706,8 +699,8 @@ export default function SwapsPage() {
               {/* Trading Chart */}
               <div className="chart-container trading-chart-wrapper">
                 <TradingChart
-                  symbol={swapState.fromToken?.symbol || 'KLC'}
-                  baseSymbol={swapState.toToken?.symbol || 'USDT'}
+                  tokenA={swapState.fromToken}
+                  tokenB={swapState.toToken}
                   height={600}
                   showTimeframes={true}
                   showChartTypes={true}
@@ -761,7 +754,18 @@ export default function SwapsPage() {
                 </Card>
 
                 <TabsContent value="swap" className="mt-1">
-                  <SwapInterfaceWrapper />
+                  <SwapInterfaceWrapper
+                    fromToken={swapState.fromToken}
+                    toToken={swapState.toToken}
+                    onTokenChange={(fromToken, toToken) => {
+                      console.log(`🔄 Token change: ${fromToken?.symbol}/${toToken?.symbol}`);
+                      setSwapState(prev => ({
+                        ...prev,
+                        fromToken,
+                        toToken
+                      }));
+                    }}
+                  />
                 </TabsContent>
 
                 <TabsContent value="limit" className="mt-1">
@@ -873,30 +877,32 @@ export default function SwapsPage() {
               {/* Quick stats */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg">Market Stats</CardTitle>
+                  <CardTitle className="text-lg">
+                    {swapState.fromToken?.symbol}/{swapState.toToken?.symbol} Market Stats
+                  </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">KLC Price</span>
+                    <span className="text-sm text-gray-600">Price</span>
                     <div className="flex items-center gap-2">
-                      {dexStatsLoading ? (
+                      {pairStatsLoading ? (
                         <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
-                      ) : dexStatsError ? (
+                      ) : pairStatsError ? (
                         <span className="text-xs text-red-600">Error loading price</span>
                       ) : (
                         <>
                           <span className="font-medium">
-                            ${klcPrice ? formatTokenPrice(klcPrice, 'KLC') : '0.00000000'}
+                            {pairPrice > 0 ? formatTokenPrice(pairPrice, swapState.toToken?.symbol || '') : '0.00000000'}
                           </span>
-                          {klcChange !== null && (
+                          {priceChange24h !== 0 && (
                             <span
                               className={`text-xs px-1 py-0.5 rounded ${
-                                klcChange >= 0
+                                priceChange24h >= 0
                                   ? 'text-green-700 bg-green-100'
                                   : 'text-red-700 bg-red-100'
                               }`}
                             >
-                              {formatPriceChange(klcChange)}
+                              {formatPriceChange(priceChange24h)}
                             </span>
                           )}
                         </>
@@ -905,21 +911,21 @@ export default function SwapsPage() {
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600">24h Volume</span>
-                    {dexStatsLoading ? (
+                    {pairStatsLoading ? (
                       <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
                     ) : (
                       <span className="font-medium">
-                        ${volume24h ? volume24h.toLocaleString() : 'N/A'}
+                        ${volume24h > 0 ? volume24h.toLocaleString() : '0'}
                       </span>
                     )}
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Total Liquidity</span>
-                    {dexStatsLoading ? (
+                    <span className="text-sm text-gray-600">Liquidity</span>
+                    {pairStatsLoading ? (
                       <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin" />
                     ) : (
                       <span className="font-medium">
-                        ${totalLiquidity ? totalLiquidity.toLocaleString(undefined, { maximumFractionDigits: 0 }) : 'N/A'}
+                        ${liquidity > 0 ? liquidity.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '0'}
                       </span>
                     )}
                   </div>

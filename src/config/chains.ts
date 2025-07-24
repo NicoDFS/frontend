@@ -63,12 +63,47 @@ export const kalychainTestnet = defineChain({
   iconUrl: '/tokens/klc.png',
 })
 
+// Clisha Mainnet Configuration
+export const clisha = defineChain({
+  id: 3890,
+  name: 'Clisha',
+  nativeCurrency: {
+    decimals: 18,
+    name: 'clisha',
+    symbol: 'CLISHA',
+  },
+  rpcUrls: {
+    default: {
+      http: ['https://rpc.clishachain.com/rpc'],
+    },
+    public: {
+      http: ['https://rpc.clishachain.com/rpc'],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: 'ClishaExplorer',
+      url: 'https://clishascan.com',
+    },
+  },
+  contracts: {
+    // Add multicall contract if available
+    // multicall3: {
+    //   address: '0x...',
+    //   blockCreated: 0,
+    // },
+  },
+  // Add custom icon for Rainbow Kit
+  iconUrl: '/icons/clisha.png',
+})
+
 // Bridge-supported chains - Required for bridge functionality
 export const supportedChains = [
   kalychain,
   arbitrum,
   bsc,
   polygon,
+  clisha,
   // kalychainTestnet, // Uncomment when testnet is available
 ] as const
 
@@ -111,6 +146,13 @@ export const CHAIN_CONFIG = {
   [polygon.id]: {
     name: 'Polygon',
     shortName: 'POL',
+    isTestnet: false,
+    faucetUrl: null,
+    bridgeUrl: null,
+  },
+  [clisha.id]: {
+    name: 'Clisha',
+    shortName: 'CLISHA',
     isTestnet: false,
     faucetUrl: null,
     bridgeUrl: null,

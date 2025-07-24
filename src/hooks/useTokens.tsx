@@ -10,6 +10,12 @@ interface Token {
   symbol: string;
   logoURI: string;
   balance?: string;
+  // Enhanced with subgraph data
+  tradeVolumeUSD?: string;
+  totalLiquidity?: string;
+  derivedKLC?: string;
+  txCount?: string;
+  priceUSD?: string;
 }
 
 // Official KalyChain tokens from https://raw.githubusercontent.com/KalyCoinProject/tokenlists/main/kalyswap.tokenlist.json
@@ -111,7 +117,8 @@ export function useTokens() {
     setError(null);
 
     try {
-      // TODO: Replace with actual GraphQL query to the DEX subgraph
+      console.log('🔍 Fetching tokens from DEX subgraph...');
+
       const response = await fetch('/api/graphql', {
         method: 'POST',
         headers: {
@@ -132,6 +139,8 @@ export function useTokens() {
                 decimals
                 tradeVolumeUSD
                 totalLiquidity
+                derivedKLC
+                txCount
               }
             }
           `
@@ -139,29 +148,49 @@ export function useTokens() {
       });
 
       if (response.ok) {
-        const data = await response.json();
+        const result = await response.json();
+        console.log('📊 Subgraph tokens response:', result);
 
-        if (data.data && data.data.tokens) {
-          const subgraphTokens: Token[] = data.data.tokens.map((token: any) => ({
+        if (result.errors) {
+          console.error('GraphQL errors:', result.errors);
+          throw new Error(result.errors[0].message);
+        }
+
+        if (result.data && result.data.tokens) {
+          const subgraphTokens: Token[] = result.data.tokens.map((token: any) => ({
             chainId: 3888,
             address: token.id,
             symbol: token.symbol,
             name: token.name,
             decimals: parseInt(token.decimals),
-            logoURI: `https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/${token.id}/logo_24.png`
+            logoURI: `https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/${token.id}/logo_24.png`,
+            // Enhanced subgraph data
+            tradeVolumeUSD: token.tradeVolumeUSD,
+            totalLiquidity: token.totalLiquidity,
+            derivedKLC: token.derivedKLC,
+            txCount: token.txCount,
+            // Calculate price from derivedKLC (assuming KLC price calculation)
+            priceUSD: token.derivedKLC ? (parseFloat(token.derivedKLC) * 0.0003).toFixed(8) : undefined
           }));
 
-          // Merge with common tokens, prioritizing common tokens
+          console.log(`✅ Fetched ${subgraphTokens.length} tokens from subgraph`);
+
+          // Merge with common tokens, prioritizing common tokens but adding subgraph data
           const mergedTokens = mergeTokenLists(COMMON_TOKENS, subgraphTokens);
           setTokens(mergedTokens);
+        } else {
+          console.warn('No token data in subgraph response, using common tokens');
+          setTokens(COMMON_TOKENS);
         }
       } else {
         console.warn('Failed to fetch tokens from subgraph, using common tokens');
+        setTokens(COMMON_TOKENS);
       }
     } catch (err) {
-      console.error('Error fetching tokens:', err);
-      setError('Failed to load tokens');
+      console.error('❌ Error fetching tokens from subgraph:', err);
+      setError('Failed to load tokens from subgraph');
       // Keep using common tokens as fallback
+      setTokens(COMMON_TOKENS);
     } finally {
       setLoading(false);
     }
@@ -170,15 +199,28 @@ export function useTokens() {
   const mergeTokenLists = (commonTokens: Token[], subgraphTokens: Token[]): Token[] => {
     const tokenMap = new Map<string, Token>();
 
-    // Add common tokens first (higher priority)
+    // Add common tokens first (higher priority for basic info)
     commonTokens.forEach(token => {
       tokenMap.set(token.address.toLowerCase(), token);
     });
 
-    // Add subgraph tokens if not already present
+    // Enhance common tokens with subgraph data and add new subgraph tokens
     subgraphTokens.forEach(token => {
       const key = token.address.toLowerCase();
-      if (!tokenMap.has(key)) {
+      const existingToken = tokenMap.get(key);
+
+      if (existingToken) {
+        // Enhance existing common token with subgraph data
+        tokenMap.set(key, {
+          ...existingToken,
+          tradeVolumeUSD: token.tradeVolumeUSD,
+          totalLiquidity: token.totalLiquidity,
+          derivedKLC: token.derivedKLC,
+          txCount: token.txCount,
+          priceUSD: token.priceUSD
+        });
+      } else {
+        // Add new token from subgraph
         tokenMap.set(key, token);
       }
     });
@@ -218,6 +260,23 @@ export function useTokens() {
     getTokenByAddress,
     getTokenBySymbol,
     searchTokens,
-    refetch: fetchTokensFromSubgraph
+    refetch: fetchTokensFromSubgraph,
+    // Additional utilities for enhanced token data
+    getTokenWithMetadata: (address: string): Token | undefined => {
+      const token = getTokenByAddress(address);
+      return token;
+    },
+    getTopTokensByVolume: (limit: number = 10): Token[] => {
+      return tokens
+        .filter(token => token.tradeVolumeUSD && parseFloat(token.tradeVolumeUSD) > 0)
+        .sort((a, b) => parseFloat(b.tradeVolumeUSD || '0') - parseFloat(a.tradeVolumeUSD || '0'))
+        .slice(0, limit);
+    },
+    getTopTokensByLiquidity: (limit: number = 10): Token[] => {
+      return tokens
+        .filter(token => token.totalLiquidity && parseFloat(token.totalLiquidity) > 0)
+        .sort((a, b) => parseFloat(b.totalLiquidity || '0') - parseFloat(a.totalLiquidity || '0'))
+        .slice(0, limit);
+    }
   };
 }

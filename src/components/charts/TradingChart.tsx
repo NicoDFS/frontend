@@ -25,7 +25,18 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { TrendingUp, BarChart3, Maximize2, RefreshCw } from 'lucide-react';
-import { usePriceData, formatTokenPrice, formatPriceChange } from '@/hooks/usePriceData';
+import { useHistoricalPriceData, formatTokenPrice, formatPriceChange } from '@/hooks/usePriceData';
+
+// Token interface
+interface Token {
+  chainId: number;
+  address: string;
+  decimals: number;
+  name: string;
+  symbol: string;
+  logoURI: string;
+  isNative?: boolean;
+}
 
 // Chart data interfaces
 interface PriceData {
@@ -38,6 +49,9 @@ interface PriceData {
 }
 
 interface ChartProps {
+  tokenA?: Token | null;
+  tokenB?: Token | null;
+  // Legacy props for backward compatibility
   symbol?: string;
   baseSymbol?: string;
   height?: number;
@@ -93,6 +107,9 @@ const generateMockData = (symbol: string = 'KLC', baseSymbol: string = 'USDT'): 
 };
 
 export default function TradingChart({
+  tokenA,
+  tokenB,
+  // Legacy props for backward compatibility
   symbol = 'KLC',
   baseSymbol = 'USDT',
   height = 400,
@@ -107,151 +124,185 @@ export default function TradingChart({
   const [selectedTimeframe, setSelectedTimeframe] = useState('1h');
   const [selectedChartType, setSelectedChartType] = useState('candlestick');
 
-  // Check if this is KLC/USDT pair (only supported pair for now)
-  const isKlcUsdtPair = (symbol === 'KLC' || symbol === 'wKLC') && (baseSymbol === 'USDT' || baseSymbol === 'USDt');
+  // Use Token objects if provided, otherwise fall back to legacy string props
+  const currentTokenA = tokenA || (symbol ? { symbol, chainId: 3888, address: '', decimals: 18, name: symbol, logoURI: '' } as Token : null);
+  const currentTokenB = tokenB || (baseSymbol ? { symbol: baseSymbol, chainId: 3888, address: '', decimals: 18, name: baseSymbol, logoURI: '' } as Token : null);
 
-  console.log('TradingChart props:', { symbol, baseSymbol, isKlcUsdtPair });
-
-  // Use the price data hook only for KLC/USDT
+  // Fetch real historical price data from DEX subgraph
   const {
-    priceData,
-    currentPrice,
-    priceChange24h,
-    volume24h,
-    isLoading,
-    error,
-    refreshData,
-  } = usePriceData({ baseToken: symbol, quoteToken: baseSymbol }, selectedTimeframe);
+    priceData: historicalData,
+    isLoading: dataLoading,
+    error: dataError,
+    refetch: refetchData
+  } = useHistoricalPriceData(currentTokenA, currentTokenB);
 
-  // Show "Coming Soon" for non-KLC/USDT pairs
-  if (!isKlcUsdtPair) {
-    return (
-      <div className={`bg-white rounded-lg border ${className}`}>
-        <div className="p-4 border-b">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900">
-              {symbol}/{baseSymbol}
-            </h3>
-          </div>
-        </div>
-        <div className="flex items-center justify-center" style={{ height: `${height}px` }}>
-          <div className="text-center">
-            <BarChart3 className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Live Chart Coming Soon</h3>
-            <p className="text-gray-500 max-w-sm">
-              Advanced trading charts for {symbol}/{baseSymbol} will be available shortly
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  console.log('🎯 TradingChart Debug:', {
+    tokenA: currentTokenA?.symbol,
+    tokenB: currentTokenB?.symbol,
+    tokenAAddress: currentTokenA?.address,
+    tokenBAddress: currentTokenB?.address,
+    dataLoading,
+    dataError,
+    historicalDataLength: historicalData.length,
+    historicalData: historicalData.slice(0, 2), // Show first 2 items
+    timestamp: new Date().toISOString()
+  });
 
-  // Initialize chart
+  // Use real historical data from subgraph
+  const chartData = React.useMemo(() => {
+    return historicalData;
+  }, [historicalData]);
+
+  // Calculate current price and stats from latest data point
+  const currentPrice = React.useMemo(() => {
+    if (historicalData.length > 0) {
+      return historicalData[historicalData.length - 1].close;
+    }
+    return 0;
+  }, [historicalData]);
+
+  const priceChange24h = React.useMemo(() => {
+    if (historicalData.length >= 2) {
+      const latest = historicalData[historicalData.length - 1];
+      const previous = historicalData[historicalData.length - 2];
+      return ((latest.close - previous.close) / previous.close) * 100;
+    }
+    return 0;
+  }, [historicalData]);
+
+  const volume24h = React.useMemo(() => {
+    if (historicalData.length > 0) {
+      return historicalData[historicalData.length - 1].volume || 0;
+    }
+    return 0;
+  }, [historicalData]);
+
+  // Initialize chart only when we have data and container will be rendered
   useEffect(() => {
-    if (!chartContainerRef.current) return;
+    // Only initialize if we're not loading, have no errors, and have data
+    const shouldInitialize = !dataLoading && !dataError && historicalData.length > 0;
+
+    console.log('🎯 Chart initialization effect:', {
+      hasContainer: !!chartContainerRef.current,
+      hasTokens: !!(currentTokenA && currentTokenB),
+      hasExistingChart: !!chartRef.current,
+      shouldInitialize,
+      dataLoading,
+      dataError: !!dataError,
+      dataLength: historicalData.length
+    });
+
+    if (!shouldInitialize) {
+      console.log('⚠️ Chart initialization skipped: conditions not met');
+      return;
+    }
+
+    if (!chartContainerRef.current) {
+      console.log('⚠️ Chart initialization skipped: no container');
+      return;
+    }
 
     try {
       const chart = createChart(chartContainerRef.current, {
-      layout: {
-        background: { type: ColorType.Solid, color: 'transparent' },
-        textColor: '#374151',
-        fontSize: 12,
-        fontFamily: 'Inter, system-ui, sans-serif',
-      },
-      grid: {
-        vertLines: {
-          color: '#f3f4f6',
-          style: LineStyle.Solid,
+        layout: {
+          background: { type: ColorType.Solid, color: 'transparent' },
+          textColor: '#374151',
+          fontSize: 12,
+          fontFamily: 'Inter, system-ui, sans-serif',
         },
-        horzLines: {
-          color: '#f3f4f6',
-          style: LineStyle.Solid,
+        grid: {
+          vertLines: {
+            color: '#f3f4f6',
+            style: LineStyle.Solid,
+          },
+          horzLines: {
+            color: '#f3f4f6',
+            style: LineStyle.Solid,
+          },
         },
-      },
-      crosshair: {
-        mode: CrosshairMode.Normal,
-        vertLine: {
-          color: '#9ca3af',
-          width: 1,
-          style: LineStyle.Dashed,
+        crosshair: {
+          mode: CrosshairMode.Normal,
+          vertLine: {
+            color: '#9ca3af',
+            width: 1,
+            style: LineStyle.Dashed,
+          },
+          horzLine: {
+            color: '#9ca3af',
+            width: 1,
+            style: LineStyle.Dashed,
+          },
         },
-        horzLine: {
-          color: '#9ca3af',
-          width: 1,
-          style: LineStyle.Dashed,
+        rightPriceScale: {
+          borderColor: '#e5e7eb',
+          scaleMargins: {
+            top: 0.05,
+            bottom: 0.1,
+          },
+          mode: PriceScaleMode.Normal,
         },
-      },
-      rightPriceScale: {
-        borderColor: '#e5e7eb',
-        scaleMargins: {
-          top: 0.05,
-          bottom: 0.1,
+        leftPriceScale: {
+          visible: false,
         },
-        mode: PriceScaleMode.Normal,
-      },
-      leftPriceScale: {
-        visible: false,
-      },
-      timeScale: {
-        borderColor: '#e5e7eb',
-        timeVisible: true,
-        secondsVisible: false,
-        rightOffset: 2,
-        barSpacing: 8,
-        minBarSpacing: 4,
-      },
-      handleScroll: {
-        mouseWheel: true,
-        pressedMouseMove: true,
-        horzTouchDrag: true,
-        vertTouchDrag: true,
-      },
-      handleScale: {
-        axisPressedMouseMove: true,
-        mouseWheel: true,
-        pinch: true,
-      },
-    });
+        timeScale: {
+          borderColor: '#e5e7eb',
+          timeVisible: true,
+          secondsVisible: false,
+        },
+        handleScroll: {
+          mouseWheel: true,
+          pressedMouseMove: true,
+        },
+        handleScale: {
+          axisPressedMouseMove: true,
+          mouseWheel: true,
+          pinch: true,
+        },
+      });
 
-      chart.timeScale().fitContent();
       chartRef.current = chart;
-
-      // Handle resize
-      const handleResize = () => {
-        if (chartContainerRef.current && chart) {
-          chart.applyOptions({
-            width: chartContainerRef.current.clientWidth,
-            height: height,
-          });
-        }
-      };
-
-      window.addEventListener('resize', handleResize);
-      handleResize();
+      console.log('✅ Chart initialized successfully');
 
       return () => {
-        window.removeEventListener('resize', handleResize);
-        if (chart) {
-          chart.remove();
+        if (chartRef.current) {
+          chartRef.current.remove();
+          chartRef.current = null;
         }
       };
     } catch (error) {
       console.error('Failed to initialize chart:', error);
     }
-  }, [height]);
+  }, [dataLoading, dataError, historicalData.length]);
 
-  // Update chart data and series type
+  // Update chart data when data changes
   useEffect(() => {
-    if (!chartRef.current || !priceData.length) return;
+    console.log('📊 Chart data update effect:', {
+      hasChartRef: !!chartRef.current,
+      hasTokens: !!(currentTokenA && currentTokenB),
+      chartDataLength: chartData.length,
+      chartData: chartData.slice(0, 2)
+    });
 
-    // Remove existing series
-    if (seriesRef.current) {
-      chartRef.current.removeSeries(seriesRef.current);
+    if (!chartRef.current || chartData.length === 0) {
+      console.log('⚠️ Chart update skipped:', {
+        hasChartRef: !!chartRef.current,
+        chartDataLength: chartData.length
+      });
+      return;
     }
 
-    // Convert price data to chart format
-    const chartData = priceData.map(item => ({
+    // Remove existing series
+    if (seriesRef.current && chartRef.current) {
+      try {
+        chartRef.current.removeSeries(seriesRef.current);
+      } catch (error) {
+        console.warn('Error removing chart series:', error);
+      }
+      seriesRef.current = null;
+    }
+
+    // Use the historical data from subgraph (already in correct format)
+    const formattedChartData = chartData.map(item => ({
       time: item.time as Time,
       open: item.open,
       high: item.high,
@@ -271,12 +322,12 @@ export default function TradingChart({
         wickUpColor: '#10b981',
         priceFormat: {
           type: 'price',
-          precision: symbol === 'KLC' ? 8 : 4,
-          minMove: symbol === 'KLC' ? 0.00000001 : 0.0001,
+          precision: (currentTokenA?.symbol === 'KLC' || currentTokenA?.symbol === 'wKLC') ? 8 : 4,
+          minMove: (currentTokenA?.symbol === 'KLC' || currentTokenA?.symbol === 'wKLC') ? 0.00000001 : 0.0001,
         },
       });
 
-      candlestickSeries.setData(chartData);
+      candlestickSeries.setData(formattedChartData);
       seriesRef.current = candlestickSeries;
 
       // Add volume series for candlestick charts
@@ -290,10 +341,10 @@ export default function TradingChart({
         priceLineVisible: false,
       });
 
-      const volumeData = chartData.map(item => ({
+      const volumeData = formattedChartData.map(item => ({
         time: item.time,
         value: item.volume || 0,
-        color: item.close >= item.open ? '#10b98150' : '#ef444450',
+        color: item.close >= item.open ? '#10b981' : '#ef4444',
       }));
 
       volumeSeries.setData(volumeData);
@@ -315,12 +366,12 @@ export default function TradingChart({
         lineWidth: 2,
         priceFormat: {
           type: 'price',
-          precision: symbol === 'KLC' ? 8 : 4,
-          minMove: symbol === 'KLC' ? 0.00000001 : 0.0001,
+          precision: (currentTokenA?.symbol === 'KLC' || currentTokenA?.symbol === 'wKLC') ? 8 : 4,
+          minMove: (currentTokenA?.symbol === 'KLC' || currentTokenA?.symbol === 'wKLC') ? 0.00000001 : 0.0001,
         },
       });
 
-      const lineData: LineData[] = chartData.map(item => ({
+      const lineData: LineData[] = formattedChartData.map(item => ({
         time: item.time,
         value: item.close,
       }));
@@ -334,18 +385,95 @@ export default function TradingChart({
       chartRef.current?.timeScale().fitContent();
     }, 100);
 
-  }, [selectedChartType, selectedTimeframe, symbol, baseSymbol, priceData]);
+  }, [selectedChartType, selectedTimeframe, currentTokenA, currentTokenB, chartData]);
 
-  // Handle error display
-  if (error) {
+  console.log('TradingChart props:', {
+    tokenA: currentTokenA?.symbol,
+    tokenB: currentTokenB?.symbol,
+    dataLoading,
+    historicalDataLength: historicalData.length
+  });
+
+  // Show loading state while fetching data
+  if (dataLoading) {
     return (
       <div className={`bg-white rounded-lg border ${className}`}>
-        <div className="p-8 text-center">
-          <div className="text-red-500 mb-2">Failed to load chart data</div>
-          <Button onClick={refreshData} variant="outline" size="sm">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Retry
-          </Button>
+        <div className="p-4 border-b">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-900">
+              {currentTokenA?.symbol || 'TOKEN1'}/{currentTokenB?.symbol || 'TOKEN2'}
+            </h3>
+          </div>
+        </div>
+        <div className="flex items-center justify-center" style={{ height: `${height}px` }}>
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-500">Loading chart data...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state if data fetch failed
+  if (dataError) {
+    return (
+      <div className={`bg-white rounded-lg border ${className}`}>
+        <div className="p-4 border-b">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-900">
+              {currentTokenA?.symbol || 'TOKEN1'}/{currentTokenB?.symbol || 'TOKEN2'}
+            </h3>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={refetchData}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Retry
+            </Button>
+          </div>
+        </div>
+        <div className="flex items-center justify-center" style={{ height: `${height}px` }}>
+          <div className="text-center">
+            <BarChart3 className="mx-auto h-12 w-12 text-red-400 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Failed to Load Chart Data</h3>
+            <p className="text-gray-500 max-w-sm">
+              {dataError}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show "No data" message if no chart data and no loading
+  if (!dataLoading && historicalData.length === 0) {
+    const isLiquidityError = dataError?.includes('No liquidity pool exists');
+
+    return (
+      <div className={`bg-white rounded-lg border ${className}`}>
+        <div className="p-4 border-b">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-900">
+              {currentTokenA?.symbol || 'TOKEN1'}/{currentTokenB?.symbol || 'TOKEN2'}
+            </h3>
+          </div>
+        </div>
+        <div className="flex items-center justify-center" style={{ height: `${height}px` }}>
+          <div className="text-center">
+            <BarChart3 className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              {isLiquidityError ? 'No Liquidity Pool' : 'No Chart Data Available'}
+            </h3>
+            <p className="text-gray-500 max-w-sm">
+              {isLiquidityError
+                ? `No liquidity pool exists for ${currentTokenA?.symbol}/${currentTokenB?.symbol}. This pair is not available for trading.`
+                : `Chart data for ${currentTokenA?.symbol || 'TOKEN1'}/${currentTokenB?.symbol || 'TOKEN2'} is not available`
+              }
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -358,12 +486,12 @@ export default function TradingChart({
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
             <h3 className="text-lg font-semibold text-gray-900">
-              {symbol}/{baseSymbol}
+              {currentTokenA?.symbol || 'TOKEN1'}/{currentTokenB?.symbol || 'TOKEN2'}
             </h3>
             {currentPrice && (
               <div className="flex items-center gap-2">
                 <span className="text-xl font-bold text-gray-900">
-                  ${formatTokenPrice(currentPrice, symbol)}
+                  ${formatTokenPrice(currentPrice, currentTokenA?.symbol || 'TOKEN1')}
                 </span>
                 {priceChange24h !== null && (
                   <span
@@ -386,8 +514,8 @@ export default function TradingChart({
           </div>
 
           <div className="flex items-center gap-2">
-            <Button onClick={refreshData} variant="ghost" size="sm" disabled={isLoading}>
-              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            <Button onClick={refetchData} variant="ghost" size="sm" disabled={dataLoading}>
+              <RefreshCw className={`h-4 w-4 ${dataLoading ? 'animate-spin' : ''}`} />
             </Button>
             <Button variant="ghost" size="sm">
               <Maximize2 className="h-4 w-4" />
@@ -441,7 +569,7 @@ export default function TradingChart({
 
       {/* Chart Container */}
       <div className="relative">
-        {isLoading && (
+        {dataLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 z-10">
             <div className="flex items-center gap-2 text-gray-600">
               <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />

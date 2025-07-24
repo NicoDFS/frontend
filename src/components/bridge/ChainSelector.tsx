@@ -29,6 +29,8 @@ function ChainIcon({ chainName, size = 20 }: { chainName: string; size?: number 
         return 'binance';
       case 'polygon':
         return 'polygon';
+      case 'clisha':
+        return 'clisha';
       default:
         return chain.toLowerCase();
     }

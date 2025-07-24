@@ -36,6 +36,12 @@ const CHAIN_WALLET_CONFIGS: Record<string, ChainWalletConfig> = {
     supportedWallets: ['metamask', 'walletconnect', 'coinbase', 'internal'],
     requiredFeatures: ['eth_sendTransaction', 'eth_signTransaction'],
   },
+  clisha: {
+    chainId: 3890,
+    chainName: 'Clisha',
+    supportedWallets: ['metamask', 'walletconnect', 'coinbase', 'internal'],
+    requiredFeatures: ['eth_sendTransaction', 'eth_signTransaction'],
+  },
   polygon: {
     chainId: 137,
     chainName: 'Polygon',

@@ -10,6 +10,18 @@ interface Token {
   decimals: number;
   symbol: string;
   isNative?: boolean;
+  // Enhanced with subgraph data
+  tradeVolumeUSD?: string;
+  totalLiquidity?: string;
+  derivedKLC?: string;
+  txCount?: string;
+  priceUSD?: string;
+}
+
+interface TokenWithBalance extends Token {
+  balance: string;
+  formattedBalance: string;
+  balanceUSD?: string; // Calculated from balance * priceUSD
 }
 
 export function useTokenBalance(token: Token | null) {
@@ -20,6 +32,14 @@ export function useTokenBalance(token: Token | null) {
   // Get wagmi hooks (must be called at top level)
   const { address, isConnected } = useAccount();
   const publicClient = usePublicClient();
+
+  // Calculate USD value if price is available
+  const calculateBalanceUSD = (balance: string, priceUSD?: string): string => {
+    if (!priceUSD || !balance || balance === '0') return '0';
+    const balanceNum = parseFloat(balance);
+    const priceNum = parseFloat(priceUSD);
+    return (balanceNum * priceNum).toFixed(2);
+  };
 
   useEffect(() => {
     if (!token || !address || !isConnected || !publicClient) {
@@ -42,20 +62,26 @@ export function useTokenBalance(token: Token | null) {
           ]) as bigint;
           setBalance(formatUnits(nativeBalance, 18));
         } else {
-          // Get ERC20 token balance with timeout
-          const tokenContract = getContract({
-            address: token.address as `0x${string}`,
-            abi: ERC20_ABI,
-            client: publicClient,
-          });
+          // Get ERC20 token balance with timeout and error handling
+          try {
+            const tokenContract = getContract({
+              address: token.address as `0x${string}`,
+              abi: ERC20_ABI,
+              client: publicClient,
+            });
 
-          const tokenBalance = await Promise.race([
-            tokenContract.read.balanceOf([address]),
-            new Promise((_, reject) =>
-              setTimeout(() => reject(new Error('Balance fetch timeout')), 5000)
-            )
-          ]) as bigint;
-          setBalance(formatUnits(tokenBalance, token.decimals));
+            const tokenBalance = await Promise.race([
+              tokenContract.read.balanceOf([address]),
+              new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Balance fetch timeout')), 5000)
+              )
+            ]) as bigint;
+            setBalance(formatUnits(tokenBalance, token.decimals));
+          } catch (contractError) {
+            // Handle tokens that don't implement proper ERC20 interface (like bridge tokens)
+            console.warn(`Token ${token.symbol} (${token.address}) doesn't implement balanceOf properly:`, contractError);
+            setBalance('0');
+          }
         }
       } catch (err) {
         console.error('Error fetching token balance:', err);
@@ -83,7 +109,16 @@ export function useTokenBalance(token: Token | null) {
     balance,
     isLoading,
     error,
-    formattedBalance: parseFloat(balance).toFixed(6)
+    formattedBalance: parseFloat(balance).toFixed(6),
+    balanceUSD: calculateBalanceUSD(balance, token?.priceUSD),
+    // Include token metadata for enhanced display
+    tokenMetadata: token ? {
+      tradeVolumeUSD: token.tradeVolumeUSD,
+      totalLiquidity: token.totalLiquidity,
+      derivedKLC: token.derivedKLC,
+      txCount: token.txCount,
+      priceUSD: token.priceUSD
+    } : undefined
   };
 }
 
@@ -153,22 +188,31 @@ export function useTokenBalances(tokens: (Token | null)[]) {
                 balance: formatUnits(nativeBalance, 18)
               };
             } else {
-              const tokenContract = getContract({
-                address: token.address as `0x${string}`,
-                abi: ERC20_ABI,
-                client: publicClient,
-              });
+              try {
+                const tokenContract = getContract({
+                  address: token.address as `0x${string}`,
+                  abi: ERC20_ABI,
+                  client: publicClient,
+                });
 
-              const tokenBalance = await Promise.race([
-                tokenContract.read.balanceOf([address]),
-                new Promise((_, reject) =>
-                  setTimeout(() => reject(new Error('Balance fetch timeout')), 5000)
-                )
-              ]) as bigint;
-              return {
-                symbol: token.symbol,
-                balance: formatUnits(tokenBalance, token.decimals)
-              };
+                const tokenBalance = await Promise.race([
+                  tokenContract.read.balanceOf([address]),
+                  new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Balance fetch timeout')), 5000)
+                  )
+                ]) as bigint;
+                return {
+                  symbol: token.symbol,
+                  balance: formatUnits(tokenBalance, token.decimals)
+                };
+              } catch (contractError) {
+                // Handle tokens that don't implement proper ERC20 interface (like bridge tokens)
+                console.warn(`Token ${token.symbol} (${token.address}) doesn't implement balanceOf properly:`, contractError);
+                return {
+                  symbol: token.symbol,
+                  balance: '0'
+                };
+              }
             }
           } catch (err) {
             // Don't log timeout errors as they're expected with slow RPC
@@ -221,12 +265,61 @@ export function useTokenBalances(tokens: (Token | null)[]) {
     return () => clearInterval(interval);
   }, [address, isConnected, publicClient]);
 
+  // Helper function to get token by symbol
+  const getTokenBySymbol = (symbol: string): Token | null => {
+    return tokensRef.current.find(token => token?.symbol === symbol) || null;
+  };
+
+  // Helper function to calculate USD value
+  const calculateBalanceUSD = (balance: string, priceUSD?: string): string => {
+    if (!priceUSD || !balance || balance === '0') return '0';
+    const balanceNum = parseFloat(balance);
+    const priceNum = parseFloat(priceUSD);
+    return (balanceNum * priceNum).toFixed(2);
+  };
+
   return {
     balances,
     isLoading: isLoading && isInitialLoad, // Only show loading during initial load
     error,
     getBalance: (symbol: string) => balances[symbol] || '0',
     getFormattedBalance: (symbol: string) => parseFloat(balances[symbol] || '0').toFixed(6),
+    getBalanceUSD: (symbol: string) => {
+      const token = getTokenBySymbol(symbol);
+      const balance = balances[symbol] || '0';
+      return calculateBalanceUSD(balance, token?.priceUSD);
+    },
+    getTokenWithBalance: (symbol: string): TokenWithBalance | null => {
+      const token = getTokenBySymbol(symbol);
+      if (!token) return null;
+
+      const balance = balances[symbol] || '0';
+      const formattedBalance = parseFloat(balance).toFixed(6);
+      const balanceUSD = calculateBalanceUSD(balance, token.priceUSD);
+
+      return {
+        ...token,
+        balance,
+        formattedBalance,
+        balanceUSD
+      };
+    },
+    getAllTokensWithBalances: (): TokenWithBalance[] => {
+      return tokensRef.current
+        .filter((token): token is Token => token !== null)
+        .map(token => {
+          const balance = balances[token.symbol] || '0';
+          const formattedBalance = parseFloat(balance).toFixed(6);
+          const balanceUSD = calculateBalanceUSD(balance, token.priceUSD);
+
+          return {
+            ...token,
+            balance,
+            formattedBalance,
+            balanceUSD
+          };
+        });
+    },
     refreshBalances: () => fetchBalancesRef.current?.(true)
   };
 }

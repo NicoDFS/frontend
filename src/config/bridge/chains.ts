@@ -25,7 +25,7 @@ export const bridgeChains: ChainMap<ChainMetadata> = {
     blocks: {
       confirmations: 1,
       reorgPeriod: 1,
-      estimateBlockTime: 10,
+      estimateBlockTime: 2,
     },
     logoURI: '/logos/klc.svg',
   },
@@ -97,6 +97,29 @@ export const bridgeChains: ChainMap<ChainMetadata> = {
       estimateBlockTime: 2,
     },
     logoURI: '/logos/polygon.svg',
+  },
+  clisha: {
+    protocol: ProtocolType.Ethereum,
+    chainId: 3890,
+    domainId: 3890,
+    name: 'clisha',
+    displayName: 'Clisha',
+    nativeToken: { name: 'Clisha Coin', symbol: 'CLISHA', decimals: 18 },
+    rpcUrls: [{ http: 'https://rpc.clishachain.com/rpc' }],
+    blockExplorers: [
+      {
+        name: 'ClishaScan',
+        url: 'https://clishascan.com',
+        apiUrl: 'https://clishascan.com/api',
+        family: ExplorerFamily.Etherscan,
+      },
+    ],
+    blocks: {
+      confirmations: 1,
+      reorgPeriod: 2,
+      estimateBlockTime: 4,
+    },
+    logoURI: '/logos/clisha.svg',
   },
 };
 

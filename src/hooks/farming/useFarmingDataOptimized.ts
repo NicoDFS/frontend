@@ -11,6 +11,7 @@ import { LP_FARMING_POOLS, DOUBLE_SIDE_STAKING } from '@/config/farming'
 import { batchFarmingCalls, createMulticallService } from '@/utils/multicall'
 import { contractCache, CacheKeys } from '@/utils/contractCache'
 import stakingRewardsABI from '@/config/abis/dex/stakingRewardsABI.json'
+import { useFarmingSubgraph } from '@/hooks/useFarmingSubgraph'
 
 // Mock TokenAmount implementation (same as original)
 class MockTokenAmount {
@@ -88,6 +89,17 @@ export function useFarmingDataOptimized(pools?: DoubleSideStaking[]) {
   const [error, setError] = useState<string | null>(null)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const hasInitiallyLoaded = useRef(false)
+  const [useSubgraph, setUseSubgraph] = useState(true) // Flag to control subgraph usage
+
+  // Get farming data from subgraph
+  const {
+    farmingData,
+    isLoading: subgraphLoading,
+    error: subgraphError,
+    getFarmingPoolByStakingToken,
+    getUserStakedAmount,
+    getUserEarnedRewards
+  } = useFarmingSubgraph(address)
 
   // Use LP_FARMING_POOLS if no pools provided, fallback to DOUBLE_SIDE_STAKING
   // Memoize to prevent array recreation on every render
@@ -97,6 +109,81 @@ export function useFarmingDataOptimized(pools?: DoubleSideStaking[]) {
       ? Object.values(LP_FARMING_POOLS)
       : Object.values(DOUBLE_SIDE_STAKING)
   }, [pools])
+
+  // Create staking info from subgraph data
+  const createStakingInfoFromSubgraph = useCallback((pool: any, token0: Token, token1: Token, pairAddress: string): DoubleSideStakingInfo | null => {
+    try {
+      // Get farming pool data from subgraph
+      const farmingPool = getFarmingPoolByStakingToken(pairAddress);
+      if (!farmingPool) {
+        console.log(`No farming pool found in subgraph for ${pairAddress}`);
+        return null;
+      }
+
+      console.log('📊 Creating staking info from subgraph data:', farmingPool);
+
+      const lpToken: Token = {
+        address: pairAddress,
+        symbol: `${token0.symbol}-${token1.symbol}`,
+        name: `${token0.name}-${token1.name} LP`,
+        decimals: 18,
+        chainId: chainId || 3888
+      };
+
+      const rewardToken: Token = {
+        address: farmingPool.rewardsToken,
+        symbol: 'KSWAP',
+        name: 'KalySwap',
+        decimals: 18,
+        chainId: chainId || 3888
+      };
+
+      // Get user-specific data
+      const userStakedAmount = getUserStakedAmount(farmingPool.address);
+      const userEarnedRewards = getUserEarnedRewards(farmingPool.address);
+
+      // Calculate period finish
+      const periodFinish = new Date(parseInt(farmingPool.periodFinish) * 1000);
+      const isPeriodFinished = periodFinish.getTime() < Date.now();
+
+      // Create token amounts
+      const stakedAmount = new MockTokenAmount(lpToken, BigNumber.from(userStakedAmount));
+      const earnedAmount = new MockTokenAmount(rewardToken, BigNumber.from(userEarnedRewards));
+      const totalStakedAmount = new MockTokenAmount(lpToken, BigNumber.from(farmingPool.totalStaked));
+      const rewardRate = new MockTokenAmount(rewardToken, BigNumber.from(farmingPool.rewardRate));
+
+      // Calculate weekly reward rate (rewardRate is per second)
+      const weeklyRewardRate = new MockTokenAmount(
+        rewardToken,
+        BigNumber.from(farmingPool.rewardRate).mul(7 * 24 * 60 * 60) // seconds in a week
+      );
+
+      return {
+        stakingRewardAddress: farmingPool.address,
+        tokens: [token0, token1],
+        multiplier: BigNumber.from(1), // Default multiplier
+        stakedAmount,
+        earnedAmount,
+        totalStakedAmount,
+        totalStakedInWklc: totalStakedAmount, // Simplified
+        totalStakedInUsd: totalStakedAmount, // Simplified
+        totalRewardRatePerSecond: rewardRate,
+        totalRewardRatePerWeek: weeklyRewardRate,
+        rewardRatePerWeek: weeklyRewardRate,
+        periodFinish,
+        isPeriodFinished,
+        swapFeeApr: 0, // TODO: Calculate from DEX subgraph
+        stakingApr: 0, // TODO: Calculate based on reward rate and total staked
+        combinedApr: 0, // TODO: Calculate combined APR
+        rewardTokensAddress: [farmingPool.rewardsToken],
+        rewardsAddress: farmingPool.address,
+        getHypotheticalWeeklyRewardRate: () => weeklyRewardRate
+      };
+    } catch (err) {
+      console.error('❌ Error creating staking info from subgraph:', err);
+      return null;
+    }
+  }, [chainId, getFarmingPoolByStakingToken, getUserStakedAmount, getUserEarnedRewards]);
 
   // Create N/A staking info for failed pools
   const createNAStakingInfo = useCallback((pool: any, token0: Token, token1: Token, pairAddress: string): DoubleSideStakingInfo => {
@@ -150,6 +237,67 @@ export function useFarmingDataOptimized(pools?: DoubleSideStaking[]) {
       if (!hasInitiallyLoaded.current) {
         setIsLoading(true)
       }
+
+      // Try subgraph first if enabled and data is available
+      if (useSubgraph && farmingData.farmingPools.length > 0 && !subgraphError) {
+        console.log('🚀 Using subgraph data for farming pools...');
+
+        const subgraphStakingInfos: DoubleSideStakingInfo[] = [];
+
+        for (const pool of farmingPools) {
+          try {
+            const token0: Token = {
+              address: pool.tokens[0].address,
+              symbol: pool.tokens[0].symbol,
+              name: pool.tokens[0].name,
+              decimals: pool.tokens[0].decimals,
+              chainId: chainId || 3888
+            };
+
+            const token1: Token = {
+              address: pool.tokens[1].address,
+              symbol: pool.tokens[1].symbol,
+              name: pool.tokens[1].name,
+              decimals: pool.tokens[1].decimals,
+              chainId: chainId || 3888
+            };
+
+            const poolKey = `${token0.symbol}_${token1.symbol}`;
+            const pairAddress = pairAddresses[poolKey] || pool.pairAddress;
+
+            if (!pairAddress) {
+              console.warn(`No pair address found for ${poolKey}`);
+              subgraphStakingInfos.push(createNAStakingInfo(pool, token0, token1, 'N/A'));
+              continue;
+            }
+
+            // Try to create staking info from subgraph
+            const stakingInfo = createStakingInfoFromSubgraph(pool, token0, token1, pairAddress);
+
+            if (stakingInfo) {
+              subgraphStakingInfos.push(stakingInfo);
+              console.log(`✅ Created staking info from subgraph for ${poolKey}`);
+            } else {
+              // Fallback to N/A if subgraph data not available for this pool
+              console.warn(`⚠️ No subgraph data for ${poolKey}, creating N/A info`);
+              subgraphStakingInfos.push(createNAStakingInfo(pool, token0, token1, pairAddress));
+            }
+          } catch (err) {
+            console.error(`❌ Error processing pool ${pool.tokens[0].symbol}-${pool.tokens[1].symbol}:`, err);
+            subgraphStakingInfos.push(createNAStakingInfo(pool, pool.tokens[0], pool.tokens[1], 'N/A'));
+          }
+        }
+
+        console.log(`✅ Subgraph processing complete: ${subgraphStakingInfos.length} pools processed`);
+        setStakingInfos(subgraphStakingInfos);
+        setIsLoading(false);
+        setIsFetching(false);
+        hasInitiallyLoaded.current = true;
+        return;
+      }
+
+      // Fallback to contract calls if subgraph is disabled or failed
+      console.log('⚠️ Falling back to contract calls for farming data...');
 
       console.log('🚀 Starting optimized farm data fetch with multicall (including whitelisting)...')
       const startTime = Date.now()
@@ -498,11 +646,11 @@ export function useFarmingDataOptimized(pools?: DoubleSideStaking[]) {
       setIsLoading(false)
       setIsFetching(false)
     }
-  }, [farmingPools, address, chainId, pairAddresses, refreshTrigger, provider, getLiquidityPoolManagerContract, getPoolAPR, createNAStakingInfo])
+  }, [farmingPools, address, chainId, pairAddresses, refreshTrigger, provider, getLiquidityPoolManagerContract, getPoolAPR, createNAStakingInfo, useSubgraph, farmingData, subgraphError, createStakingInfoFromSubgraph])
 
   useEffect(() => {
     fetchStakingDataOptimized()
-  }, [farmingPools, address, chainId, pairAddresses, refreshTrigger])
+  }, [farmingPools, address, chainId, pairAddresses, refreshTrigger, useSubgraph, farmingData])
 
   const refetch = useCallback(() => {
     console.log('🔄 Refetching farm data (clearing cache)...')
@@ -517,6 +665,12 @@ export function useFarmingDataOptimized(pools?: DoubleSideStaking[]) {
     stakingInfos,
     isLoading,
     error,
-    refetch
+    refetch,
+    // Subgraph status information
+    subgraphEnabled: useSubgraph,
+    subgraphLoading,
+    subgraphError,
+    toggleSubgraph: () => setUseSubgraph(!useSubgraph),
+    farmingPoolsCount: farmingData.farmingPools.length
   }
 }

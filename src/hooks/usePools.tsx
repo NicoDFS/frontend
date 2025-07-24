@@ -22,6 +22,12 @@ interface PairInfo {
   reserve1: string;
   totalSupply: string;
   exists: boolean;
+  // Enhanced with subgraph data
+  reserveUSD?: string;
+  volumeUSD?: string;
+  txCount?: string;
+  token0Price?: string;
+  token1Price?: string;
 }
 
 interface OptimalAmounts {
@@ -229,7 +235,113 @@ export function usePools() {
     }
   }, [executeContractCall, publicClient, address, walletClient]);
 
+  // New function to get pair info from subgraph
+  const getPairInfoFromSubgraph = useCallback(async (tokenA: string, tokenB: string): Promise<PairInfo | null> => {
+    try {
+      console.log('🔍 Fetching pair info from subgraph for:', tokenA, tokenB);
+
+      const response = await fetch('/api/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: `
+            query GetPairInfo($token0: String!, $token1: String!) {
+              pairs(where: {
+                or: [
+                  { and: [{ token0: $token0 }, { token1: $token1 }] },
+                  { and: [{ token0: $token1 }, { token1: $token0 }] }
+                ]
+              }) {
+                id
+                token0 {
+                  id
+                  symbol
+                  decimals
+                }
+                token1 {
+                  id
+                  symbol
+                  decimals
+                }
+                reserve0
+                reserve1
+                totalSupply
+                reserveUSD
+                volumeUSD
+                txCount
+                token0Price
+                token1Price
+              }
+            }
+          `,
+          variables: {
+            token0: tokenA.toLowerCase(),
+            token1: tokenB.toLowerCase()
+          }
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('📊 Subgraph pair response:', result);
+
+        if (result.errors) {
+          console.error('GraphQL errors:', result.errors);
+          throw new Error(result.errors[0].message);
+        }
+
+        if (result.data?.pairs && result.data.pairs.length > 0) {
+          const pair = result.data.pairs[0];
+
+          return {
+            address: pair.id,
+            token0: pair.token0.id,
+            token1: pair.token1.id,
+            reserve0: pair.reserve0,
+            reserve1: pair.reserve1,
+            totalSupply: pair.totalSupply,
+            exists: true,
+            // Enhanced subgraph data
+            reserveUSD: pair.reserveUSD,
+            volumeUSD: pair.volumeUSD,
+            txCount: pair.txCount,
+            token0Price: pair.token0Price,
+            token1Price: pair.token1Price
+          };
+        } else {
+          // Pair doesn't exist in subgraph
+          return {
+            address: '',
+            token0: tokenA,
+            token1: tokenB,
+            reserve0: '0',
+            reserve1: '0',
+            totalSupply: '0',
+            exists: false
+          };
+        }
+      } else {
+        console.warn('Failed to fetch pair from subgraph, falling back to contract call');
+        return null; // Will trigger fallback to contract call
+      }
+    } catch (err) {
+      console.error('❌ Error fetching pair from subgraph:', err);
+      return null; // Will trigger fallback to contract call
+    }
+  }, []);
+
   const getPairInfo = useCallback(async (tokenA: string, tokenB: string): Promise<PairInfo | null> => {
+    // First try to get pair info from subgraph (faster and more data)
+    const subgraphResult = await getPairInfoFromSubgraph(tokenA, tokenB);
+    if (subgraphResult !== null) {
+      console.log('✅ Using subgraph data for pair:', tokenA, tokenB);
+      return subgraphResult;
+    }
+
+    // Fallback to contract calls if subgraph fails
+    console.log('⚠️ Falling back to contract calls for pair:', tokenA, tokenB);
     if (!publicClient) return null;
 
     try {
@@ -312,7 +424,7 @@ export function usePools() {
       console.error('Error fetching pair info:', err);
       return null;
     }
-  }, [publicClient]);
+  }, [publicClient, getPairInfoFromSubgraph]);
 
   const calculateOptimalAmounts = useCallback(async (
     tokenA: string,
@@ -686,10 +798,85 @@ export function usePools() {
     }
   }, []);
 
+  // Get all pairs from subgraph for browsing
+  const getAllPairs = useCallback(async (first: number = 20, skip: number = 0, orderBy: string = 'reserveUSD', orderDirection: string = 'desc') => {
+    try {
+      console.log('🔍 Fetching all pairs from subgraph...');
+
+      const response = await fetch('/api/graphql', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: `
+            query GetAllPairs($first: Int!, $skip: Int!, $orderBy: String!, $orderDirection: String!) {
+              pairs(
+                first: $first
+                skip: $skip
+                orderBy: $orderBy
+                orderDirection: $orderDirection
+                where: { reserveUSD_gt: "0" }
+              ) {
+                id
+                token0 {
+                  id
+                  symbol
+                  name
+                  decimals
+                }
+                token1 {
+                  id
+                  symbol
+                  name
+                  decimals
+                }
+                reserve0
+                reserve1
+                totalSupply
+                reserveUSD
+                volumeUSD
+                txCount
+                token0Price
+                token1Price
+              }
+            }
+          `,
+          variables: {
+            first,
+            skip,
+            orderBy,
+            orderDirection
+          }
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('📊 All pairs response:', result);
+
+        if (result.errors) {
+          console.error('GraphQL errors:', result.errors);
+          throw new Error(result.errors[0].message);
+        }
+
+        return result.data?.pairs || [];
+      } else {
+        console.warn('Failed to fetch pairs from subgraph');
+        return [];
+      }
+    } catch (err) {
+      console.error('❌ Error fetching pairs from subgraph:', err);
+      return [];
+    }
+  }, []);
+
   return {
     loading,
     error,
     getPairInfo,
+    getPairInfoFromSubgraph,
+    getAllPairs,
     calculateOptimalAmounts,
     createPair,
     addLiquidity,

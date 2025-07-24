@@ -115,7 +115,11 @@ export default function PoolCard({ pool, onAddLiquidity }: PoolCardProps) {
                 )}
               </div>
               <p className="text-sm text-gray-300">
-                Liquidity Pool
+                {pool.reserveUSD ? (
+                  <>TVL: ${formatNumber(pool.reserveUSD, 0)}</>
+                ) : (
+                  'Liquidity Pool'
+                )}
               </p>
             </div>
           </div>
@@ -191,6 +195,30 @@ export default function PoolCard({ pool, onAddLiquidity }: PoolCardProps) {
             </span>
           </div>
         </div>
+
+        {/* Enhanced Subgraph Stats */}
+        {(pool.volumeUSD || pool.txCount) && (
+          <div className="mt-3 pt-3 border-t border-gray-700/50">
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              {pool.volumeUSD && (
+                <div>
+                  <span className="text-gray-400">24h Volume</span>
+                  <div className="text-white font-medium">
+                    ${formatNumber(pool.volumeUSD, 0)}
+                  </div>
+                </div>
+              )}
+              {pool.txCount && (
+                <div>
+                  <span className="text-gray-400">Transactions</span>
+                  <div className="text-white font-medium">
+                    {formatNumber(pool.txCount, 0)}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="mt-4 pt-4 border-t border-gray-600">

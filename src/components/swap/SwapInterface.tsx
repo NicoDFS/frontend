@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,6 +37,13 @@ interface Token {
   symbol: string;
   logoURI: string;
   isNative?: boolean;
+}
+
+// Props interface for SwapInterface
+interface SwapInterfaceProps {
+  fromToken?: Token | null;
+  toToken?: Token | null;
+  onTokenChange?: (fromToken: Token | null, toToken: Token | null) => void;
 }
 
 // KalyChain tokens - Official KalySwap Token List
@@ -121,6 +128,7 @@ const KALYCHAIN_TOKENS: Token[] = [
     name: 'DAI Token',
     symbol: 'DAI',
     logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x6E92CAC380F7A7B86f4163fad0df2F277B16Edc6/logo_24.png'
+    // Note: This is a Hyperlane bridge token (EvmHypSynthetic) that may not implement standard ERC20 balanceOf
   }
 ];
 
@@ -149,7 +157,7 @@ interface SwapState {
   deadline: string;
 }
 
-export default function SwapInterface() {
+export default function SwapInterface({ fromToken: propFromToken, toToken: propToToken, onTokenChange }: SwapInterfaceProps = {}) {
   // Wagmi hooks for wallet interaction
   const { address, isConnected, connector } = useAccount();
   const publicClient = usePublicClient();
@@ -158,15 +166,28 @@ export default function SwapInterface() {
   // Token balances
   const { balances, getFormattedBalance, isLoading: balancesLoading, refreshBalances } = useTokenBalances(KALYCHAIN_TOKENS);
 
-  // Component state
+  // Component state - use props if provided, otherwise use defaults
   const [swapState, setSwapState] = useState<SwapState>({
-    fromToken: KALYCHAIN_TOKENS[0], // KLC
-    toToken: KALYCHAIN_TOKENS[4], // USDt (now at index 4 after adding KSWAP and BNB)
+    fromToken: propFromToken || KALYCHAIN_TOKENS[0], // KLC
+    toToken: propToToken || KALYCHAIN_TOKENS[4], // USDt (now at index 4 after adding KSWAP and BNB)
     fromAmount: '',
     toAmount: '',
     slippage: '0.5',
     deadline: '20'
   });
+
+  // Update internal state when props change
+  useEffect(() => {
+    if (propFromToken !== undefined || propToToken !== undefined) {
+      setSwapState(prev => ({
+        ...prev,
+        fromToken: propFromToken !== undefined ? propFromToken : prev.fromToken,
+        toToken: propToToken !== undefined ? propToToken : prev.toToken,
+      }));
+    }
+  }, [propFromToken, propToToken]);
+
+
 
   const [isSwapping, setIsSwapping] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -440,13 +461,22 @@ export default function SwapInterface() {
 
   // Handle token swap in the interface
   const handleSwapTokens = () => {
-    setSwapState(prev => ({
-      ...prev,
-      fromToken: prev.toToken,
-      toToken: prev.fromToken,
-      fromAmount: prev.toAmount,
-      toAmount: prev.fromAmount
-    }));
+    setSwapState(prev => {
+      const newState = {
+        ...prev,
+        fromToken: prev.toToken,
+        toToken: prev.fromToken,
+        fromAmount: prev.toAmount,
+        toAmount: prev.fromAmount
+      };
+
+      // Notify parent component of token change
+      if (onTokenChange) {
+        onTokenChange(newState.fromToken, newState.toToken);
+      }
+
+      return newState;
+    });
   };
 
   // Enhanced price impact calculation using actual pool reserves
@@ -1079,7 +1109,13 @@ export default function SwapInterface() {
       <TokenSelectorModal
         isOpen={showFromTokenModal}
         onClose={() => setShowFromTokenModal(false)}
-        onTokenSelect={(token) => setSwapState(prev => ({ ...prev, fromToken: token }))}
+        onTokenSelect={(token) => {
+          setSwapState(prev => ({ ...prev, fromToken: token }));
+          // Notify parent component of token change
+          if (onTokenChange) {
+            onTokenChange(token, swapState.toToken);
+          }
+        }}
         selectedToken={swapState.fromToken}
         tokens={KALYCHAIN_TOKENS}
         title="Select a token"
@@ -1089,7 +1125,13 @@ export default function SwapInterface() {
       <TokenSelectorModal
         isOpen={showToTokenModal}
         onClose={() => setShowToTokenModal(false)}
-        onTokenSelect={(token) => setSwapState(prev => ({ ...prev, toToken: token }))}
+        onTokenSelect={(token) => {
+          setSwapState(prev => ({ ...prev, toToken: token }));
+          // Notify parent component of token change
+          if (onTokenChange) {
+            onTokenChange(swapState.fromToken, token);
+          }
+        }}
         selectedToken={swapState.toToken}
         tokens={KALYCHAIN_TOKENS}
         title="Select a token"

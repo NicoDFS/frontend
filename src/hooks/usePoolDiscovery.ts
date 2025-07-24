@@ -6,6 +6,7 @@ import { getContract, formatUnits } from 'viem';
 import { getContractAddress, DEFAULT_CHAIN_ID } from '@/config/contracts';
 import { FACTORY_ABI, PAIR_ABI, ERC20_ABI } from '@/config/abis';
 import { useUserPositions } from './useUserPositions';
+import { usePools } from './usePools';
 
 export interface PoolData {
   id: string;
@@ -25,6 +26,13 @@ export interface PoolData {
   reserve0: string;
   reserve1: string;
   totalSupply: string;
+  // Enhanced subgraph data
+  reserveUSD?: string;
+  volumeUSD?: string;
+  txCount?: string;
+  token0Price?: string;
+  token1Price?: string;
+  // User position data
   userHasPosition?: boolean;
   userLpBalance?: string;
   userPoolShare?: string;
@@ -62,6 +70,9 @@ export function usePoolDiscovery() {
     publicClient = null;
     address = undefined;
   }
+
+  // Use enhanced pools hook with subgraph integration
+  const { getAllPairs } = usePools();
 
   // Get pool addresses for user position tracking (memoized to prevent loops)
   const poolAddresses = useMemo(() => state.pools.map(pool => pool.address), [state.pools]);
@@ -159,14 +170,74 @@ export function usePoolDiscovery() {
     }
   }, [publicClient, getTokenInfo]);
 
-  // Fetch all pools from factory
+  // Fetch all pools using subgraph (enhanced performance and data)
   const fetchPools = useCallback(async () => {
+    setState(prev => ({ ...prev, loading: true, error: null }));
+
+    try {
+      console.log('📊 Fetching pools from DEX subgraph...');
+
+      // Use subgraph-powered getAllPairs function
+      const subgraphPairs = await getAllPairs();
+
+      if (subgraphPairs && subgraphPairs.length > 0) {
+        // Transform subgraph data to PoolData format
+        const pools: PoolData[] = subgraphPairs.map((pair: any) => ({
+          id: pair.id,
+          address: pair.id,
+          token0: {
+            address: pair.token0.id,
+            symbol: pair.token0.symbol,
+            name: pair.token0.name,
+            decimals: parseInt(pair.token0.decimals)
+          },
+          token1: {
+            address: pair.token1.id,
+            symbol: pair.token1.symbol,
+            name: pair.token1.name,
+            decimals: parseInt(pair.token1.decimals)
+          },
+          reserve0: pair.reserve0,
+          reserve1: pair.reserve1,
+          totalSupply: pair.totalSupply,
+          // Enhanced subgraph data
+          reserveUSD: pair.reserveUSD,
+          volumeUSD: pair.volumeUSD,
+          txCount: pair.txCount,
+          token0Price: pair.token0Price,
+          token1Price: pair.token1Price
+        }));
+
+        console.log(`✅ Successfully loaded ${pools.length} pools from subgraph`);
+
+        setState(prev => ({
+          ...prev,
+          pools,
+          loading: false
+        }));
+      } else {
+        // Fallback to contract calls if subgraph fails
+        console.log('⚠️ No subgraph data available, falling back to contract calls...');
+        await fetchPoolsFromContract();
+      }
+    } catch (error) {
+      console.error('❌ Error fetching pools from subgraph:', error);
+      // Fallback to contract calls
+      console.log('⚠️ Subgraph failed, falling back to contract calls...');
+      await fetchPoolsFromContract();
+    }
+  }, [getAllPairs]);
+
+  // Fallback function for contract calls
+  const fetchPoolsFromContract = useCallback(async () => {
     if (!publicClient) {
-      console.log('📊 Public client not available yet, skipping pool fetch');
+      setState(prev => ({
+        ...prev,
+        loading: false,
+        error: 'Wallet connection required'
+      }));
       return;
     }
-
-    setState(prev => ({ ...prev, loading: true, error: null }));
 
     try {
       const factoryAddress = getContractAddress('FACTORY', DEFAULT_CHAIN_ID);
@@ -180,35 +251,25 @@ export function usePoolDiscovery() {
       const allPairsLength = await factoryContract.read.allPairsLength([]);
       const totalPairs = Number(allPairsLength);
 
-      console.log(`📊 Found ${totalPairs} total pairs in factory`);
+      console.log(`📊 Found ${totalPairs} total pairs in factory (contract fallback)`);
 
-      // Fetch pairs in batches to avoid overwhelming the RPC
-      const batchSize = 10;
+      // Limit to first 20 pairs for performance
       const pools: PoolData[] = [];
+      const maxPairs = Math.min(totalPairs, 20);
 
-      for (let i = 0; i < Math.min(totalPairs, 50); i += batchSize) { // Limit to first 50 for now
-        const batch = [];
-        const endIndex = Math.min(i + batchSize, Math.min(totalPairs, 50));
-
-        // Get pair addresses for this batch
-        for (let j = i; j < endIndex; j++) {
-          batch.push(factoryContract.read.allPairs([BigInt(j)]));
+      for (let i = 0; i < maxPairs; i++) {
+        try {
+          const pairAddress = await factoryContract.read.allPairs([BigInt(i)]);
+          const poolData = await getPoolData(pairAddress as string);
+          if (poolData) {
+            pools.push(poolData);
+          }
+        } catch (err) {
+          console.warn(`Failed to fetch pool ${i}:`, err);
         }
-
-        const pairAddresses = await Promise.all(batch);
-
-        // Get pool data for each pair in this batch
-        const poolDataPromises = pairAddresses.map(address => getPoolData(address as string));
-        const poolDataResults = await Promise.all(poolDataPromises);
-
-        // Filter out null results and add to pools array
-        const validPools = poolDataResults.filter((pool): pool is PoolData => pool !== null);
-        pools.push(...validPools);
-
-        console.log(`📊 Processed batch ${i / batchSize + 1}, found ${validPools.length} valid pools`);
       }
 
-      console.log(`✅ Successfully loaded ${pools.length} pools`);
+      console.log(`✅ Successfully loaded ${pools.length} pools from contracts`);
 
       setState(prev => ({
         ...prev,
@@ -216,7 +277,7 @@ export function usePoolDiscovery() {
         loading: false
       }));
     } catch (error) {
-      console.error('❌ Error fetching pools:', error);
+      console.error('❌ Error fetching pools from contracts:', error);
       setState(prev => ({
         ...prev,
         loading: false,

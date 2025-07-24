@@ -3,6 +3,28 @@
 import dynamic from 'next/dynamic';
 import { Card, CardContent } from '@/components/ui/card';
 
+
+
+
+
+// Token interface
+interface Token {
+  chainId: number;
+  address: string;
+  decimals: number;
+  name: string;
+  symbol: string;
+  logoURI: string;
+  isNative?: boolean;
+}
+
+// Props interface
+interface SwapInterfaceWrapperProps {
+  fromToken?: Token | null;
+  toToken?: Token | null;
+  onTokenChange?: (fromToken: Token | null, toToken: Token | null) => void;
+}
+
 // Dynamically import SwapInterface to prevent SSR issues with Wagmi
 const SwapInterface = dynamic(
   () => import('./SwapInterface').catch(() => {
@@ -34,6 +56,6 @@ const SwapInterface = dynamic(
   }
 );
 
-export default function SwapInterfaceWrapper() {
-  return <SwapInterface />;
+export default function SwapInterfaceWrapper({ fromToken, toToken, onTokenChange }: SwapInterfaceWrapperProps) {
+  return <SwapInterface fromToken={fromToken} toToken={toToken} onTokenChange={onTokenChange} />;
 }
