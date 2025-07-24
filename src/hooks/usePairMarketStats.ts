@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { getPairMarketStats } from '@/lib/subgraph-client';
+import { usePriceDataContext } from '@/contexts/PriceDataContext';
 
 interface Token {
   address: string;
@@ -27,11 +28,13 @@ const WKLC_ADDRESS = '0x069255299Bb729399f3CECaBdc73d15d3D10a2A3';
  */
 export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketStats {
   const [price, setPrice] = useState<number>(0);
-  const [priceChange24h, setPriceChange24h] = useState<number>(0);
   const [volume24h, setVolume24h] = useState<number>(0);
   const [liquidity, setLiquidity] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Use shared price change from context
+  const { priceChange24h } = usePriceDataContext();
 
   // Convert native KLC to WKLC address
   const getTokenAddress = useCallback((token: Token): string => {
@@ -101,13 +104,13 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
       // Calculate price from reserves
       const reserve0 = parseFloat(stats.pair.reserve0);
       const reserve1 = parseFloat(stats.pair.reserve1);
-      
+
       let calculatedPrice = 0;
       if (reserve0 > 0 && reserve1 > 0) {
         // Determine which token is which
         const token0Address = getTokenAddress(tokenA);
         const token1Address = getTokenAddress(tokenB);
-        
+
         if (stats.pair.token0.id.toLowerCase() === token0Address.toLowerCase()) {
           // tokenA is token0, tokenB is token1
           calculatedPrice = reserve1 / reserve0; // tokenB per tokenA
@@ -118,13 +121,13 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
       }
 
       setPrice(calculatedPrice);
-      setPriceChange24h(stats.priceChange24h);
+
+      // Price change is now handled by the shared context from TradingChart
+      // No need to calculate it here anymore
       setVolume24h(stats.volume24h);
-      
+
       // Calculate liquidity manually since reserveUSD might be 0
       let calculatedLiquidity = 0;
-
-
 
       // Find which reserve corresponds to stablecoins (USDT, USDC, DAI)
       const stablecoins = ['USDT', 'USDt', 'USDC', 'DAI'];

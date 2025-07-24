@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/select';
 import { TrendingUp, BarChart3, Maximize2, RefreshCw } from 'lucide-react';
 import { useHistoricalPriceData, formatTokenPrice, formatPriceChange } from '@/hooks/usePriceData';
+import { usePriceDataContext } from '@/contexts/PriceDataContext';
 
 // Token interface
 interface Token {
@@ -161,14 +162,22 @@ export default function TradingChart({
     return 0;
   }, [historicalData]);
 
+  const { setPriceChange24h: setSharedPriceChange } = usePriceDataContext();
+
   const priceChange24h = React.useMemo(() => {
     if (historicalData.length >= 2) {
       const latest = historicalData[historicalData.length - 1];
       const previous = historicalData[historicalData.length - 2];
-      return ((latest.close - previous.close) / previous.close) * 100;
+      const change = ((latest.close - previous.close) / previous.close) * 100;
+      return change;
     }
     return 0;
   }, [historicalData]);
+
+  // Update shared context in useEffect to avoid render phase setState
+  React.useEffect(() => {
+    setSharedPriceChange(priceChange24h);
+  }, [priceChange24h, setSharedPriceChange]);
 
   const volume24h = React.useMemo(() => {
     if (historicalData.length > 0) {

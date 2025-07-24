@@ -37,6 +37,7 @@ import SwapInterfaceWrapper from '@/components/swap/SwapInterfaceWrapper';
 import { formatTokenPrice, formatPriceChange } from '@/hooks/usePriceData';
 import { usePairMarketStats } from '@/hooks/usePairMarketStats';
 import { useWallet } from '@/hooks/useWallet';
+import { PriceDataProvider } from '@/contexts/PriceDataContext';
 import './swaps.css';
 
 // Token interface based on KalyChain official tokenlist
@@ -165,15 +166,7 @@ export default function SwapsPage() {
     deadline: '20'
   });
 
-  // Get real-time pair-specific market stats (after swapState is declared)
-  const {
-    price: pairPrice,
-    priceChange24h,
-    volume24h,
-    liquidity,
-    isLoading: pairStatsLoading,
-    error: pairStatsError
-  } = usePairMarketStats(swapState.fromToken, swapState.toToken);
+  // Market stats will be handled inside the PriceDataProvider wrapper
 
   // Settings state
   const [showSettings, setShowSettings] = useState(false);
@@ -689,10 +682,108 @@ export default function SwapsPage() {
   );
 
   return (
+    <PriceDataProvider>
+      <SwapsPageContent
+        swapState={swapState}
+        setSwapState={setSwapState}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        loading={loading}
+        setLoading={setLoading}
+        showSettings={showSettings}
+        setShowSettings={setShowSettings}
+        isConnected={isConnected}
+        userAddress={userAddress}
+        router={router}
+        // Pass all the other state and functions
+        user={user}
+        activeWallet={activeWallet}
+        sendState={sendState}
+        setSendState={setSendState}
+        sendError={sendError}
+        setSendError={setSendError}
+        userTokens={userTokens}
+        handleSwap={handleSwap}
+        handleSend={handleSend}
+        handleSwapTokens={handleSwapTokens}
+        handleFromAmountChange={handleFromAmountChange}
+        TokenSelector={TokenSelector}
+        SendTokenSelector={SendTokenSelector}
+        SendTokenIcon={SendTokenIcon}
+      />
+    </PriceDataProvider>
+  );
+}
+
+// Separate component that uses the market stats hook inside the provider
+function SwapsPageContent({
+  swapState,
+  setSwapState,
+  activeTab,
+  setActiveTab,
+  loading,
+  setLoading,
+  showSettings,
+  setShowSettings,
+  isConnected,
+  userAddress,
+  router,
+  user,
+  activeWallet,
+  sendState,
+  setSendState,
+  sendError,
+  setSendError,
+  userTokens,
+  handleSwap,
+  handleSend,
+  handleSwapTokens,
+  handleFromAmountChange,
+  TokenSelector,
+  SendTokenSelector,
+  SendTokenIcon
+}: {
+  swapState: SwapState;
+  setSwapState: React.Dispatch<React.SetStateAction<SwapState>>;
+  activeTab: string;
+  setActiveTab: React.Dispatch<React.SetStateAction<string>>;
+  loading: boolean;
+  setLoading: React.Dispatch<React.SetStateAction<boolean>>;
+  showSettings: boolean;
+  setShowSettings: React.Dispatch<React.SetStateAction<boolean>>;
+  isConnected: boolean;
+  userAddress: string | null;
+  router: any;
+  user: any;
+  activeWallet: any;
+  sendState: any;
+  setSendState: any;
+  sendError: string | null;
+  setSendError: any;
+  userTokens: any[];
+  handleSwap: () => Promise<void>;
+  handleSend: () => Promise<void>;
+  handleSwapTokens: () => void;
+  handleFromAmountChange: (value: string) => void;
+  TokenSelector: any;
+  SendTokenSelector: any;
+  SendTokenIcon: any;
+}) {
+  // Get real-time pair-specific market stats (now inside the provider)
+  const {
+    price: pairPrice,
+    priceChange24h,
+    volume24h,
+    liquidity,
+    isLoading: pairStatsLoading,
+    error: pairStatsError
+  } = usePairMarketStats(swapState.fromToken, swapState.toToken);
+
+  return (
     <MainLayout>
       <div className="swaps-layout min-h-screen bg-gradient-to-b from-slate-50 to-white">
-        <div className="container mx-auto px-4 py-8">
-          <div className="swaps-grid grid grid-cols-1 xl:grid-cols-4 gap-6">
+      <div className="container mx-auto px-4 py-8">
+        <div className="swaps-grid grid grid-cols-1 xl:grid-cols-4 gap-6">
 
             {/* Left side - Trading Chart and Transaction Data */}
             <div className="xl:col-span-3 space-y-8">
@@ -898,8 +989,8 @@ export default function SwapsPage() {
                             <span
                               className={`text-xs px-1 py-0.5 rounded ${
                                 priceChange24h >= 0
-                                  ? 'text-green-700 bg-green-100'
-                                  : 'text-red-700 bg-red-100'
+                                  ? 'text-green-300 bg-green-900/30'
+                                  : 'text-red-300 bg-red-900/30'
                               }`}
                             >
                               {formatPriceChange(priceChange24h)}
