@@ -9,6 +9,10 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'KalySwap - Decentralized Exchange',
   description: 'Trade tokens on KalyChain with KalySwap DEX',
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/icon.png',
+  },
 };
 
 export default function RootLayout({

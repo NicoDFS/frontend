@@ -63,7 +63,13 @@ export function useUserFarmingPositions(userAddress?: string) {
       
       console.log('🔍 Fetching user farming positions for:', userAddress);
 
-      const response = await fetch('/api/graphql', {
+      // Use backend API URL from environment variables with fallback
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
+      const graphqlEndpoint = `${apiUrl}/graphql`;
+
+      console.log('📡 GraphQL Endpoint:', graphqlEndpoint);
+
+      const response = await fetch(graphqlEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -71,7 +77,7 @@ export function useUserFarmingPositions(userAddress?: string) {
         body: JSON.stringify({
           query: `
             query GetUserFarmingPositions($userAddress: String!) {
-              farmers(where: { address: $userAddress }) {
+              userFarmingData(userAddress: $userAddress) {
                 id
                 address
                 stakedAmount
@@ -103,8 +109,8 @@ export function useUserFarmingPositions(userAddress?: string) {
           throw new Error(result.errors[0].message);
         }
 
-        if (result.data?.farmers) {
-          const farmers = result.data.farmers;
+        if (result.data?.userFarmingData) {
+          const farmers = result.data.userFarmingData;
           
           const userPositions: UserFarmingPosition[] = farmers.map((farmer: any) => {
             const pool = farmer.pool;
@@ -167,11 +173,14 @@ export function useUserFarmingPositions(userAddress?: string) {
           });
         }
       } else {
-        throw new Error('Failed to fetch user farming positions');
+        const errorText = await response.text();
+        console.error('❌ Backend GraphQL response not ok:', response.status, errorText);
+        throw new Error(`Backend API error: ${response.status} ${response.statusText}`);
       }
     } catch (err) {
       console.error('❌ Error fetching user farming positions:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch farming positions');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch farming positions';
+      setError(`User farming positions fetch failed: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }
@@ -244,8 +253,8 @@ export function useUserFarmingPosition(userAddress?: string, poolAddress?: strin
         },
         body: JSON.stringify({
           query: `
-            query GetUserFarmingPosition($farmerId: String!) {
-              farmer(id: $farmerId) {
+            query GetUserFarmingPosition($userAddress: String!) {
+              userFarmingData(userAddress: $userAddress) {
                 id
                 address
                 stakedAmount
@@ -263,7 +272,7 @@ export function useUserFarmingPosition(userAddress?: string, poolAddress?: strin
             }
           `,
           variables: {
-            farmerId: `${userAddress.toLowerCase()}-${poolAddress.toLowerCase()}`
+            userAddress: userAddress.toLowerCase()
           }
         })
       });

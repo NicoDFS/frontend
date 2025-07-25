@@ -52,10 +52,10 @@ export default function FarmCard({ stakingInfo, version }: FarmCardProps) {
     ? stakingInfo.rewardRatePerWeek?.toSignificant(4, { groupSeparator: ',' }) || 'N/A'
     : 'N/A'
 
-  // Format pool weight (multiplier) - show N/A if 0
-  const poolWeight = stakingInfo.multiplier?.gt(0)
+  // Format pool weight (multiplier) - show actual value, even if 0
+  const poolWeight = stakingInfo.multiplier
     ? stakingInfo.multiplier.toString()
-    : 'N/A'
+    : '0'
 
   // Debug logging
   const pairName = `${stakingInfo.tokens[0].symbol}-${stakingInfo.tokens[1].symbol}`
@@ -137,10 +137,7 @@ export default function FarmCard({ stakingInfo, version }: FarmCardProps) {
               <span className="text-gray-300">Pool Rate:</span>
               <span className="text-white font-medium">{poolRate} KSWAP / week</span>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-300">Weight:</span>
-              <span className="text-white font-medium">{poolWeight}</span>
-            </div>
+
           </div>
         </div>
 

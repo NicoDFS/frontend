@@ -12,7 +12,7 @@ import { Search, ChevronDown, ChevronUp, Zap, TrendingUp, ArrowLeft } from 'luci
 import { useRouter } from 'next/navigation'
 import { useWallet } from '@/hooks/useWallet'
 import { useFarmingDataOptimized } from '@/hooks/farming/useFarmingDataOptimized'
-import { useUserFarmingPositions } from '@/hooks/useUserFarmingPositions'
+
 import FarmCard from '@/components/farming/FarmCard'
 import { formatNumber } from '@/lib/utils'
 
@@ -23,23 +23,17 @@ export default function FarmPage() {
   const [sortBy, setSortBy] = useState<{ field: string; desc: boolean }>({ field: 'totalStakedInUsd', desc: true })
   const [activeTab, setActiveTab] = useState('all')
 
-  // Fetch farming data using optimized multicall hook
+  // Fetch farming data using optimized hook
   const { stakingInfos, isLoading: stakingLoading, error, refetch } = useFarmingDataOptimized()
 
-  // Fetch user farming positions for enhanced "My Farms" experience
-  const {
-    summary: userSummary,
-    isLoading: userPositionsLoading,
-    hasActivePositions
-  } = useUserFarmingPositions(address)
+
 
   // Debug logging
   console.log('🚜 Farm page data:', {
     stakingInfos: stakingInfos?.length || 0,
     isLoading: stakingLoading,
     stakingInfosData: stakingInfos,
-    userSummary,
-    hasActivePositions
+    error: error
   })
 
   // Keep pools loading for backward compatibility
@@ -152,38 +146,7 @@ export default function FarmPage() {
             </CardContent>
           </Card>
 
-          {/* User Summary - Only show when connected and has positions */}
-          {isConnected && hasActivePositions && (
-            <Card className="farm-card mb-6 border-amber-500/20">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
-                      <Zap className="w-5 h-5 text-amber-400" />
-                      My Farming Summary
-                    </h3>
-                    <p className="text-gray-300 text-sm">
-                      Your active farming positions from subgraph data
-                    </p>
-                  </div>
-                  <div className="text-right space-y-2">
-                    <div>
-                      <p className="text-gray-400 text-sm">Active Positions</p>
-                      <p className="text-xl font-bold text-amber-400">
-                        {userSummary.activePositions}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-400 text-sm">Total Staked</p>
-                      <p className="text-lg font-semibold text-white">
-                        ${userSummary.totalStakedUSD ? formatNumber(parseFloat(userSummary.totalStakedUSD), 2) : '0.00'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+
 
           {/* Controls */}
           <div className="mb-6">
@@ -263,15 +226,10 @@ export default function FarmPage() {
                 </Button>
               </CardContent>
             </Card>
-          ) : poolsLoading || stakingLoading || (activeTab === 'staked' && userPositionsLoading) ? (
+          ) : stakingLoading ? (
             <div className="flex flex-col items-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-400 mb-4"></div>
-              <p className="text-slate-400 text-sm">
-                {activeTab === 'staked' && userPositionsLoading
-                  ? 'Loading your farming positions from subgraph...'
-                  : 'Loading farms with optimized multicall...'
-                }
-              </p>
+              <p className="text-slate-400 text-sm">Loading farms...</p>
             </div>
           ) : sortedPools.length === 0 ? (
             <Card className="farm-card">

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { graphqlRequest, isDevelopment } from '@/lib/api-config';
 
 // Types for farming subgraph data
 export interface FarmingPool {
@@ -49,9 +50,15 @@ export function useFarmingSubgraph(userAddress?: string) {
       setIsLoading(true);
       setError(null);
       
-      console.log('🔍 Fetching farming data from subgraph...');
+      console.log('🔍 Fetching farming data from backend GraphQL...');
 
-      const response = await fetch('/api/graphql', {
+      // Use backend API URL from environment variables with fallback
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
+      const graphqlEndpoint = `${apiUrl}/graphql`;
+
+      console.log('📡 GraphQL Endpoint:', graphqlEndpoint);
+
+      const response = await fetch(graphqlEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -59,33 +66,43 @@ export function useFarmingSubgraph(userAddress?: string) {
         body: JSON.stringify({
           query: `
             query GetFarmingData($userAddress: String) {
-              farmingPools {
-                id
-                address
-                stakingToken
-                rewardsToken
-                totalStaked
-                rewardRate
-                periodFinish
-                farmers(where: { address: $userAddress }) {
-                  id
-                  address
-                  stakedAmount
-                  rewards
-                }
-              }
-              whitelistedPools {
-                id
-                pairAddress
-                weight
-                stakingPool {
+              farmingData(userAddress: $userAddress) {
+                farmingPools {
                   id
                   address
                   stakingToken
                   rewardsToken
                   totalStaked
                   rewardRate
+                  rewardsDuration
                   periodFinish
+                  lastUpdateTime
+                  rewardPerTokenStored
+                  createdAt
+                  updatedAt
+                }
+                whitelistedPools {
+                  id
+                  pair
+                  weight
+                  manager {
+                    id
+                    address
+                  }
+                }
+                userFarms {
+                  id
+                  address
+                  stakedAmount
+                  rewards
+                  lastAction
+                  lastActionTimestamp
+                  pool {
+                    id
+                    address
+                    stakingToken
+                    rewardsToken
+                  }
                 }
               }
             }
@@ -105,32 +122,26 @@ export function useFarmingSubgraph(userAddress?: string) {
           throw new Error(result.errors[0].message);
         }
 
-        if (result.data) {
-          const farmingPools = result.data.farmingPools || [];
-          const whitelistedPools = result.data.whitelistedPools || [];
-          
-          // Extract user farms from all pools
-          const userFarms: Farmer[] = [];
-          farmingPools.forEach((pool: FarmingPool) => {
-            if (pool.farmers && pool.farmers.length > 0) {
-              userFarms.push(...pool.farmers);
-            }
-          });
+        if (result.data?.farmingData) {
+          const { farmingPools, whitelistedPools, userFarms } = result.data.farmingData;
 
           setFarmingData({
-            farmingPools,
-            whitelistedPools,
-            userFarms
+            farmingPools: farmingPools || [],
+            whitelistedPools: whitelistedPools || [],
+            userFarms: userFarms || []
           });
 
-          console.log(`✅ Fetched ${farmingPools.length} farming pools, ${whitelistedPools.length} whitelisted pools, ${userFarms.length} user farms`);
+          console.log(`✅ Fetched ${farmingPools?.length || 0} farming pools, ${whitelistedPools?.length || 0} whitelisted pools, ${userFarms?.length || 0} user farms`);
         }
       } else {
-        throw new Error('Failed to fetch farming data from subgraph');
+        const errorText = await response.text();
+        console.error('❌ Backend GraphQL response not ok:', response.status, errorText);
+        throw new Error(`Backend API error: ${response.status} ${response.statusText}`);
       }
     } catch (err) {
       console.error('❌ Error fetching farming data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch farming data');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch farming data';
+      setError(`Farming data fetch failed: ${errorMessage}`);
     } finally {
       setIsLoading(false);
     }
