@@ -4,7 +4,10 @@
  */
 
 // Base API URL from environment variables
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ||
+  (typeof window !== 'undefined' && window.location.protocol === 'https:'
+    ? `https://${window.location.host}/api`
+    : 'http://localhost:3000/api');
 
 // Validate API URL format
 const validateApiUrl = (url: string): boolean => {
