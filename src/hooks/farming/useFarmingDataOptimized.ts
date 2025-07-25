@@ -435,9 +435,128 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
             whitelistedPoolsCount: farmingData.whitelistedPools.length
           });
 
-          // Use the same subgraph processing logic as above (lines 228-383)
-          // This will be handled by the no-wallet case above, so we can skip this
-          console.log('✅ Subgraph data will be processed by the no-wallet case above');
+          // Process subgraph data (same logic as no-wallet case)
+          const subgraphStakingInfos = farmingData.farmingPools.map((pool: any) => {
+            // Find corresponding whitelisted pool for weight
+            const whitelistedPool = farmingData.whitelistedPools.find((wp: any) =>
+              wp.pair?.toLowerCase() === pool.stakingToken?.toLowerCase()
+            );
+
+            // Find user's staking data for this pool
+            const userFarm = farmingData.userFarms.find((farm: any) =>
+              farm.pool?.address?.toLowerCase() === pool.address?.toLowerCase()
+            );
+
+            // Get pair address from stakingToken
+            const pairAddress = pool.stakingToken;
+            let token0Symbol = 'UNKNOWN';
+            let token1Symbol = 'UNKNOWN';
+
+            // Find matching pool configuration
+            const matchingPool = farmingPools.find(p =>
+              p.stakingRewardAddress.toLowerCase() === pool.address.toLowerCase()
+            );
+
+            if (matchingPool) {
+              token0Symbol = matchingPool.tokens[0].symbol;
+              token1Symbol = matchingPool.tokens[1].symbol;
+              console.log(`✅ Found pool config for ${pairAddress}: ${token0Symbol}-${token1Symbol}`);
+            } else {
+              console.warn(`⚠️ No pool configuration found for ${pairAddress}, using fallback mappings`);
+              // Fallback to hardcoded mappings for pools not in config
+              if (pairAddress === '0x25fddaf836d12dc5e285823a644bb86e0b79c8e2') {
+                token0Symbol = 'WKLC';
+                token1Symbol = 'USDT';
+              } else if (pairAddress === '0x0e520779287bb711c8e603cc85d532daa7c55372') {
+                token0Symbol = 'KSWAP';
+                token1Symbol = 'USDT';
+              } else if (pairAddress === '0xf3e034650e1c2597a0af75012c1854247f271ee0') {
+                token0Symbol = 'KSWAP';
+                token1Symbol = 'WKLC';
+              }
+            }
+
+            // Create token objects
+            const token0: Token = {
+              address: matchingPool?.tokens[0]?.address || '0x0000000000000000000000000000000000000000',
+              symbol: token0Symbol,
+              name: token0Symbol,
+              decimals: 18,
+              chainId: chainId || 3888
+            };
+
+            const token1: Token = {
+              address: matchingPool?.tokens[1]?.address || '0x0000000000000000000000000000000000000000',
+              symbol: token1Symbol,
+              name: token1Symbol,
+              decimals: 18,
+              chainId: chainId || 3888
+            };
+
+            // Create LP token
+            const lpToken: Token = {
+              address: pairAddress,
+              symbol: `${token0Symbol}-${token1Symbol}`,
+              name: `${token0Symbol}-${token1Symbol} LP`,
+              decimals: 18,
+              chainId: chainId || 3888
+            };
+
+            // Create reward token (KSWAP)
+            const rewardToken: Token = {
+              address: '0xcc93b84ceed74dc28c746b7697d6fa477ffff65a',
+              symbol: 'KSWAP',
+              name: 'KalySwap',
+              decimals: 18,
+              chainId: chainId || 3888
+            };
+
+            // Convert string values to BigNumber and create MockTokenAmount objects
+            const totalStaked = BigNumber.from(pool.totalStaked || '0');
+            const rewardRate = BigNumber.from(pool.rewardRate || '0');
+            const periodFinish = BigNumber.from(pool.periodFinish || '0');
+
+            // Calculate weekly reward rate (rewardRate is per second in wei)
+            const secondsPerWeek = BigNumber.from(60 * 60 * 24 * 7);
+            const rewardRatePerWeekWei = rewardRate.mul(secondsPerWeek);
+
+            // Debug logging to see actual values
+            console.log(`🔍 Pool ${pool.address}: totalStaked=${pool.totalStaked}, rewardRate=${pool.rewardRate}, weight=${whitelistedPool?.weight}`);
+            console.log(`🎯 Token mapping for ${pairAddress}: ${token0Symbol}-${token1Symbol}`);
+
+            // User amounts (from userFarm if available)
+            const userStakedAmount = BigNumber.from(userFarm?.stakedAmount || '0');
+            const userEarnedAmount = BigNumber.from(userFarm?.rewards || '0');
+
+            return {
+              stakingRewardAddress: pool.address,
+              tokens: [token0, token1] as [Token, Token], // Proper pair tokens
+              stakedAmount: new MockTokenAmount(lpToken, userStakedAmount),
+              earnedAmount: new MockTokenAmount(rewardToken, userEarnedAmount),
+              totalStakedAmount: new MockTokenAmount(lpToken, totalStaked),
+              totalStakedInWklc: new MockTokenAmount(lpToken, BigNumber.from('0')), // TODO: Calculate from DEX data
+              totalStakedInUsd: new MockTokenAmount(lpToken, totalStaked), // Raw LP token amount - UI will format
+              totalRewardRatePerSecond: new MockTokenAmount(rewardToken, rewardRate),
+              totalRewardRatePerWeek: new MockTokenAmount(rewardToken, rewardRatePerWeekWei),
+              rewardRatePerWeek: new MockTokenAmount(rewardToken, rewardRatePerWeekWei),
+              periodFinish: new Date(periodFinish.toNumber() * 1000),
+              multiplier: whitelistedPool?.weight ? BigNumber.from(whitelistedPool.weight) : BigNumber.from('1'),
+              isPeriodFinished: periodFinish.toNumber() * 1000 < Date.now(),
+              swapFeeApr: 0,
+              stakingApr: 0,
+              combinedApr: 0,
+              getHypotheticalWeeklyRewardRate: (stakedAmount: any, totalStakedAmount: any, totalRewardRatePerSecond: any) => {
+                if (totalStakedAmount.raw.isZero()) return new MockTokenAmount(totalRewardRatePerSecond.token, BigNumber.from(0))
+                const weeklyRate = totalRewardRatePerSecond.raw.mul(604800)
+                return new MockTokenAmount(totalRewardRatePerSecond.token, weeklyRate.mul(stakedAmount.raw).div(totalStakedAmount.raw))
+              }
+            };
+          });
+
+          setStakingInfos(subgraphStakingInfos);
+          setIsLoading(false);
+          hasInitiallyLoaded.current = true;
+          console.log(`✅ Loaded ${subgraphStakingInfos.length} farms from subgraph with wallet connected!`);
           return;
         }
 
