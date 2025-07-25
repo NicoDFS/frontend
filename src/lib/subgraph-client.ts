@@ -139,7 +139,7 @@ export const TOKEN_QUERY = `
 // Helper functions for direct subgraph calls
 export async function getFactoryData() {
   try {
-    const result = await subgraphClient.request(FACTORY_QUERY);
+    const result = await subgraphClient.request(FACTORY_QUERY) as any;
     return result.kalyswapFactory;
   } catch (error) {
     console.error('Error fetching factory data:', error);
@@ -153,7 +153,7 @@ export async function getPairsData(first = 10, orderBy = 'reserveUSD', orderDire
       first,
       orderBy,
       orderDirection
-    });
+    }) as any;
     return result.pairs;
   } catch (error) {
     console.error('Error fetching pairs data:', error);
@@ -163,7 +163,7 @@ export async function getPairsData(first = 10, orderBy = 'reserveUSD', orderDire
 
 export async function getPairData(pairId: string) {
   try {
-    const result = await subgraphClient.request(PAIR_QUERY, { id: pairId });
+    const result = await subgraphClient.request(PAIR_QUERY, { id: pairId }) as any;
     return result.pair;
   } catch (error) {
     console.error('Error fetching pair data:', error);
@@ -177,7 +177,7 @@ export async function getPairDayData(pairAddress: string, first = 30, skip = 0) 
       pairAddress,
       first,
       skip
-    });
+    }) as any;
     return result.pairDayDatas;
   } catch (error) {
     console.error('Error fetching pair day data:', error);
@@ -190,7 +190,7 @@ export async function getKalyswapDayData(first = 7, skip = 0) {
     const result = await subgraphClient.request(KALYSWAP_DAY_DATA_QUERY, {
       first,
       skip
-    });
+    }) as any;
     return result.kalyswapDayDatas;
   } catch (error) {
     console.error('Error fetching Kalyswap day data:', error);
@@ -200,7 +200,7 @@ export async function getKalyswapDayData(first = 7, skip = 0) {
 
 export async function getTokenData(tokenId: string) {
   try {
-    const result = await subgraphClient.request(TOKEN_QUERY, { id: tokenId });
+    const result = await subgraphClient.request(TOKEN_QUERY, { id: tokenId }) as any;
     return result.token;
   } catch (error) {
     console.error('Error fetching token data:', error);

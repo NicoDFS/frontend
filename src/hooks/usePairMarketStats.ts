@@ -168,7 +168,6 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
       
       // Reset to default values
       setPrice(0);
-      setPriceChange24h(0);
       setVolume24h(0);
       setLiquidity(0);
     } finally {

@@ -76,9 +76,14 @@ interface UseFarmingDataOptimizedProps {
 }
 
 export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps = {}) {
-  const { address, provider, chainId } = useWallet()
+  const { address, chainId } = useWallet()
   const { getLiquidityPoolManagerContract, getPoolAPR } = useFarmingContracts()
   const { pairAddresses } = usePairAddresses()
+
+  // Create provider when needed
+  const getProvider = useCallback(() => {
+    return new ethers.providers.JsonRpcProvider('https://rpc.kalychain.io/rpc')
+  }, [])
   
   const [stakingInfos, setStakingInfos] = useState<DoubleSideStakingInfo[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -129,20 +134,18 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
       stakedAmount: zeroAmount,
       earnedAmount: zeroReward,
       totalStakedAmount: zeroAmount,
-      totalRewardRate: zeroReward,
       totalStakedInWklc: zeroAmount,
       totalStakedInUsd: zeroAmount,
       totalRewardRatePerSecond: zeroReward,
       totalRewardRatePerWeek: zeroReward,
       rewardRatePerWeek: zeroReward,
       periodFinish: new Date(0),
-      apr: 'N/A',
-      multiplier: BigNumber.from(0),
-      isPeriodFinished: true,
-      pairAddress,
       swapFeeApr: 0,
       stakingApr: 0,
-      combinedApr: 0
+      combinedApr: 0,
+      multiplier: BigNumber.from(0),
+      isPeriodFinished: true,
+      getHypotheticalWeeklyRewardRate: (stakedAmount: any, totalStakedAmount: any, totalRewardRatePerSecond: any) => zeroReward
     }
   }, [chainId])
 
@@ -198,15 +201,37 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
           { ...token0, address: pairAddress } as Token,
           totalStaked
         ),
-        totalRewardRate: new MockTokenAmount(
+        totalStakedInWklc: new MockTokenAmount(
+          { ...token0, address: pairAddress } as Token,
+          BigNumber.from(0) // TODO: Calculate from DEX data
+        ),
+        totalStakedInUsd: new MockTokenAmount(
+          { ...token0, address: pairAddress } as Token,
+          totalStaked // Raw LP token amount - UI will format
+        ),
+        totalRewardRatePerSecond: new MockTokenAmount(
           { address: '0x4C4b968232a8603e2D1e53AB26E9a0319fA33ED3', symbol: 'KSWAP', name: 'KalySwap', decimals: 18, chainId: chainId || 3888 } as Token,
           rewardRate
         ),
+        totalRewardRatePerWeek: new MockTokenAmount(
+          { address: '0x4C4b968232a8603e2D1e53AB26E9a0319fA33ED3', symbol: 'KSWAP', name: 'KalySwap', decimals: 18, chainId: chainId || 3888 } as Token,
+          rewardRate.mul(604800) // Convert per second to per week (60*60*24*7)
+        ),
+        rewardRatePerWeek: new MockTokenAmount(
+          { address: '0x4C4b968232a8603e2D1e53AB26E9a0319fA33ED3', symbol: 'KSWAP', name: 'KalySwap', decimals: 18, chainId: chainId || 3888 } as Token,
+          BigNumber.from(0) // User-specific reward rate
+        ),
         periodFinish: new Date(periodFinish.toNumber() * 1000),
-        apr: apr,
-        multiplier: '1',
+        swapFeeApr: 0,
+        stakingApr: 0,
+        combinedApr: 0,
+        multiplier: BigNumber.from(1),
         isPeriodFinished: periodFinish.toNumber() * 1000 < Date.now(),
-        pairAddress
+        getHypotheticalWeeklyRewardRate: (stakedAmount: any, totalStakedAmount: any, totalRewardRatePerSecond: any) => {
+          if (totalStakedAmount.raw.isZero()) return new MockTokenAmount(totalRewardRatePerSecond.token, BigNumber.from(0))
+          const weeklyRate = totalRewardRatePerSecond.raw.mul(604800) // seconds in a week
+          return new MockTokenAmount(totalRewardRatePerSecond.token, weeklyRate.mul(stakedAmount.raw).div(totalStakedAmount.raw))
+        }
       };
 
       return stakingInfo;
@@ -220,7 +245,7 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
     // For testing: Allow subgraph data even without wallet connection
     const canUseSubgraph = useSubgraph && !subgraphLoading && !subgraphError && farmingData.farmingPools.length > 0
 
-    if (!provider || !chainId) {
+    if (!chainId) {
       if (canUseSubgraph) {
         console.log('🚀 Using subgraph data without wallet connection for testing!')
 
@@ -354,24 +379,28 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
 
           return {
             stakingRewardAddress: pool.address,
-            tokens: [token0, token1], // Proper pair tokens
+            tokens: [token0, token1] as [Token, Token], // Proper pair tokens
             stakedAmount: new MockTokenAmount(lpToken, userStakedAmount),
             earnedAmount: new MockTokenAmount(rewardToken, userEarnedAmount),
             totalStakedAmount: new MockTokenAmount(lpToken, totalStaked),
             totalStakedInWklc: new MockTokenAmount(lpToken, BigNumber.from('0')), // TODO: Calculate from DEX data
             totalStakedInUsd: new MockTokenAmount(lpToken, totalStaked), // Raw LP token amount - UI will format
-            totalRewardRate: new MockTokenAmount(rewardToken, rewardRate),
+
             totalRewardRatePerSecond: new MockTokenAmount(rewardToken, rewardRate),
             totalRewardRatePerWeek: new MockTokenAmount(rewardToken, rewardRatePerWeekWei), // Use wei value so MockTokenAmount can convert properly
             rewardRatePerWeek: new MockTokenAmount(rewardToken, userRewardRatePerWeekWei), // Use wei value for MockTokenAmount
             periodFinish: new Date(periodFinish.toNumber() * 1000),
-            apr: '0', // TODO: Calculate real APR from reward rate and staked amount
+
             multiplier: whitelistedPool?.weight ? BigNumber.from(whitelistedPool.weight) : BigNumber.from('1'),
             isPeriodFinished: periodFinish.toNumber() * 1000 < Date.now(),
-            pairAddress: pool.stakingToken,
             swapFeeApr: 0,
             stakingApr: 0,
-            combinedApr: 0
+            combinedApr: 0,
+            getHypotheticalWeeklyRewardRate: (stakedAmount: any, totalStakedAmount: any, totalRewardRatePerSecond: any) => {
+              if (totalStakedAmount.raw.isZero()) return new MockTokenAmount(totalRewardRatePerSecond.token, BigNumber.from(0))
+              const weeklyRate = totalRewardRatePerSecond.raw.mul(604800)
+              return new MockTokenAmount(totalRewardRatePerSecond.token, weeklyRate.mul(stakedAmount.raw).div(totalStakedAmount.raw))
+            }
           };
         });
 
@@ -381,7 +410,7 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
         return;
       }
 
-      console.log('⏸️ Provider or chainId not available, skipping fetch')
+      console.log('⏸️ ChainId not available, skipping fetch')
       return
     }
 
@@ -460,11 +489,23 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
         console.log('📡 Executing multicall for all farms (including whitelisting checks)...')
         console.log('🔍 Checking whitelisting for pair addresses:', poolPairAddresses)
 
+        const liquidityManagerContract = getLiquidityPoolManagerContract()
+        if (!liquidityManagerContract) {
+          throw new Error('LiquidityPoolManager contract not available')
+        }
+
+        // Create staking contracts from farming pools
+        const provider = getProvider()
+        const stakingContracts = farmingPools.map(pool =>
+          new ethers.Contract(pool.stakingRewardAddress, stakingRewardsABI, provider)
+        )
+
         const { liquidityManagerResults, stakingResults } = await batchFarmingCalls(
           provider,
-          getLiquidityPoolManagerContract(),
-          farmingPools,
-          poolPairAddresses
+          liquidityManagerContract,
+          stakingContracts,
+          poolPairAddresses,
+          address
         )
 
         console.log('✅ Multicall successful, got', liquidityManagerResults.length + stakingResults.length, 'results')
@@ -526,7 +567,7 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
               stakingResults,
               baseIndex,
               stakingIndex,
-              provider,
+              getProvider(),
               getPoolAPR
             );
           } catch (err) {
@@ -556,7 +597,7 @@ export function useFarmingDataOptimized({ pools }: UseFarmingDataOptimizedProps 
       setIsLoading(false)
       setIsFetching(false)
     }
-  }, [farmingPools, address, chainId, pairAddresses, refreshTrigger, provider, getLiquidityPoolManagerContract, getPoolAPR, createNAStakingInfo, useSubgraph, farmingData, subgraphLoading, subgraphError])
+  }, [farmingPools, address, chainId, pairAddresses, refreshTrigger, getProvider, getLiquidityPoolManagerContract, getPoolAPR, createNAStakingInfo, useSubgraph, farmingData, subgraphLoading, subgraphError])
 
   useEffect(() => {
     fetchStakingDataOptimized()

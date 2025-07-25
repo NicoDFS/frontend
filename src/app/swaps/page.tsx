@@ -752,7 +752,7 @@ function SwapsPageContent({
   showSettings: boolean;
   setShowSettings: React.Dispatch<React.SetStateAction<boolean>>;
   isConnected: boolean;
-  userAddress: string | null;
+  userAddress: string | null | undefined;
   router: any;
   user: any;
   activeWallet: any;
@@ -777,7 +777,7 @@ function SwapsPageContent({
     liquidity,
     isLoading: pairStatsLoading,
     error: pairStatsError
-  } = usePairMarketStats(swapState.fromToken, swapState.toToken);
+  } = usePairMarketStats(swapState.fromToken || undefined, swapState.toToken || undefined);
 
   return (
     <MainLayout>
@@ -884,7 +884,7 @@ function SwapsPageContent({
                         <>
                           <SendTokenSelector
                             selectedToken={sendState.token}
-                            onTokenSelect={(token) => setSendState(prev => ({ ...prev, token }))}
+                            onTokenSelect={(token: any) => setSendState((prev: any) => ({ ...prev, token }))}
                             label="Asset"
                           />
 
@@ -894,7 +894,7 @@ function SwapsPageContent({
                               type="number"
                               placeholder="0.0"
                               value={sendState.amount}
-                              onChange={(e) => setSendState(prev => ({ ...prev, amount: e.target.value }))}
+                              onChange={(e) => setSendState((prev: any) => ({ ...prev, amount: e.target.value }))}
                               className="text-lg h-12"
                             />
                             {sendState.token && (
@@ -905,7 +905,7 @@ function SwapsPageContent({
                                 <button
                                   type="button"
                                   className="text-blue-600 hover:underline"
-                                  onClick={() => setSendState(prev => ({ ...prev, amount: sendState.token.balance }))}
+                                  onClick={() => setSendState((prev: any) => ({ ...prev, amount: sendState.token.balance }))}
                                 >
                                   Max
                                 </button>
@@ -918,7 +918,7 @@ function SwapsPageContent({
                             <Input
                               placeholder="0x..."
                               value={sendState.recipient}
-                              onChange={(e) => setSendState(prev => ({ ...prev, recipient: e.target.value }))}
+                              onChange={(e) => setSendState((prev: any) => ({ ...prev, recipient: e.target.value }))}
                               className="font-mono"
                             />
                           </div>

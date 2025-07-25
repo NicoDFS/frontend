@@ -14,10 +14,6 @@ const LIQUIDITY_POOL_MANAGER_V2_ADDRESS = '0xe83e7ede1358FA87e5039CF8B1cffF383Bc
 const weightsCache = new Map<string, { weights: { [key: string]: string }, timestamp: number }>()
 const WEIGHTS_CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
 
-// Cache for weights to avoid repeated contract calls
-const weightsCache = new Map<string, { weights: { [key: string]: string }, timestamp: number }>()
-const CACHE_DURATION = 60000 // 1 minute
-
 // Mock TokenAmount implementation
 class MockTokenAmount {
   constructor(public token: Token, public raw: BigNumber) {}
@@ -64,6 +60,14 @@ class MockTokenAmount {
     } catch (error) {
       return false
     }
+  }
+
+  lessThan(other: MockTokenAmount): boolean {
+    return this.raw.lt(other.raw)
+  }
+
+  equalTo(other: MockTokenAmount): boolean {
+    return this.raw.eq(other.raw)
   }
 }
 
@@ -313,7 +317,12 @@ export function useFarmingSubgraphSimple() {
           pairAddress: pool.stakingToken,
           swapFeeApr: 0,
           stakingApr: 0,
-          combinedApr: 0
+          combinedApr: 0,
+          getHypotheticalWeeklyRewardRate: (stakedAmount: any, totalStakedAmount: any, totalRewardRatePerSecond: any) => {
+            if (totalStakedAmount.raw.isZero()) return new MockTokenAmount(totalRewardRatePerSecond.token, BigNumber.from(0))
+            const weeklyRate = totalRewardRatePerSecond.raw.mul(604800)
+            return new MockTokenAmount(totalRewardRatePerSecond.token, weeklyRate.mul(stakedAmount.raw).div(totalStakedAmount.raw))
+          }
         } as DoubleSideStakingInfo
       })
 

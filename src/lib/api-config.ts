@@ -102,8 +102,8 @@ export async function apiRequest<T = any>(
     }
 
     // Retry logic for network errors
-    if (retryCount < REQUEST_CONFIG.RETRY_ATTEMPTS && 
-        (error instanceof TypeError || error.name === 'AbortError')) {
+    if (retryCount < REQUEST_CONFIG.RETRY_ATTEMPTS &&
+        (error instanceof TypeError || (error instanceof Error && error.name === 'AbortError'))) {
       
       if (isDevelopment) {
         console.log(`🔄 Retrying request (${retryCount + 1}/${REQUEST_CONFIG.RETRY_ATTEMPTS}): ${url}`);
