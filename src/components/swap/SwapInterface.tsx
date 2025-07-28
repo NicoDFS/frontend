@@ -129,6 +129,14 @@ const KALYCHAIN_TOKENS: Token[] = [
     symbol: 'DAI',
     logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x6E92CAC380F7A7B86f4163fad0df2F277B16Edc6/logo_24.png'
     // Note: This is a Hyperlane bridge token (EvmHypSynthetic) that may not implement standard ERC20 balanceOf
+  },
+  {
+    chainId: 3888,
+    address: '0x376E0ac0B55aA79F9B30aAc8842e5E84fF06360C',
+    decimals: 18,
+    name: 'Clisha Coin',
+    symbol: 'CLISHA',
+    logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x376E0ac0B55aA79F9B30aAc8842e5E84fF06360C/logo_24.png'
   }
 ];
 
