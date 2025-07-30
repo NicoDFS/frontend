@@ -185,18 +185,18 @@ export function usePoolDiscovery() {
           token0: {
             address: pair.token0.id,
             symbol: pair.token0.symbol,
-            name: pair.token0.name || pair.token0.symbol, // Fallback if name is missing
+            name: pair.token0.name || pair.token0.symbol,
             decimals: parseInt(pair.token0.decimals)
           },
           token1: {
             address: pair.token1.id,
             symbol: pair.token1.symbol,
-            name: pair.token1.name || pair.token1.symbol, // Fallback if name is missing
+            name: pair.token1.name || pair.token1.symbol,
             decimals: parseInt(pair.token1.decimals)
           },
           reserve0: pair.reserve0,
           reserve1: pair.reserve1,
-          totalSupply: pair.totalSupply || '0', // Fallback if totalSupply is missing
+          totalSupply: pair.totalSupply,
           // Enhanced subgraph data
           reserveUSD: pair.reserveUSD,
           volumeUSD: pair.volumeUSD,

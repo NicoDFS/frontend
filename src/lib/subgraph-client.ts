@@ -28,15 +28,18 @@ export const PAIRS_QUERY = `
       token0 { 
         id 
         symbol 
+        name
         decimals 
       }
       token1 { 
         id 
         symbol 
+        name
         decimals 
       }
       reserve0
       reserve1
+      totalSupply
       reserveUSD
       token0Price
       token1Price
@@ -56,15 +59,18 @@ export const PAIR_QUERY = `
       token0 { 
         id 
         symbol 
+        name
         decimals 
       }
       token1 { 
         id 
         symbol 
+        name
         decimals 
       }
       reserve0
       reserve1
+      totalSupply
       reserveUSD
       token0Price
       token1Price
