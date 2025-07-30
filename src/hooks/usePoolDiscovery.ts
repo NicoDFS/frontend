@@ -255,7 +255,7 @@ export function usePoolDiscovery() {
 
       // Limit to first 20 pairs for performance
       const pools: PoolData[] = [];
-      const maxPairs = Math.min(totalPairs, 20);
+      const maxPairs = Math.min(totalPairs, 21);
 
       for (let i = 0; i < maxPairs; i++) {
         try {

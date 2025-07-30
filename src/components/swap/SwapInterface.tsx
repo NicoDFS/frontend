@@ -421,20 +421,69 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
       // Convert input amount to proper decimals
       const amountIn = parseUnits(inputAmount, fromToken.decimals);
 
-      // Build path for swap
-      const path = (fromToken.isNative === true)
-        ? [getContractAddress('WKLC', DEFAULT_CHAIN_ID), toToken.address]
-        : (toToken.isNative === true)
-        ? [fromToken.address, getContractAddress('WKLC', DEFAULT_CHAIN_ID)]
-        : [fromToken.address, getContractAddress('WKLC', DEFAULT_CHAIN_ID), toToken.address];
+      console.log('🔍 DEBUG: Starting quote calculation', {
+        fromToken: fromToken.symbol,
+        toToken: toToken.symbol,
+        inputAmount,
+        amountIn: amountIn.toString(),
+        fromTokenAddress: fromToken.address,
+        toTokenAddress: toToken.address
+      });
 
-      // Get amounts out
-      const amounts = await routerContract.read.getAmountsOut([amountIn, path]) as bigint[];
+      // Build path for swap - try direct pair first, fallback to WKLC routing
+      let path: string[];
+      let amounts: bigint[];
+
+      if (fromToken.isNative === true) {
+        path = [getContractAddress('WKLC', DEFAULT_CHAIN_ID), toToken.address];
+        console.log('🔍 DEBUG: Using KLC routing path:', path);
+      } else if (toToken.isNative === true) {
+        path = [fromToken.address, getContractAddress('WKLC', DEFAULT_CHAIN_ID)];
+        console.log('🔍 DEBUG: Using KLC routing path:', path);
+      } else {
+        // For token-to-token swaps, try direct pair first
+        const directPath = [fromToken.address, toToken.address];
+        console.log('🔍 DEBUG: Trying direct pair path:', directPath);
+        
+        try {
+          amounts = await routerContract.read.getAmountsOut([amountIn, directPath]) as bigint[];
+          const outputAmount = amounts[amounts.length - 1];
+          const formattedOutput = formatUnits(outputAmount, toToken.decimals);
+          
+          console.log('✅ DEBUG: Direct pair successful', {
+            path: directPath,
+            amounts: amounts.map(a => a.toString()),
+            outputAmount: outputAmount.toString(),
+            formattedOutput,
+            price: `${parseFloat(formattedOutput) / parseFloat(inputAmount)} ${toToken.symbol} per ${fromToken.symbol}`
+          });
+          
+          return formattedOutput;
+        } catch (error) {
+          console.log('❌ DEBUG: Direct pair failed, trying WKLC routing:', error);
+          // Fall back to WKLC routing
+          path = [fromToken.address, getContractAddress('WKLC', DEFAULT_CHAIN_ID), toToken.address];
+          console.log('🔍 DEBUG: Using WKLC routing path:', path);
+        }
+      }
+
+      // Get amounts out (for non-direct paths or fallback)
+      console.log('🔍 DEBUG: Getting amounts out for path:', path);
+      amounts = await routerContract.read.getAmountsOut([amountIn, path]) as bigint[];
       const outputAmount = amounts[amounts.length - 1];
+      const formattedOutput = formatUnits(outputAmount, toToken.decimals);
+      
+      console.log('✅ DEBUG: Quote calculation complete', {
+        path,
+        amounts: amounts.map(a => a.toString()),
+        outputAmount: outputAmount.toString(),
+        formattedOutput,
+        price: `${parseFloat(formattedOutput) / parseFloat(inputAmount)} ${toToken.symbol} per ${fromToken.symbol}`
+      });
 
-      return formatUnits(outputAmount, toToken.decimals);
+      return formattedOutput;
     } catch (error) {
-      console.error('Error getting quote:', error);
+      console.error('❌ DEBUG: Error getting quote:', error);
       return null;
     }
   };
@@ -604,12 +653,32 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
       // Calculate deadline (current time + minutes)
       const deadline = BigInt(Math.floor(Date.now() / 1000) + (parseInt(swapState.deadline) * 60));
 
-      // Build path for swap
-      const path = (swapState.fromToken.isNative === true)
-        ? [getContractAddress('WKLC', DEFAULT_CHAIN_ID), swapState.toToken.address]
-        : (swapState.toToken.isNative === true)
-        ? [swapState.fromToken.address, getContractAddress('WKLC', DEFAULT_CHAIN_ID)]
-        : [swapState.fromToken.address, getContractAddress('WKLC', DEFAULT_CHAIN_ID), swapState.toToken.address];
+      // Build path for swap - try direct pair first, fallback to WKLC routing
+      let path: string[];
+      if (swapState.fromToken.isNative === true) {
+        path = [getContractAddress('WKLC', DEFAULT_CHAIN_ID), swapState.toToken.address];
+      } else if (swapState.toToken.isNative === true) {
+        path = [swapState.fromToken.address, getContractAddress('WKLC', DEFAULT_CHAIN_ID)];
+      } else {
+        // For token-to-token swaps, try direct pair first
+        const directPath = [swapState.fromToken.address, swapState.toToken.address];
+        try {
+          // Test if direct path works by getting amounts out
+          const routerAddress = getContractAddress('ROUTER', DEFAULT_CHAIN_ID);
+          const routerContract = getContract({
+            address: routerAddress as `0x${string}`,
+            abi: ROUTER_ABI,
+            client: publicClient,
+          });
+          await routerContract.read.getAmountsOut([amountIn, directPath]);
+          // If we get here, direct path works
+          path = directPath;
+        } catch (error) {
+          console.log('Direct pair failed for execution, using WKLC routing:', error);
+          // Fall back to WKLC routing
+          path = [swapState.fromToken.address, getContractAddress('WKLC', DEFAULT_CHAIN_ID), swapState.toToken.address];
+        }
+      }
 
       // Check if this is a wrap or unwrap operation
       const isWrap = isWrapOperation(swapState.fromToken, swapState.toToken);

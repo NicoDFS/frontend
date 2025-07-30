@@ -147,7 +147,7 @@ export async function getFactoryData() {
   }
 }
 
-export async function getPairsData(first = 10, orderBy = 'reserveUSD', orderDirection = 'desc') {
+export async function getPairsData(first = 10000, orderBy = 'reserveUSD', orderDirection = 'desc') {
   try {
     const result = await subgraphClient.request(PAIRS_QUERY, {
       first,

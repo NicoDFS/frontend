@@ -799,7 +799,7 @@ export function usePools() {
   }, []);
 
   // Get all pairs from subgraph for browsing
-  const getAllPairs = useCallback(async (first: number = 20, skip: number = 0, orderBy: string = 'reserveUSD', orderDirection: string = 'desc') => {
+  const getAllPairs = useCallback(async (first: number = 25, skip: number = 0, orderBy: string = 'reserveUSD', orderDirection: string = 'desc') => {
     try {
       console.log('🔍 Fetching all pairs from subgraph...');
 
