@@ -6,7 +6,6 @@ import { getContract, formatUnits } from 'viem';
 import { getContractAddress, DEFAULT_CHAIN_ID } from '@/config/contracts';
 import { FACTORY_ABI, PAIR_ABI, ERC20_ABI } from '@/config/abis';
 import { useUserPositions } from './useUserPositions';
-import { usePools } from './usePools';
 
 export interface PoolData {
   id: string;
@@ -70,9 +69,6 @@ export function usePoolDiscovery() {
     publicClient = null;
     address = undefined;
   }
-
-  // Use enhanced pools hook with subgraph integration
-  const { getAllPairs } = usePools();
 
   // Get pool addresses for user position tracking (memoized to prevent loops)
   const poolAddresses = useMemo(() => state.pools.map(pool => pool.address), [state.pools]);
@@ -170,15 +166,16 @@ export function usePoolDiscovery() {
     }
   }, [publicClient, getTokenInfo]);
 
-  // Fetch all pools using subgraph (enhanced performance and data)
+  // Fetch all pools using direct subgraph calls (enhanced performance and data)
   const fetchPools = useCallback(async () => {
     setState(prev => ({ ...prev, loading: true, error: null }));
 
     try {
-      console.log('📊 Fetching pools from DEX subgraph...');
+      console.log('📊 Fetching pools directly from DEX subgraph...');
 
-      // Use subgraph-powered getAllPairs function
-      const subgraphPairs = await getAllPairs();
+      // Direct subgraph call - no backend proxy needed!
+      const { getPairsData } = await import('@/lib/subgraph-client');
+      const subgraphPairs = await getPairsData(100, 'reserveUSD', 'desc');
 
       if (subgraphPairs && subgraphPairs.length > 0) {
         // Transform subgraph data to PoolData format
@@ -188,18 +185,18 @@ export function usePoolDiscovery() {
           token0: {
             address: pair.token0.id,
             symbol: pair.token0.symbol,
-            name: pair.token0.name,
+            name: pair.token0.name || pair.token0.symbol, // Fallback if name is missing
             decimals: parseInt(pair.token0.decimals)
           },
           token1: {
             address: pair.token1.id,
             symbol: pair.token1.symbol,
-            name: pair.token1.name,
+            name: pair.token1.name || pair.token1.symbol, // Fallback if name is missing
             decimals: parseInt(pair.token1.decimals)
           },
           reserve0: pair.reserve0,
           reserve1: pair.reserve1,
-          totalSupply: pair.totalSupply,
+          totalSupply: pair.totalSupply || '0', // Fallback if totalSupply is missing
           // Enhanced subgraph data
           reserveUSD: pair.reserveUSD,
           volumeUSD: pair.volumeUSD,
@@ -208,7 +205,7 @@ export function usePoolDiscovery() {
           token1Price: pair.token1Price
         }));
 
-        console.log(`✅ Successfully loaded ${pools.length} pools from subgraph`);
+        console.log(`✅ Successfully loaded ${pools.length} pools from direct subgraph`);
 
         setState(prev => ({
           ...prev,
@@ -221,12 +218,12 @@ export function usePoolDiscovery() {
         await fetchPoolsFromContract();
       }
     } catch (error) {
-      console.error('❌ Error fetching pools from subgraph:', error);
+      console.error('❌ Error fetching pools from direct subgraph:', error);
       // Fallback to contract calls
-      console.log('⚠️ Subgraph failed, falling back to contract calls...');
+      console.log('⚠️ Direct subgraph failed, falling back to contract calls...');
       await fetchPoolsFromContract();
     }
-  }, [getAllPairs]);
+  }, []);
 
   // Fallback function for contract calls
   const fetchPoolsFromContract = useCallback(async () => {
