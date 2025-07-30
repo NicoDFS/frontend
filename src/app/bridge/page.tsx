@@ -24,7 +24,7 @@ function BridgeTipCard() {
         <div className="flex items-end justify-between">
           <p className="mt-1 max-w-[75%] text-xs text-gray-600">
             Warp Routes make it safe and easy to bridge your tokens to and from KalyChain, Arbitrum,
-            BSC and Polygon!
+            BSC and Clisha!
           </p>
           <Button
             variant="ghost"

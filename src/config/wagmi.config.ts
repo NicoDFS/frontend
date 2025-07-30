@@ -1,7 +1,7 @@
 import { getDefaultConfig, getDefaultWallets, connectorsForWallets } from '@rainbow-me/rainbowkit'
 import { createConfig, http } from 'wagmi'
 import { kalychain, clisha, supportedChains } from './chains'
-import { arbitrum, bsc, polygon } from 'viem/chains'
+import { arbitrum, bsc } from 'viem/chains'
 import { kalyswapWallet } from './wallets'
 
 // Get project ID from environment variables
@@ -63,7 +63,6 @@ export const chainRpcUrls = {
   [kalychain.id]: 'https://rpc.kalychain.io/rpc',
   [arbitrum.id]: 'https://arb1.arbitrum.io/rpc',
   [bsc.id]: 'https://bsc-dataseed.binance.org',
-  [polygon.id]: 'https://polygon-rpc.com',
   [clisha.id]: 'https://rpc.clishachain.com/rpc',
 } as const
 

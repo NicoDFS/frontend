@@ -27,8 +27,6 @@ function ChainIcon({ chainName, size = 20 }: { chainName: string; size?: number 
         return 'arbitrum';
       case 'bsc':
         return 'binance';
-      case 'polygon':
-        return 'polygon';
       case 'clisha':
         return 'clisha';
       default:

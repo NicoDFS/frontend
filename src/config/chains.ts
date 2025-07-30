@@ -1,5 +1,5 @@
 import { defineChain } from 'viem'
-import { arbitrum, bsc, polygon } from 'viem/chains'
+import { arbitrum, bsc } from 'viem/chains'
 
 // KalyChain Mainnet Configuration
 export const kalychain = defineChain({
@@ -102,7 +102,6 @@ export const supportedChains = [
   kalychain,
   arbitrum,
   bsc,
-  polygon,
   clisha,
   // kalychainTestnet, // Uncomment when testnet is available
 ] as const
@@ -139,13 +138,6 @@ export const CHAIN_CONFIG = {
   [bsc.id]: {
     name: 'BNB Smart Chain',
     shortName: 'BSC',
-    isTestnet: false,
-    faucetUrl: null,
-    bridgeUrl: null,
-  },
-  [polygon.id]: {
-    name: 'Polygon',
-    shortName: 'POL',
     isTestnet: false,
     faucetUrl: null,
     bridgeUrl: null,

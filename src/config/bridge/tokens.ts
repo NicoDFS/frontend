@@ -73,15 +73,6 @@ export const bridgeTokens: ChainMap<BridgeToken[]> = {
       standard: 'EvmHypSynthetic',
     },
     {
-      address: '0x706C9a63d7c8b7Aaf85DDCca52654645f470E8Ac',
-      symbol: 'POL',
-      name: 'Polygon Ecosystem Token',
-      decimals: 18,
-      chainId: 3888,
-      logoURI: '/tokens/pol.png',
-      standard: 'EvmHypSynthetic',
-    },
-    {
       address: '0xaA77D4a26d432B82DB07F8a47B7f7F623fd92455',
       symbol: 'WBTC',
       name: 'Wrapped BTC',
