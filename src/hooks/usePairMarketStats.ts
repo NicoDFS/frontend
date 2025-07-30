@@ -130,7 +130,7 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
       let calculatedLiquidity = 0;
 
       // Find which reserve corresponds to stablecoins (USDT, USDC, DAI)
-      const stablecoins = ['USDT', 'USDt', 'USDC', 'DAI'];
+      const stablecoins = ['USDT', 'USDC', 'DAI'];
       let stablecoinReserve = 0;
 
       if (stablecoins.includes(stats.pair.token0.symbol)) {

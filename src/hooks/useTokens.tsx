@@ -50,7 +50,7 @@ const COMMON_TOKENS: Token[] = [
     address: '0x2CA775C77B922A51FcF3097F52bFFdbc0250D99A',
     decimals: 6,
     name: 'Tether USD',
-    symbol: 'USDt',
+    symbol: 'USDT',
     logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x2CA775C77B922A51FcF3097F52bFFdbc0250D99A/logo_24.png'
   },
   {

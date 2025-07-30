@@ -37,11 +37,23 @@ export default function PoolsPage() {
     const tokenASymbol = searchParams.get('tokenASymbol');
     const tokenBSymbol = searchParams.get('tokenBSymbol');
 
+    // Helper function to get correct decimals for tokens
+    const getTokenDecimals = (address: string): number => {
+      const usdtAddress = '0x2CA775C77B922A51FcF3097F52bFFdbc0250D99A';
+      const usdcAddress = '0x9cAb0c396cF0F4325913f2269a0b72BD4d46E3A9';
+      
+      if (address.toLowerCase() === usdtAddress.toLowerCase() || 
+          address.toLowerCase() === usdcAddress.toLowerCase()) {
+        return 6; // USDT and USDC have 6 decimals
+      }
+      return 18; // Default for other tokens
+    };
+
     if (tokenAAddress && tokenASymbol) {
       const tokenA: Token = {
         chainId: 3888,
         address: tokenAAddress,
-        decimals: 18, // Default, will be updated when token is properly loaded
+        decimals: getTokenDecimals(tokenAAddress),
         name: tokenASymbol,
         symbol: tokenASymbol,
         logoURI: `https://raw.githubusercontent.com/KalyCoinProject/tokens/main/assets/${tokenAAddress}/logo.png`
@@ -53,7 +65,7 @@ export default function PoolsPage() {
       const tokenB: Token = {
         chainId: 3888,
         address: tokenBAddress,
-        decimals: 18, // Default, will be updated when token is properly loaded
+        decimals: getTokenDecimals(tokenBAddress),
         name: tokenBSymbol,
         symbol: tokenBSymbol,
         logoURI: `https://raw.githubusercontent.com/KalyCoinProject/tokens/main/assets/${tokenBAddress}/logo.png`

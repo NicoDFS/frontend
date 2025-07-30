@@ -86,7 +86,7 @@ const KALYCHAIN_TOKENS: Token[] = [
     address: '0x2CA775C77B922A51FcF3097F52bFFdbc0250D99A',
     decimals: 6,
     name: 'Tether USD',
-    symbol: 'USDt',
+    symbol: 'USDT',
     logoURI: 'https://raw.githubusercontent.com/kalycoinproject/tokens/main/assets/3888/0x2CA775C77B922A51FcF3097F52bFFdbc0250D99A/logo_24.png'
   },
   {
@@ -177,7 +177,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
   // Component state - use props if provided, otherwise use defaults
   const [swapState, setSwapState] = useState<SwapState>({
     fromToken: propFromToken || KALYCHAIN_TOKENS[0], // KLC
-    toToken: propToToken || KALYCHAIN_TOKENS[4], // USDt (now at index 4 after adding KSWAP and BNB)
+    toToken: propToToken || KALYCHAIN_TOKENS[4], // USDT (now at index 4 after adding KSWAP and BNB)
     fromAmount: '',
     toAmount: '',
     slippage: '0.5',

@@ -94,7 +94,7 @@ export function usePriceData(pair: TokenPair, timeframe: string = '1h') {
   const fetchCoinGeckoData = useCallback(async () => {
     try {
       // Check if this is KLC/USDT pair
-      const isKlcUsdtPair = (pair.baseToken === 'KLC' || pair.baseToken === 'wKLC') && (pair.quoteToken === 'USDT' || pair.quoteToken === 'USDt');
+      const isKlcUsdtPair = (pair.baseToken === 'KLC' || pair.baseToken === 'wKLC') && (pair.quoteToken === 'USDT');
 
       console.log('fetchCoinGeckoData called:', {
         baseToken: pair.baseToken,
@@ -262,7 +262,6 @@ export function useTokenPrice(symbol: string) {
           'KLC': '0x069255299bb729399f3cecabdc73d15d3d10a2a3', // wKLC address (KLC = wKLC for pricing)
           'wKLC': '0x069255299bb729399f3cecabdc73d15d3d10a2a3',
           'USDT': '0x2ca775c77b922a51fcf3097f52bffdbc0250d99a',
-          'USDt': '0x2ca775c77b922a51fcf3097f52bffdbc0250d99a',
           'KSWAP': '0xcc93b84ceed74dc28c746b7697d6fa477ffff65a',
           'DAI': '0x6e92cac380f7a7b86f4163fad0df2f277b16edc6',
           'CLISHA': '0x376e0ac0b55aa79f9b30aac8842e5e84ff06360c'
@@ -343,7 +342,7 @@ export function useTokenPrice(symbol: string) {
               // Token is token1, price = reserve0 / reserve1
               calculatedPrice = parseFloat(pair.reserve0) / parseFloat(pair.reserve1);
             }
-          } else if (symbol === 'USDT' || symbol === 'USDt') {
+          } else if (symbol === 'USDT') {
             // USDT is our base currency
             calculatedPrice = 1.0;
           } else {
@@ -366,7 +365,6 @@ export function useTokenPrice(symbol: string) {
         const mockPrices: Record<string, { price: number; change: number }> = {
           'KLC': { price: 0.0003, change: 2.5 },
           'wKLC': { price: 0.0003, change: 2.5 },
-          'USDt': { price: 1.0, change: 0.1 },
           'USDT': { price: 1.0, change: 0.1 },
           'KSWAP': { price: 0.15, change: 8.7 },
         };
@@ -393,7 +391,7 @@ export function useTokenPrice(symbol: string) {
 export function formatTokenPrice(price: number, symbol: string): string {
   if (symbol === 'KLC' || symbol === 'wKLC') {
     return price.toFixed(8);
-  } else if (['USDt', 'USDC', 'DAI'].includes(symbol)) {
+  } else if (['USDT', 'USDC', 'DAI'].includes(symbol)) {
     return price.toFixed(4);
   } else if (symbol === 'WBTC') {
     return price.toFixed(2);
@@ -695,8 +693,8 @@ export function useDexMarketStats(): DexMarketStats {
           // If not found by address, look for any WKLC/USDT pair
           if (!wklcUsdtPair) {
             wklcUsdtPair = pairs.find((pair: any) =>
-              (pair.token0.symbol === 'WKLC' && (pair.token1.symbol === 'USDT' || pair.token1.symbol === 'USDt')) ||
-              (pair.token1.symbol === 'WKLC' && (pair.token0.symbol === 'USDT' || pair.token0.symbol === 'USDt'))
+              (pair.token0.symbol === 'WKLC' && (pair.token1.symbol === 'USDT')) ||
+              (pair.token1.symbol === 'WKLC' && (pair.token0.symbol === 'USDT'))
             );
           }
 
@@ -726,11 +724,11 @@ export function useDexMarketStats(): DexMarketStats {
             const reserve1 = parseFloat(pair.reserve1 || '0');
 
             // Calculate USD value more accurately
-            if (pair.token0.symbol === 'USDT' || pair.token0.symbol === 'USDt') {
+            if (pair.token0.symbol === 'USDT') {
               // Token0 is USDT - total liquidity = USDT reserve + (other token reserve * other token price)
               const otherTokenValueUsd = pair.token1.symbol === 'WKLC' ? reserve1 * calculatedKlcPrice : 0;
               pairLiquidityUsd = reserve0 + otherTokenValueUsd;
-            } else if (pair.token1.symbol === 'USDT' || pair.token1.symbol === 'USDt') {
+            } else if (pair.token1.symbol === 'USDT') {
               // Token1 is USDT - total liquidity = USDT reserve + (other token reserve * other token price)
               const otherTokenValueUsd = pair.token0.symbol === 'WKLC' ? reserve0 * calculatedKlcPrice : 0;
               pairLiquidityUsd = reserve1 + otherTokenValueUsd;

@@ -45,7 +45,7 @@ This is the main trading interface for KalySwap, built as a comprehensive swaps 
 ### **Token Data**
 - Uses official KalyChain token list from `https://raw.githubusercontent.com/KalyCoinProject/tokenlists/main/kalyswap.tokenlist.json`
 - Includes token logos from `https://github.com/KalyCoinProject/tokens`
-- Supports all major KalyChain tokens: KLC, wKLC, KSWAP, USDt, USDC, DAI, WBTC, ETH, BNB, POL
+- Supports all major KalyChain tokens: KLC, wKLC, KSWAP, USDT, USDC, DAI, WBTC, ETH, BNB, POL
 
 ### **Components Used**
 - **shadcn/ui**: Button, Card, Input, Label, Tabs, Select
