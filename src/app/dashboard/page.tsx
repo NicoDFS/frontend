@@ -778,11 +778,16 @@ export default function DashboardPage() {
                                       </SelectTrigger>
                                       <SelectContent className="select-content">
                                         <SelectItem value="KLC">KLC (Native)</SelectItem>
-                                        {wallet.balance?.tokens.map((token) => (
-                                          <SelectItem key={token.address} value={token.address}>
-                                            {token.symbol}
-                                          </SelectItem>
-                                        ))}
+                                        {wallet.balance?.tokens
+                                          .filter((token) => token.address && token.address.trim() !== '')
+                                          .map((token, index) => (
+                                            <SelectItem
+                                              key={`${token.address}-${index}`}
+                                              value={token.address}
+                                            >
+                                              {token.symbol}
+                                            </SelectItem>
+                                          ))}
                                       </SelectContent>
                                     </Select>
                                   </div>
