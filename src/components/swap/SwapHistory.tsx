@@ -235,20 +235,33 @@ export default function SwapHistory({
     explorerUrl: `https://kalyscan.io/tx/${tx.hash}`
   });
 
+  // Type guard functions
+  const isDexTransaction = (tx: any): tx is DexTransaction => {
+    return 'token0Symbol' in tx && 'token1Symbol' in tx && 'token0Amount' in tx && 'token1Amount' in tx && 'amountUSD' in tx && 'sender' in tx && 'to' in tx;
+  };
+
+  const isFormattedSwapType = (tx: any): tx is FormattedSwap => {
+    return 'token0Symbol' in tx && 'token1Symbol' in tx && 'amountUSD' in tx && 'type' in tx && 'timestamp' in tx;
+  };
+
+  const isSwapTransaction = (tx: any): tx is SwapTransaction => {
+    return 'fromToken' in tx && 'toToken' in tx;
+  };
+
   // Transaction row component
   const TransactionRow = ({ transaction }: { transaction: SwapTransaction | DexTransaction | ExplorerTransaction | FormattedSwap }) => {
     // Convert to unified SwapTransaction format
     let unifiedTransaction: SwapTransaction;
 
-    if ('fromToken' in transaction) {
+    if (isSwapTransaction(transaction)) {
       // Already a SwapTransaction
-      unifiedTransaction = transaction as SwapTransaction;
-    } else if ('token0Symbol' in transaction && 'token1Symbol' in transaction && 'amountUSD' in transaction) {
+      unifiedTransaction = transaction;
+    } else if (isFormattedSwapType(transaction)) {
       // FormattedSwap from subgraph
-      unifiedTransaction = convertFormattedSwap(transaction as FormattedSwap);
-    } else if ('token0Symbol' in transaction) {
-      // DexTransaction
-      unifiedTransaction = convertDexTransaction(transaction as DexTransaction);
+      unifiedTransaction = convertFormattedSwap(transaction);
+    } else if (isDexTransaction(transaction)) {
+      // DexTransaction - has all required properties
+      unifiedTransaction = convertDexTransaction(transaction);
     } else {
       // ExplorerTransaction
       unifiedTransaction = convertExplorerTransaction(transaction as ExplorerTransaction);

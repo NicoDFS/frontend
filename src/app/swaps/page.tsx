@@ -802,7 +802,6 @@ function SwapsPageContent({
                   tokenA={swapState.fromToken}
                   tokenB={swapState.toToken}
                   height={600}
-                  showTimeframes={true}
                   showChartTypes={true}
                   className="w-full h-[500px] lg:h-[600px]"
                 />
@@ -814,7 +813,7 @@ function SwapsPageContent({
                   selectedPair={{
                     token0Symbol: swapState.fromToken?.symbol || 'KLC',
                     token1Symbol: swapState.toToken?.symbol || 'USDT',
-                    pairAddress: pairAddress
+                    pairAddress: pairAddress || undefined
                   }}
                   userAddress={userAddress}
                 />

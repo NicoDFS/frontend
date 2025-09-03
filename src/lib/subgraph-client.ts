@@ -3,9 +3,8 @@ import { GraphQLClient } from 'graphql-request';
 // Subgraph endpoint - points directly to the v2-subgraph
 const SUBGRAPH_URL = process.env.NEXT_PUBLIC_SUBGRAPH_URL || 'http://localhost:8000/subgraphs/name/kalyswap/dex-subgraph';
 
-// Configure GraphQL client with timeout and error handling
+// Configure GraphQL client with error handling
 export const subgraphClient = new GraphQLClient(SUBGRAPH_URL, {
-  timeout: 10000, // 10 second timeout
   headers: {
     'Content-Type': 'application/json',
   },
