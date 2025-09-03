@@ -22,18 +22,21 @@ import {
 import { useSwapTransactions, type SwapTransaction } from '@/hooks/useSwapTransactions';
 import { useDexData, type DexTransaction } from '@/hooks/useDexData';
 import { useExplorerTransactions, type ExplorerTransaction } from '@/hooks/useExplorerTransactions';
+import { usePairSwaps, type FormattedSwap } from '@/hooks/usePairSwaps';
 import { useAccount } from 'wagmi';
 
 interface SwapHistoryProps {
   className?: string;
   compact?: boolean;
   maxItems?: number;
+  pairAddress?: string | null; // Add pair address for filtering
 }
 
 export default function SwapHistory({
   className = '',
   compact = false,
-  maxItems = 10
+  maxItems = 10,
+  pairAddress = null
 }: SwapHistoryProps) {
   const { address, isConnected } = useAccount();
   const [activeTab, setActiveTab] = useState<'recent' | 'my'>('recent');
@@ -43,24 +46,26 @@ export default function SwapHistory({
     console.log('SwapHistory - Wallet status:', { address, isConnected, activeTab });
   }, [address, isConnected, activeTab]);
 
-  // Use Explorer API for recent trades (all trades)
+  // Use subgraph for recent trades (all trades or pair-specific)
   const {
-    transactions: recentTransactions,
+    swaps: recentSwaps,
     loading: recentLoading,
     error: recentError,
     refetch: refetchRecent
-  } = useExplorerTransactions({
+  } = usePairSwaps({
+    pairAddress: pairAddress,
     limit: maxItems
   });
 
-  // Use Explorer API for user-specific trades when wallet is connected
+  // Use subgraph for user-specific trades
   const {
-    transactions: userExplorerTransactions,
-    loading: userExplorerLoading,
-    error: userExplorerError,
-    refetch: refetchUserExplorer
-  } = useExplorerTransactions({
-    userAddress: isConnected ? address : undefined,
+    swaps: userSwaps,
+    loading: userLoading,
+    error: userError,
+    refetch: refetchUser
+  } = usePairSwaps({
+    pairAddress: pairAddress,
+    userAddress: isConnected ? address : null,
     limit: maxItems
   });
 
@@ -77,12 +82,11 @@ export default function SwapHistory({
     refreshInterval: 15000
   });
 
-  // Combine user transactions from both sources for "My Trades"
+  // Combine user transactions from swap transactions and subgraph for "My Trades"
   const combinedUserTransactions = [
     ...getFilteredTransactions('all'),
-    ...userExplorerTransactions
+    ...userSwaps
   ].sort((a, b) => {
-    // Both SwapTransaction and ExplorerTransaction have timestamp as Date objects
     const aTime = a.timestamp.getTime();
     const bTime = b.timestamp.getTime();
     return bTime - aTime;
@@ -90,13 +94,13 @@ export default function SwapHistory({
 
   // Get transactions based on active tab
   const displayTransactions = activeTab === 'recent'
-    ? recentTransactions.slice(0, maxItems)
+    ? recentSwaps.slice(0, maxItems)
     : combinedUserTransactions;
 
-  const loading = activeTab === 'recent' ? recentLoading : (userExplorerLoading || userSwapLoading);
-  const error = activeTab === 'recent' ? recentError : (userExplorerError || userSwapError);
+  const loading = activeTab === 'recent' ? recentLoading : (userLoading || userSwapLoading);
+  const error = activeTab === 'recent' ? recentError : (userError || userSwapError);
   const refetch = activeTab === 'recent' ? refetchRecent : () => {
-    refetchUserExplorer();
+    refetchUser();
     // Note: useSwapTransactions auto-refreshes, no manual fetch needed
   };
 
@@ -179,7 +183,33 @@ export default function SwapHistory({
     explorerUrl: `https://kalyscan.io/tx/${tx.hash}`
   });
 
-  // Convert ExplorerTransaction to unified format
+  // Convert FormattedSwap to unified format
+  const convertFormattedSwap = (tx: FormattedSwap): SwapTransaction => ({
+    id: tx.id,
+    hash: tx.hash,
+    status: 'confirmed' as const, // Subgraph swaps are already confirmed
+    type: 'SWAP' as const,
+    fromToken: {
+      symbol: tx.type === 'SELL' ? tx.token0Symbol : tx.token1Symbol,
+      address: '0x0',
+      decimals: 18,
+    },
+    toToken: {
+      symbol: tx.type === 'SELL' ? tx.token1Symbol : tx.token0Symbol,
+      address: '0x0',
+      decimals: 18,
+    },
+    fromAmount: tx.type === 'SELL' ? tx.token0Amount.replace('-', '') : tx.token1Amount.replace('-', ''),
+    toAmount: tx.type === 'SELL' ? tx.token1Amount.replace('+', '') : tx.token0Amount.replace('+', ''),
+    fromAmountFormatted: tx.type === 'SELL' ? tx.token0Amount.replace('-', '') : tx.token1Amount.replace('-', ''),
+    toAmountFormatted: tx.type === 'SELL' ? tx.token1Amount.replace('+', '') : tx.token0Amount.replace('+', ''),
+    slippage: '0.5',
+    timestamp: tx.timestamp,
+    userAddress: tx.from,
+    explorerUrl: `https://kalyscan.io/tx/${tx.hash}`
+  });
+
+  // Convert ExplorerTransaction to unified format (keeping for backward compatibility)
   const convertExplorerTransaction = (tx: ExplorerTransaction): SwapTransaction => ({
     id: tx.id,
     hash: tx.hash,
@@ -206,13 +236,16 @@ export default function SwapHistory({
   });
 
   // Transaction row component
-  const TransactionRow = ({ transaction }: { transaction: SwapTransaction | DexTransaction | ExplorerTransaction }) => {
+  const TransactionRow = ({ transaction }: { transaction: SwapTransaction | DexTransaction | ExplorerTransaction | FormattedSwap }) => {
     // Convert to unified SwapTransaction format
     let unifiedTransaction: SwapTransaction;
 
     if ('fromToken' in transaction) {
       // Already a SwapTransaction
       unifiedTransaction = transaction as SwapTransaction;
+    } else if ('token0Symbol' in transaction && 'token1Symbol' in transaction && 'amountUSD' in transaction) {
+      // FormattedSwap from subgraph
+      unifiedTransaction = convertFormattedSwap(transaction as FormattedSwap);
     } else if ('token0Symbol' in transaction) {
       // DexTransaction
       unifiedTransaction = convertDexTransaction(transaction as DexTransaction);
@@ -223,8 +256,10 @@ export default function SwapHistory({
 
     const statusDisplay = getStatusDisplay(unifiedTransaction.status);
 
-    // Check if this is an explorer transaction (simplified display)
+    // Check transaction type for display
+    const isFormattedSwap = 'token0Symbol' in transaction && 'token1Symbol' in transaction && 'amountUSD' in transaction;
     const isExplorerTransaction = !('token0Symbol' in transaction) && !('fromToken' in transaction);
+    const formattedSwap = isFormattedSwap ? transaction as FormattedSwap : null;
     const explorerTx = isExplorerTransaction ? transaction as ExplorerTransaction : null;
 
     return (
@@ -241,7 +276,9 @@ export default function SwapHistory({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium">
-                {explorerTx ? (
+                {formattedSwap ? (
+                  `${formattedSwap.token0Symbol} ↔ ${formattedSwap.token1Symbol}`
+                ) : explorerTx ? (
                   explorerTx.tokenPair ?
                     `${explorerTx.tokenPair.token0} ↔ ${explorerTx.tokenPair.token1}` :
                   explorerTx.type === 'KLC_SWAP' ? (
@@ -262,6 +299,11 @@ export default function SwapHistory({
                   {statusDisplay.label}
                 </span>
               </Badge>
+              {formattedSwap && formattedSwap.amountUSD > 0 && (
+                <span className="text-xs text-green-600 font-medium">
+                  ${formattedSwap.amountUSD.toFixed(2)}
+                </span>
+              )}
               <span className="text-xs text-gray-500">
                 {formatTime(unifiedTransaction.timestamp)}
               </span>

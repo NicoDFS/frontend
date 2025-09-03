@@ -156,18 +156,80 @@ export function useExplorerTransactions({
       // If userAddress is provided, fetch transactions for that specific address
       // Otherwise, fetch router transactions for general trading activity
       const targetAddress = userAddress || ROUTER_ADDRESS;
+      const apiUrl = `https://kalyscan.io/api/v2/addresses/${targetAddress}/transactions?limit=${limit}`;
 
-      const response = await fetch(
-        `https://kalyscan.io/api/v2/addresses/${targetAddress}/transactions?filter=to%20%7C%20from&limit=${limit}`,
-        {
-          headers: {
-            'accept': 'application/json'
-          }
-        }
-      );
+      console.log('KalyScan API URL:', apiUrl);
+
+      // Add timeout to prevent hanging requests
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+      const response = await fetch(apiUrl, {
+        headers: {
+          'accept': 'application/json'
+        },
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`KalyScan API error: ${response.status}`);
+        // If it's a 422 or other client error, try without any query parameters
+        if (response.status === 422 && apiUrl.includes('?')) {
+          console.log(`KalyScan API returned ${response.status} with query parameters, retrying without parameters...`);
+          const baseUrl = `https://kalyscan.io/api/v2/addresses/${targetAddress}/transactions`;
+          const retryResponse = await fetch(baseUrl, {
+            headers: {
+              'accept': 'application/json'
+            }
+          });
+
+          if (retryResponse.ok) {
+            const retryData: KalyScanResponse = await retryResponse.json();
+            console.log(`✅ Retry successful: Fetched ${retryData.items.length} transactions from KalyScan`);
+
+            // Transform and return the retry data
+            const transformedTransactions: ExplorerTransaction[] = retryData.items
+              .slice(0, limit) // Limit client-side since we couldn't use limit parameter
+              .map(tx => {
+                const tokenPair = tx.raw_input ? decodeSwapInput(tx.raw_input, tx.method) || undefined : undefined;
+                return {
+                  id: tx.hash,
+                  hash: tx.hash,
+                  timestamp: new Date(tx.timestamp),
+                  from: tx.from.hash,
+                  type: getTransactionType(tx.method),
+                  klcValue: tx.value !== '0' ? tx.value : undefined,
+                  status: tx.status === 'ok' ? 'success' : 'failed',
+                  gasUsed: tx.gas_used,
+                  blockNumber: tx.block_number,
+                  tokenPair
+                };
+              });
+
+            const filteredTransactions = userAddress && targetAddress === ROUTER_ADDRESS
+              ? transformedTransactions.filter(tx =>
+                  tx.from.toLowerCase() === userAddress.toLowerCase()
+                )
+              : transformedTransactions;
+
+            setTransactions(filteredTransactions);
+            console.log(`Processed ${filteredTransactions.length} transactions (retry)`);
+            return; // Exit successfully
+          }
+        }
+
+        // Only log detailed error if retry also failed
+        const errorText = await response.text().catch(() => 'Unknown error');
+        console.error('KalyScan API error details:', {
+          status: response.status,
+          statusText: response.statusText,
+          url: apiUrl,
+          errorText,
+          headers: Object.fromEntries(response.headers.entries())
+        });
+
+        throw new Error(`KalyScan API error: ${response.status} - ${response.statusText}`);
       }
 
       const data: KalyScanResponse = await response.json();
@@ -204,8 +266,22 @@ export function useExplorerTransactions({
 
     } catch (err) {
       console.error('Error fetching explorer transactions:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch transactions');
-      setTransactions([]);
+
+      // Handle different types of errors
+      let errorMessage = 'Failed to fetch transactions';
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          errorMessage = 'Request timed out - KalyScan API may be slow';
+        } else if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+          errorMessage = 'Network error - KalyScan API may be unavailable';
+        } else {
+          errorMessage = err.message;
+        }
+      }
+
+      console.warn(`KalyScan API unavailable: ${errorMessage}, showing empty transaction list`);
+      setError(null); // Don't show error to user, just log it
+      setTransactions([]); // Show empty list instead of error
     } finally {
       setLoading(false);
     }

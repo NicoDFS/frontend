@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getPairMarketStats } from '@/lib/subgraph-client';
 import { usePriceDataContext } from '@/contexts/PriceDataContext';
+import { fetchGraphQL, safeApiCall, isNetworkError } from '@/utils/networkUtils';
 
 interface Token {
   address: string;
@@ -16,6 +17,7 @@ interface PairMarketStats {
   priceChange24h: number;
   volume24h: number;
   liquidity: number;
+  pairAddress: string | null;
   isLoading: boolean;
   error: string | null;
 }
@@ -30,6 +32,7 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
   const [price, setPrice] = useState<number>(0);
   const [volume24h, setVolume24h] = useState<number>(0);
   const [liquidity, setLiquidity] = useState<number>(0);
+  const [pairAddress, setPairAddress] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -87,18 +90,110 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
       setIsLoading(true);
       setError(null);
 
-      const pairAddress = await findPairAddress(tokenA, tokenB);
+      const foundPairAddress = await findPairAddress(tokenA, tokenB);
 
-      if (!pairAddress) {
+      if (!foundPairAddress) {
         throw new Error(`No pair found for ${tokenA.symbol}/${tokenB.symbol}`);
       }
 
-      console.log(`📊 Fetching pair stats for ${tokenA.symbol}/${tokenB.symbol} (${pairAddress})`);
+      setPairAddress(foundPairAddress);
+      console.log(`📊 Fetching pair stats for ${tokenA.symbol}/${tokenB.symbol} (${foundPairAddress})`);
 
-      const stats = await getPairMarketStats(pairAddress);
+      const stats = await getPairMarketStats(foundPairAddress);
 
       if (!stats) {
         throw new Error('Failed to fetch pair stats');
+      }
+
+      // Get real 24hr volume using the same method as admin panel
+      let real24hrVolume = 0;
+
+      // Get KLC price from DEX data instead of CoinGecko
+      let klcPriceUSD = 0.0003; // Default fallback price
+
+      try {
+        // Calculate KLC price from WKLC/USDT pair reserves
+        const reserve0 = parseFloat(stats.pair.reserve0);
+        const reserve1 = parseFloat(stats.pair.reserve1);
+
+        if (reserve0 > 0 && reserve1 > 0) {
+          // Check if this is the WKLC/USDT pair we can use for KLC pricing
+          const isWklcUsdtPair = (stats.pair.token0.symbol === 'WKLC' && stats.pair.token1.symbol === 'USDT') ||
+                                 (stats.pair.token0.symbol === 'USDT' && stats.pair.token1.symbol === 'WKLC');
+
+          if (isWklcUsdtPair) {
+            // Calculate KLC price from this pair's reserves
+            if (stats.pair.token0.symbol === 'WKLC') {
+              klcPriceUSD = reserve1 / reserve0; // USDT per WKLC
+            } else {
+              klcPriceUSD = reserve0 / reserve1; // USDT per WKLC
+            }
+            console.log(`📊 Using KLC price from DEX reserves: $${klcPriceUSD.toFixed(6)}`);
+          }
+        }
+
+        // Sanity check for reasonable KLC price range
+        if (klcPriceUSD < 0.0001 || klcPriceUSD > 0.01) {
+          console.warn(`KLC price ${klcPriceUSD} outside reasonable range, using fallback`);
+          klcPriceUSD = 0.0003;
+        }
+
+      } catch (priceError) {
+        console.warn('Failed to calculate KLC price from DEX, using fallback:', priceError);
+        klcPriceUSD = 0.0003; // Use fallback price
+      }
+
+      // Now try to get volume data with the KLC price (fallback or real)
+      try {
+
+        // Query the backend for real 24hr volume using the same method as admin
+        // Use the actual token symbols from the pair data, not the input tokens
+        const token0Symbol = stats.pair.token0.symbol;
+        const token1Symbol = stats.pair.token1.symbol;
+
+        console.log(`🔍 Using pair token symbols: ${token0Symbol}/${token1Symbol} for volume calculation`);
+
+        // Backend GraphQL call with proper error handling
+        const volumeData = await fetchGraphQL<any>(
+          'http://localhost:3000/api/graphql',
+          `
+            query GetPairVolume($pairs: [PairInput!]!, $klcPriceUSD: Float!) {
+              multiplePairs24hrVolume(pairs: $pairs, klcPriceUSD: $klcPriceUSD) {
+                pairAddress
+                token0Symbol
+                token1Symbol
+                volume24hrUSD
+                swapCount
+              }
+            }
+          `,
+          {
+            pairs: [{
+              address: foundPairAddress.toLowerCase(),
+              token0Symbol: token0Symbol,
+              token1Symbol: token1Symbol
+            }],
+            klcPriceUSD: klcPriceUSD
+          },
+          { timeout: 8000, retries: 1 }
+        );
+
+        const pairVolumeData = volumeData?.multiplePairs24hrVolume?.[0];
+
+        if (pairVolumeData) {
+          real24hrVolume = parseFloat(pairVolumeData.volume24hrUSD) || 0;
+          console.log(`✅ Real 24hr volume for ${tokenA.symbol}/${tokenB.symbol}: $${real24hrVolume.toFixed(2)}`);
+        }
+      } catch (volumeError) {
+        console.error('Failed to fetch real 24hr volume:', volumeError);
+
+        // Handle network errors gracefully
+        if (isNetworkError(volumeError)) {
+          console.warn('Network error fetching volume, using fallback');
+        }
+
+        // Fallback to subgraph volume if available
+        real24hrVolume = stats.volume24h || 0;
       }
 
       // Calculate price from reserves
@@ -124,7 +219,7 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
 
       // Price change is now handled by the shared context from TradingChart
       // No need to calculate it here anymore
-      setVolume24h(stats.volume24h);
+      setVolume24h(real24hrVolume); // Use real 24hr volume instead of subgraph volume
 
       // Calculate liquidity manually since reserveUSD might be 0
       let calculatedLiquidity = 0;
@@ -185,6 +280,7 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
     priceChange24h,
     volume24h,
     liquidity,
+    pairAddress,
     isLoading,
     error
   };

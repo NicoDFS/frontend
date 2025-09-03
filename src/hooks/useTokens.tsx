@@ -177,8 +177,8 @@ export function useTokens() {
             totalLiquidity: token.totalLiquidity,
             derivedKLC: token.derivedKLC,
             txCount: token.txCount,
-            // Calculate price from derivedKLC (assuming KLC price calculation)
-            priceUSD: token.derivedKLC ? (parseFloat(token.derivedKLC) * 0.0003).toFixed(8) : undefined
+            // Do not calculate price with hardcoded KLC value - requires real market data
+            priceUSD: undefined // Price calculation requires real-time KLC price from market
           }));
 
           console.log(`✅ Fetched ${subgraphTokens.length} tokens from subgraph`);

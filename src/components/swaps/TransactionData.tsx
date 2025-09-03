@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useDexData, type DexTransaction } from '@/hooks/useDexData';
-import { useExplorerTransactions, type ExplorerTransaction } from '@/hooks/useExplorerTransactions';
+import { usePairSwaps, type FormattedSwap } from '@/hooks/usePairSwaps';
 import {
   Card,
   CardContent,
@@ -48,22 +47,23 @@ export default function TransactionData({ selectedPair, userAddress }: Transacti
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Use the Explorer API instead of DEX subgraph
+  // Use the subgraph for pair-specific transactions
   const {
-    transactions,
+    swaps,
     loading,
     error,
     refetch
-  } = useExplorerTransactions({
+  } = usePairSwaps({
+    pairAddress: selectedPair?.pairAddress,
     userAddress: activeTab === 'my' ? userAddress : null,
     limit: itemsPerPage * 5 // Get more transactions since we'll paginate client-side
   });
 
-  // Client-side pagination for explorer transactions
+  // Client-side pagination for swap transactions
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const paginatedTransactions = transactions.slice(startIndex, endIndex);
-  const totalPages = Math.ceil(transactions.length / itemsPerPage);
+  const paginatedSwaps = swaps.slice(startIndex, endIndex);
+  const totalPages = Math.ceil(swaps.length / itemsPerPage);
 
   // Reset page when switching tabs
   useEffect(() => {
@@ -71,8 +71,8 @@ export default function TransactionData({ selectedPair, userAddress }: Transacti
   }, [activeTab]);
 
   // Format timestamp
-  const formatTime = (timestamp: string) => {
-    const date = new Date(timestamp);
+  const formatTime = (timestamp: Date | string) => {
+    const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp;
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / (1000 * 60));
@@ -88,36 +88,7 @@ export default function TransactionData({ selectedPair, userAddress }: Transacti
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
-  // Get transaction type display for explorer transactions
-  const getTransactionTypeDisplay = (tx: ExplorerTransaction) => {
-    switch (tx.type) {
-      case 'KLC_SWAP':
-        return 'KLC Swap';
-      case 'TOKEN_SWAP':
-        return 'Token Swap';
-      default:
-        return 'Swap';
-    }
-  };
 
-  // Format KLC amount
-  const formatKlcAmount = (value?: string) => {
-    if (!value || value === '0') return '0';
-    return (parseFloat(value) / 1e18).toFixed(4);
-  };
-
-  // Get transaction value display
-  const getTransactionValue = (tx: ExplorerTransaction) => {
-    if (tx.tokenPair) {
-      return `${tx.tokenPair.token0} ↔ ${tx.tokenPair.token1}`;
-    } else if (tx.type === 'KLC_SWAP' && tx.klcValue) {
-      return `KLC ↔ Token (${formatKlcAmount(tx.klcValue)} KLC)`;
-    } else if (tx.type === 'TOKEN_SWAP') {
-      return 'Token ↔ Token';
-    } else {
-      return 'Swap Transaction';
-    }
-  };
 
   return (
     <Card className="w-full">
@@ -140,7 +111,7 @@ export default function TransactionData({ selectedPair, userAddress }: Transacti
                   <Loader2 className="h-6 w-6 animate-spin" />
                   <span className="ml-2">Loading transactions...</span>
                 </div>
-              ) : paginatedTransactions.length === 0 ? (
+              ) : paginatedSwaps.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <p>No recent transactions found</p>
                   {selectedPair && (
@@ -163,34 +134,48 @@ export default function TransactionData({ selectedPair, userAddress }: Transacti
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {paginatedTransactions.map((tx) => (
-                        <TableRow key={tx.id}>
+                      {paginatedSwaps.map((swap) => (
+                        <TableRow key={swap.id}>
                           <TableCell className="font-medium">
-                            {getTransactionTypeDisplay(tx)}
-                          </TableCell>
-                          <TableCell>
-                            {getTransactionValue(tx)}
-                          </TableCell>
-                          <TableCell>
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                              tx.status === 'success'
+                              swap.type === 'BUY'
                                 ? 'bg-green-100 text-green-800'
                                 : 'bg-red-100 text-red-800'
                             }`}>
-                              {tx.status === 'success' ? 'Success' : 'Failed'}
+                              {swap.type}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <div className="text-sm">
+                                {swap.token0Amount} {swap.token0Symbol}
+                              </div>
+                              <div className="text-sm">
+                                {swap.token1Amount} {swap.token1Symbol}
+                              </div>
+                              {swap.amountUSD > 0 && (
+                                <div className="text-xs text-gray-500">
+                                  ${swap.amountUSD.toFixed(2)}
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              Success
                             </span>
                           </TableCell>
                           <TableCell className="font-mono text-sm">
-                            {formatAddress(tx.from)}
+                            {formatAddress(swap.from)}
                           </TableCell>
                           <TableCell className="text-sm text-gray-500">
-                            {formatTime(tx.timestamp.toISOString())}
+                            {formatTime(swap.timestamp)}
                           </TableCell>
                           <TableCell>
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => window.open(`https://kalyscan.io/tx/${tx.hash}`, '_blank')}
+                              onClick={() => window.open(`https://kalyscan.io/tx/${swap.hash}`, '_blank')}
                             >
                               <ExternalLink className="h-4 w-4" />
                             </Button>
@@ -244,7 +229,7 @@ export default function TransactionData({ selectedPair, userAddress }: Transacti
                   <Loader2 className="h-6 w-6 animate-spin" />
                   <span className="ml-2">Loading your transactions...</span>
                 </div>
-              ) : paginatedTransactions.length === 0 ? (
+              ) : paginatedSwaps.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <p>No transactions found for your account</p>
                   {selectedPair && (
@@ -266,31 +251,45 @@ export default function TransactionData({ selectedPair, userAddress }: Transacti
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {paginatedTransactions.map((tx) => (
-                        <TableRow key={tx.id}>
+                      {paginatedSwaps.map((swap) => (
+                        <TableRow key={swap.id}>
                           <TableCell className="font-medium">
-                            {getTransactionTypeDisplay(tx)}
-                          </TableCell>
-                          <TableCell>
-                            {getTransactionValue(tx)}
-                          </TableCell>
-                          <TableCell>
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                              tx.status === 'success'
+                              swap.type === 'BUY'
                                 ? 'bg-green-100 text-green-800'
                                 : 'bg-red-100 text-red-800'
                             }`}>
-                              {tx.status === 'success' ? 'Success' : 'Failed'}
+                              {swap.type}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <div className="text-sm">
+                                {swap.token0Amount} {swap.token0Symbol}
+                              </div>
+                              <div className="text-sm">
+                                {swap.token1Amount} {swap.token1Symbol}
+                              </div>
+                              {swap.amountUSD > 0 && (
+                                <div className="text-xs text-gray-500">
+                                  ${swap.amountUSD.toFixed(2)}
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              Success
                             </span>
                           </TableCell>
                           <TableCell className="text-sm text-gray-500">
-                            {formatTime(tx.timestamp.toISOString())}
+                            {formatTime(swap.timestamp)}
                           </TableCell>
                           <TableCell>
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => window.open(`https://kalyscan.io/tx/${tx.hash}`, '_blank')}
+                              onClick={() => window.open(`https://kalyscan.io/tx/${swap.hash}`, '_blank')}
                             >
                               <ExternalLink className="h-4 w-4" />
                             </Button>

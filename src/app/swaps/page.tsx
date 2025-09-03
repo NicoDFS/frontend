@@ -784,7 +784,8 @@ function SwapsPageContent({
     volume24h,
     liquidity,
     isLoading: pairStatsLoading,
-    error: pairStatsError
+    error: pairStatsError,
+    pairAddress
   } = usePairMarketStats(swapState.fromToken || undefined, swapState.toToken || undefined);
 
   return (
@@ -812,7 +813,8 @@ function SwapsPageContent({
                 <TransactionData
                   selectedPair={{
                     token0Symbol: swapState.fromToken?.symbol || 'KLC',
-                    token1Symbol: swapState.toToken?.symbol || 'USDT'
+                    token1Symbol: swapState.toToken?.symbol || 'USDT',
+                    pairAddress: pairAddress
                   }}
                   userAddress={userAddress}
                 />

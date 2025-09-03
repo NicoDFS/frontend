@@ -27,6 +27,7 @@ import {
 import { TrendingUp, BarChart3, Maximize2, RefreshCw } from 'lucide-react';
 import { useHistoricalPriceData, formatTokenPrice, formatPriceChange } from '@/hooks/usePriceData';
 import { usePriceDataContext } from '@/contexts/PriceDataContext';
+import { usePairMarketStats } from '@/hooks/usePairMarketStats';
 
 // Token interface
 interface Token {
@@ -56,24 +57,16 @@ interface ChartProps {
   symbol?: string;
   baseSymbol?: string;
   height?: number;
-  showTimeframes?: boolean;
   showChartTypes?: boolean;
   className?: string;
 }
 
-// Time period options
-const TIME_PERIODS = [
-  { label: '15m', value: '15m', seconds: 900 },
-  { label: '1H', value: '1h', seconds: 3600 },
-  { label: '4H', value: '4h', seconds: 14400 },
-  { label: '1D', value: '1d', seconds: 86400 },
-  { label: '1W', value: '1w', seconds: 604800 },
-];
 
-// Chart type options
+
+// Chart type options - Line first since it works better with low volume data
 const CHART_TYPES = [
-  { label: 'Candlestick', value: 'candlestick', icon: BarChart3 },
   { label: 'Line', value: 'line', icon: TrendingUp },
+  { label: 'Candlestick', value: 'candlestick', icon: BarChart3 },
 ];
 
 // Generate mock price data for demonstration
@@ -114,7 +107,6 @@ export default function TradingChart({
   symbol = 'KLC',
   baseSymbol = 'USDT',
   height = 400,
-  showTimeframes = true,
   showChartTypes = true,
   className = '',
 }: ChartProps) {
@@ -122,8 +114,7 @@ export default function TradingChart({
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<any> | null>(null);
 
-  const [selectedTimeframe, setSelectedTimeframe] = useState('1h');
-  const [selectedChartType, setSelectedChartType] = useState('candlestick');
+  const [selectedChartType, setSelectedChartType] = useState('line');
 
   // Use Token objects if provided, otherwise fall back to legacy string props
   const currentTokenA = tokenA || (symbol ? { symbol, chainId: 3888, address: '', decimals: 18, name: symbol, logoURI: '' } as Token : null);
@@ -137,6 +128,12 @@ export default function TradingChart({
     refetch: refetchData
   } = useHistoricalPriceData(currentTokenA, currentTokenB);
 
+  // Get real-time pair-specific market stats for accurate 24hr volume
+  const {
+    volume24h: realVolume24h,
+    isLoading: volumeLoading
+  } = usePairMarketStats(currentTokenA || undefined, currentTokenB || undefined);
+
   console.log('🎯 TradingChart Debug:', {
     tokenA: currentTokenA?.symbol,
     tokenB: currentTokenB?.symbol,
@@ -146,6 +143,8 @@ export default function TradingChart({
     dataError,
     historicalDataLength: historicalData.length,
     historicalData: historicalData.slice(0, 2), // Show first 2 items
+    realVolume24h,
+    volumeLoading,
     timestamp: new Date().toISOString()
   });
 
@@ -179,12 +178,8 @@ export default function TradingChart({
     setSharedPriceChange(priceChange24h);
   }, [priceChange24h, setSharedPriceChange]);
 
-  const volume24h = React.useMemo(() => {
-    if (historicalData.length > 0) {
-      return historicalData[historicalData.length - 1].volume || 0;
-    }
-    return 0;
-  }, [historicalData]);
+  // Use real 24hr volume from market stats instead of incorrect calculation
+  const volume24h = realVolume24h || 0;
 
   // Initialize chart only when we have data and container will be rendered
   useEffect(() => {
@@ -215,17 +210,17 @@ export default function TradingChart({
       const chart = createChart(chartContainerRef.current, {
         layout: {
           background: { type: ColorType.Solid, color: 'transparent' },
-          textColor: '#374151',
+          textColor: '#ffffff', // Changed to white for better visibility
           fontSize: 12,
           fontFamily: 'Inter, system-ui, sans-serif',
         },
         grid: {
           vertLines: {
-            color: '#f3f4f6',
+            color: '#374151', // Darker grid lines
             style: LineStyle.Solid,
           },
           horzLines: {
-            color: '#f3f4f6',
+            color: '#374151', // Darker grid lines
             style: LineStyle.Solid,
           },
         },
@@ -243,7 +238,7 @@ export default function TradingChart({
           },
         },
         rightPriceScale: {
-          borderColor: '#e5e7eb',
+          borderColor: '#6b7280', // Lighter border for visibility
           scaleMargins: {
             top: 0.05,
             bottom: 0.1,
@@ -254,7 +249,7 @@ export default function TradingChart({
           visible: false,
         },
         timeScale: {
-          borderColor: '#e5e7eb',
+          borderColor: '#6b7280', // Lighter border for visibility
           timeVisible: true,
           secondsVisible: false,
         },
@@ -394,7 +389,7 @@ export default function TradingChart({
       chartRef.current?.timeScale().fitContent();
     }, 100);
 
-  }, [selectedChartType, selectedTimeframe, currentTokenA, currentTokenB, chartData]);
+  }, [selectedChartType, currentTokenA, currentTokenB, chartData]);
 
   console.log('TradingChart props:', {
     tokenA: currentTokenA?.symbol,
@@ -515,11 +510,18 @@ export default function TradingChart({
                 )}
               </div>
             )}
-            {volume24h && (
-              <div className="text-sm text-gray-600">
-                24h Volume: {volume24h.toLocaleString()}
-              </div>
-            )}
+            <div className="text-sm text-gray-600">
+              24h Volume: {volumeLoading ? (
+                <span className="inline-flex items-center gap-1">
+                  <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin" />
+                  Loading...
+                </span>
+              ) : volume24h > 0 ? (
+                `$${volume24h.toLocaleString()}`
+              ) : (
+                '$0'
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -552,25 +554,6 @@ export default function TradingChart({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-          )}
-
-          {showTimeframes && (
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">Timeframe:</span>
-              <div className="flex gap-1">
-                {TIME_PERIODS.map((period) => (
-                  <Button
-                    key={period.value}
-                    variant={selectedTimeframe === period.value ? 'default' : 'ghost'}
-                    size="sm"
-                    onClick={() => setSelectedTimeframe(period.value)}
-                    className="h-7 px-2 text-xs"
-                  >
-                    {period.label}
-                  </Button>
-                ))}
-              </div>
             </div>
           )}
         </div>

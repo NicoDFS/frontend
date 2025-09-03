@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { usePublicClient } from 'wagmi';
 import { ethers } from 'ethers';
 import { getPairAddress } from '@/utils/priceImpact';
-import { getFactoryData, getPairsData, getKalyswapDayData } from '@/lib/subgraph-client';
+import { getFactoryData, getPairsData, getKalyswapDayData, getPairDayData } from '@/lib/subgraph-client';
 
 // Import DEX contract ABIs
 import pairABI from '@/config/abis/dex/pairABI.json';
@@ -47,37 +47,7 @@ interface DexMarketStats {
   error: string | null;
 }
 
-// Generate mock data for demonstration (shared utility function)
-function generateMockPriceData(baseToken: string, quoteToken: string): PricePoint[] {
-  const data: PricePoint[] = [];
-  const now = Math.floor(Date.now() / 1000);
-  const basePrice = baseToken === 'KLC' || baseToken === 'wKLC' ? 0.0003 : 1.0;
 
-  // Generate 100 data points
-  for (let i = 99; i >= 0; i--) {
-    const time = now - (i * 3600); // 1 hour intervals
-    const randomFactor = 0.95 + Math.random() * 0.1; // ±5% variation
-    const price = basePrice * randomFactor;
-    const volatility = 0.02; // 2% volatility
-
-    const open = price;
-    const close = price * (0.98 + Math.random() * 0.04); // ±2% from open
-    const high = Math.max(open, close) * (1 + Math.random() * volatility);
-    const low = Math.min(open, close) * (1 - Math.random() * volatility);
-    const volume = Math.floor(Math.random() * 1000000);
-
-    data.push({
-      time,
-      open: parseFloat(open.toFixed(8)),
-      high: parseFloat(high.toFixed(8)),
-      low: parseFloat(low.toFixed(8)),
-      close: parseFloat(close.toFixed(8)),
-      volume,
-    });
-  }
-
-  return data;
-}
 
 // Hook for fetching price data
 export function usePriceData(pair: TokenPair, timeframe: string = '1h') {
@@ -88,64 +58,101 @@ export function usePriceData(pair: TokenPair, timeframe: string = '1h') {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Get public client for contract calls
+  const publicClient = usePublicClient();
 
 
-  // Fetch CoinGecko data for KLC/USDT
-  const fetchCoinGeckoData = useCallback(async () => {
+
+  // Fetch real chart data from subgraph for any pair
+  const fetchSubgraphChartData = useCallback(async () => {
     try {
-      // Check if this is KLC/USDT pair
-      const isKlcUsdtPair = (pair.baseToken === 'KLC' || pair.baseToken === 'wKLC') && (pair.quoteToken === 'USDT');
-
-      console.log('fetchCoinGeckoData called:', {
+      console.log('fetchSubgraphChartData called:', {
         baseToken: pair.baseToken,
         quoteToken: pair.quoteToken,
-        isKlcUsdtPair,
         timeframe
       });
 
-      if (!isKlcUsdtPair) {
-        // Use mock data for non-KLC/USDT pairs
-        const mockData = generateMockPriceData(pair.baseToken, pair.quoteToken);
-        setPriceData(mockData);
-
-        if (mockData.length > 0) {
-          const latest = mockData[mockData.length - 1];
-          setCurrentPrice(latest.close);
-          setPriceChange24h(2.5); // Mock change
-          setVolume24h(12345); // Mock volume
-        }
+      // We need a pair address to fetch data - this should be provided by the parent component
+      // For now, let's try to get it dynamically using the factory contract
+      if (!publicClient) {
+        console.log('⚠️ No publicClient available for pair address lookup');
         return;
       }
 
-      // Fetch real CoinGecko data for KLC
-      const days = timeframe === '1d' ? 1 : timeframe === '1w' ? 7 : timeframe === '1M' ? 30 : 1;
-      const response = await fetch(
-        `https://api.coingecko.com/api/v3/coins/kalycoin/ohlc?vs_currency=usd&days=${days}`
-      );
+      // Get token addresses
+      const tokenAddressMap: Record<string, string> = {
+        'KLC': '0x069255299bb729399f3cecabdc73d15d3d10a2a3', // wKLC address (KLC = wKLC for pricing)
+        'wKLC': '0x069255299bb729399f3cecabdc73d15d3d10a2a3',
+        'USDT': '0x2ca775c77b922a51fcf3097f52bffdbc0250d99a',
+        'KSWAP': '0xcc93b84ceed74dc28c746b7697d6fa477ffff65a',
+        'DAI': '0x6e92cac380f7a7b86f4163fad0df2f277b16edc6',
+        'CLISHA': '0x376e0ac0b55aa79f9b30aac8842e5e84ff06360c'
+      };
 
-      if (!response.ok) {
-        throw new Error(`CoinGecko API error: ${response.status}`);
+      const baseTokenAddress = tokenAddressMap[pair.baseToken];
+      const quoteTokenAddress = tokenAddressMap[pair.quoteToken];
+
+      if (!baseTokenAddress || !quoteTokenAddress) {
+        console.log(`⚠️ Token addresses not found for ${pair.baseToken}/${pair.quoteToken}`);
+        return;
       }
 
-      const ohlcData = await response.json();
+      // Get pair address from factory contract
+      const factoryAddress = '0xD42Af909d323D88e0E933B6c50D3e91c279004ca';
+      const factoryContract = {
+        address: factoryAddress as `0x${string}`,
+        abi: [
+          {
+            "constant": true,
+            "inputs": [{"name": "tokenA", "type": "address"}, {"name": "tokenB", "type": "address"}],
+            "name": "getPair",
+            "outputs": [{"name": "pair", "type": "address"}],
+            "type": "function"
+          }
+        ]
+      };
 
-      // Validate the response
-      if (!Array.isArray(ohlcData) || ohlcData.length === 0) {
-        throw new Error('Invalid CoinGecko data format');
+      const pairAddress = await publicClient.readContract({
+        ...factoryContract,
+        functionName: 'getPair',
+        args: [baseTokenAddress as `0x${string}`, quoteTokenAddress as `0x${string}`]
+      }) as string;
+
+      if (!pairAddress || pairAddress === '0x0000000000000000000000000000000000000000') {
+        console.log(`⚠️ No pair found for ${pair.baseToken}/${pair.quoteToken}`);
+        return;
       }
 
-      // Convert CoinGecko OHLC data to our format
-      // CoinGecko format: [timestamp, open, high, low, close]
-      const formattedData: PricePoint[] = ohlcData.map((item: number[]) => ({
-        time: Math.floor(item[0] / 1000), // Convert milliseconds to seconds
-        open: item[1],
-        high: item[2],
-        low: item[3],
-        close: item[4],
-        volume: Math.random() * 10000 + 5000, // Mock volume since CoinGecko OHLC doesn't include it
-      }));
+      console.log(`📊 Found pair address: ${pairAddress} for ${pair.baseToken}/${pair.quoteToken}`);
 
-      console.log(`Fetched ${formattedData.length} data points from CoinGecko for KLC`);
+      // Fetch pair day data from subgraph
+      const days = timeframe === '1d' ? 1 : timeframe === '1w' ? 7 : timeframe === '1M' ? 30 : 7;
+      const pairDayData = await getPairDayData(pairAddress.toLowerCase(), days, 0);
+
+      if (!pairDayData || pairDayData.length === 0) {
+        console.log(`⚠️ No chart data found for pair ${pairAddress}`);
+        return;
+      }
+
+      console.log(`📊 Fetched ${pairDayData.length} days of data for ${pair.baseToken}/${pair.quoteToken}`);
+
+      // Convert subgraph data to chart format
+      // Note: Subgraph provides daily data, so we'll create OHLC from daily prices
+      const formattedData: PricePoint[] = pairDayData.map((dayData: any) => {
+        // Calculate price from reserves (token1Price is quoteToken price in baseToken)
+        const price = parseFloat(dayData.reserve1) > 0 && parseFloat(dayData.reserve0) > 0
+          ? parseFloat(dayData.reserve1) / parseFloat(dayData.reserve0)
+          : 0;
+
+        return {
+          time: parseInt(dayData.date), // Unix timestamp
+          open: price, // For daily data, we'll use the same price for OHLC
+          high: price * 1.02, // Add small variation for visual purposes
+          low: price * 0.98,
+          close: price,
+          volume: parseFloat(dayData.dailyVolumeUSD || '0')
+        };
+      }).reverse(); // Reverse to get chronological order
 
       setPriceData(formattedData);
 
@@ -156,30 +163,20 @@ export function usePriceData(pair: TokenPair, timeframe: string = '1h') {
         setCurrentPrice(latest.close);
 
         // Calculate 24h change
-        const change = ((latest.close - first.close) / first.close) * 100;
+        const change = first.close > 0 ? ((latest.close - first.close) / first.close) * 100 : 0;
         setPriceChange24h(change);
 
-        // Calculate volume
+        // Calculate total volume
         const volume = formattedData.reduce((sum, point) => sum + point.volume, 0);
         setVolume24h(volume);
 
-        console.log(`KLC Chart Data: Price=${latest.close}, Change=${change.toFixed(2)}%`);
+        console.log(`📊 ${pair.baseToken}/${pair.quoteToken} Chart Data: Price=${latest.close.toFixed(6)}, Change=${change.toFixed(2)}%, Volume=${volume.toFixed(2)}`);
       }
 
     } catch (err) {
-      console.error('CoinGecko API error:', err);
-      // Fallback to mock data on error
-      const mockData = generateMockPriceData(pair.baseToken, pair.quoteToken);
-      setPriceData(mockData);
-
-      if (mockData.length > 0) {
-        const latest = mockData[mockData.length - 1];
-        setCurrentPrice(latest.close);
-        setPriceChange24h(2.5);
-        setVolume24h(12345);
-      }
+      console.error('Subgraph chart data error:', err);
     }
-  }, [pair.baseToken, pair.quoteToken, timeframe, generateMockPriceData]);
+  }, [pair.baseToken, pair.quoteToken, timeframe, publicClient]);
 
   // Fetch price data
   const fetchPriceData = useCallback(async () => {
@@ -187,14 +184,14 @@ export function usePriceData(pair: TokenPair, timeframe: string = '1h') {
       setIsLoading(true);
       setError(null);
 
-      await fetchCoinGeckoData();
+      await fetchSubgraphChartData();
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch price data');
     } finally {
       setIsLoading(false);
     }
-  }, [fetchCoinGeckoData]);
+  }, [fetchSubgraphChartData]);
 
   // Fetch data on mount and when dependencies change
   useEffect(() => {
@@ -346,11 +343,9 @@ export function useTokenPrice(symbol: string) {
             // USDT is our base currency
             calculatedPrice = 1.0;
           } else {
-            // Fallback: use derivedKLC * estimated KLC price
-            const derivedKLC = result.data?.token?.derivedKLC;
-            if (derivedKLC) {
-              calculatedPrice = parseFloat(derivedKLC) * 0.0003; // Estimated KLC price
-            }
+            // Cannot calculate price without market data - do not use hardcoded values
+            console.warn(`No market data available for ${symbol} - cannot calculate price`);
+            calculatedPrice = 0;
           }
 
           setPrice(calculatedPrice);
@@ -361,16 +356,15 @@ export function useTokenPrice(symbol: string) {
         }
       } catch (err) {
         console.error('❌ Error fetching token price:', err);
-        // Fallback to mock data
-        const mockPrices: Record<string, { price: number; change: number }> = {
-          'KLC': { price: 0.0003, change: 2.5 },
-          'wKLC': { price: 0.0003, change: 2.5 },
-          'USDT': { price: 1.0, change: 0.1 },
-          'KSWAP': { price: 0.15, change: 8.7 },
-        };
-        const tokenData = mockPrices[symbol] || { price: 1.0, change: 0 };
-        setPrice(tokenData.price);
-        setChange24h(tokenData.change);
+        // Only use stablecoin prices as fallback - no hardcoded token prices
+        if (symbol === 'USDT' || symbol === 'USDC' || symbol === 'DAI') {
+          setPrice(1.0);
+          setChange24h(0.1);
+        } else {
+          console.warn(`No market data available for ${symbol} - cannot provide price`);
+          setPrice(0);
+          setChange24h(0);
+        }
       } finally {
         setIsLoading(false);
       }
@@ -498,110 +492,167 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
       return;
     }
 
-    // If no pair exists, show no data (like Uniswap)
-    if (!pairAddress) {
-      console.log('⚠️ No pair exists for this token combination');
-      setPriceData([]);
-      setError('No liquidity pool exists for this token pair');
-      setIsLoading(false);
-      return;
-    }
-
     setIsLoading(true);
     setError(null);
 
     try {
-      console.log('🔍 Fetching historical price data directly from subgraph...');
+      // All pairs now use subgraph data - no more CoinGecko dependency
+
+      // For other pairs, try subgraph data
+      if (!pairAddress) {
+        console.log('⚠️ No pair exists for this token combination');
+        setPriceData([]);
+        setError('No liquidity pool exists for this token pair');
+        setIsLoading(false);
+        return;
+      }
+
+      console.log('🔍 Fetching historical price data from subgraph...');
 
       // Import the direct subgraph functions
-      const { getPairDayData, getPairData } = await import('@/lib/subgraph-client');
+      const { getPairHourData, getPairData } = await import('@/lib/subgraph-client');
 
-      // Fetch data directly from subgraph
-      const [dayData, pairData] = await Promise.all([
-        getPairDayData(pairAddress.toLowerCase(), 30, 0),
+      // Fetch hourly data for better chart granularity (168 hours = 7 days)
+      const [hourData, pairData] = await Promise.all([
+        getPairHourData(pairAddress.toLowerCase(), 168, 0),
         getPairData(pairAddress.toLowerCase())
       ]);
 
       console.log('📊 Direct subgraph response:', {
-        dayDataLength: dayData?.length || 0,
+        hourDataLength: hourData?.length || 0,
         pairData: pairData ? { id: pairData.id, reserve0: pairData.reserve0, reserve1: pairData.reserve1 } : null,
-        sampleDayData: dayData?.slice(0, 2)
+        sampleHourData: hourData?.slice(0, 2)
       });
 
-      if (dayData && pairData) {
+      if (hourData && pairData) {
         console.log('🔍 Raw subgraph data:', {
-          dayDataLength: dayData.length,
+          hourDataLength: hourData.length,
           pairData: pairData ? { id: pairData.id, reserve0: pairData.reserve0, reserve1: pairData.reserve1 } : null,
-          sampleDayData: dayData.slice(0, 2)
+          sampleHourData: hourData.slice(0, 2)
         });
 
-        // Get current price from pair reserves
-        let currentPrice = 0.0003; // Default fallback
+        // Get current price from pair reserves using same logic as historical data
+        let currentPrice = 0;
         if (pairData && pairData.token0 && pairData.token1) {
           const reserve0 = parseFloat(pairData.reserve0);
           const reserve1 = parseFloat(pairData.reserve1);
 
-          // Determine which token is which based on symbols
-          const isToken0WKLC = pairData.token0.symbol === 'WKLC' || pairData.token0.symbol === 'KLC';
-          const isToken1WKLC = pairData.token1.symbol === 'WKLC' || pairData.token1.symbol === 'KLC';
-
-          if (isToken0WKLC && reserve0 > 0) {
-            // WKLC is token0, price = reserve1 / reserve0
-            currentPrice = reserve1 / reserve0;
-          } else if (isToken1WKLC && reserve1 > 0) {
-            // WKLC is token1, price = reserve0 / reserve1
-            currentPrice = reserve0 / reserve1;
+          if (reserve0 > 0 && reserve1 > 0) {
+            // Use same logic as historical data calculation
+            if (pairData.token0.symbol === tokenA?.symbol) {
+              // tokenA is token0, so price = reserve1/reserve0 (how much token1 per token0)
+              currentPrice = reserve1 / reserve0;
+            } else if (pairData.token1.symbol === tokenA?.symbol) {
+              // tokenA is token1, so price = reserve0/reserve1 (how much token0 per token1)
+              currentPrice = reserve0 / reserve1;
+            } else {
+              // Fallback: assume we want token1 price in token0
+              currentPrice = reserve1 / reserve0;
+            }
           }
 
           console.log('💰 Current price calculation:', {
+            tokenA: tokenA?.symbol,
+            tokenB: tokenB?.symbol,
             token0: pairData.token0.symbol,
             token1: pairData.token1.symbol,
             reserve0,
             reserve1,
-            calculatedPrice: currentPrice
+            calculatedPrice: currentPrice.toFixed(8)
           });
         }
 
-        if (dayData.length > 0) {
-          // Convert subgraph data to OHLCV format - keep it simple like the working version
-          const historicalData: PricePoint[] = dayData
-            .map((day: any, index: number) => {
-              const volume = parseFloat(day.dailyVolumeUSD || '0');
+        if (hourData.length > 0) {
+          // We need to know which token is which to calculate the correct price
+          // Get the pair info to understand token0 vs token1
+          const pairInfo = pairData;
 
-              // Use current price for most recent day, generate historical prices with variation
-              let price = currentPrice;
-              if (index < dayData.length - 1) {
-                // Generate historical prices with some variation
-                const daysAgo = dayData.length - 1 - index;
-                const variation = (Math.random() - 0.5) * 0.1; // ±5% variation
-                price = currentPrice * (1 + variation * (daysAgo / dayData.length));
+          console.log('🔍 Pair info for price calculation:', {
+            pairAddress: pairInfo?.id,
+            token0: pairInfo?.token0?.symbol,
+            token1: pairInfo?.token1?.symbol,
+            targetTokenA: tokenA?.symbol,
+            targetTokenB: tokenB?.symbol
+          });
+
+          // Convert subgraph hourly data to OHLCV format using REAL price data from reserves
+          const historicalData: PricePoint[] = hourData
+            .map((hour: any) => {
+              const volume = parseFloat(hour.hourlyVolumeUSD || '0');
+
+              const reserve0 = parseFloat(hour.reserve0 || '0');
+              const reserve1 = parseFloat(hour.reserve1 || '0');
+
+              if (reserve0 <= 0 || reserve1 <= 0) {
+                return null; // Skip invalid data
               }
 
-              // Convert day ID to timestamp (day * 86400 seconds)
-              const timestamp = day.date * 86400;
+              // Calculate price correctly based on which token we want the price for
+              // If we want tokenA price in terms of tokenB:
+              // - If tokenA is token0, price = reserve1/reserve0 (token1 per token0)
+              // - If tokenA is token1, price = reserve0/reserve1 (token0 per token1)
+
+              let price = 0;
+              let calculation = '';
+
+              if (pairInfo?.token0?.symbol === tokenA?.symbol) {
+                // tokenA is token0, so price = reserve1/reserve0 (how much token1 per token0)
+                price = reserve1 / reserve0;
+                calculation = `${reserve1}/${reserve0} (${tokenA?.symbol} is token0)`;
+              } else if (pairInfo?.token1?.symbol === tokenA?.symbol) {
+                // tokenA is token1, so price = reserve0/reserve1 (how much token0 per token1)
+                price = reserve0 / reserve1;
+                calculation = `${reserve0}/${reserve1} (${tokenA?.symbol} is token1)`;
+              } else {
+                // Fallback: assume we want token1 price in token0
+                price = reserve1 / reserve0;
+                calculation = `${reserve1}/${reserve0} (fallback)`;
+              }
+
+              // Log the first calculation for debugging
+              if (hourData.indexOf(hour) === 0) {
+                console.log('💰 Price calculation debug:', {
+                  tokenA: tokenA?.symbol,
+                  tokenB: tokenB?.symbol,
+                  token0: pairInfo?.token0?.symbol,
+                  token1: pairInfo?.token1?.symbol,
+                  reserve0,
+                  reserve1,
+                  calculation,
+                  finalPrice: price.toFixed(8)
+                });
+              }
+
+              const timestamp = parseInt(hour.hourStartUnix);
 
               return {
                 time: timestamp,
-                open: price * (0.98 + Math.random() * 0.04), // Random open within 2% of close
-                high: price * (1.01 + Math.random() * 0.02), // High 1-3% above close
-                low: price * (0.97 + Math.random() * 0.02),  // Low 1-3% below close
+                open: price,
+                high: price * 1.005, // Smaller variation for hourly data
+                low: price * 0.995,
                 close: price,
                 volume: volume
               };
             })
+            .filter((point: any) => point !== null && point.close > 0) // Filter out invalid price points
             .sort((a: any, b: any) => (a.time as number) - (b.time as number)); // Sort by time ascending
 
-          console.log(`✅ Processed ${historicalData.length} historical price points`);
+          console.log(`✅ Processed ${historicalData.length} REAL historical price points from subgraph`);
+          console.log('📊 Sample data points:', historicalData.slice(0, 3).map(p => ({
+            time: typeof p.time === 'number' ? new Date(p.time * 1000).toISOString().split('T')[0] : 'invalid',
+            price: p.close.toFixed(8),
+            volume: p.volume.toFixed(2)
+          })));
           setPriceData(historicalData);
         } else {
-          console.log('⚠️ No historical data available');
+          console.log('⚠️ No historical data available - subgraph may not be fully synced');
           setPriceData([]);
-          setError('No historical data available for this pair');
+          setError('Chart data not available - subgraph is syncing');
         }
       } else {
-        console.log('⚠️ No data returned from subgraph');
+        console.log('⚠️ No data returned from subgraph - pair may not be indexed yet');
         setPriceData([]);
-        setError('No data available for this pair');
+        setError('Chart data not available - pair not indexed in subgraph yet');
       }
     } catch (err) {
       console.error('❌ Error fetching historical price data:', err);
@@ -680,8 +731,8 @@ export function useDexMarketStats(): DexMarketStats {
         const pairs = pairsData || [];
         const dayDatas = dayData || [];
 
-        // Calculate KLC price from WKLC/USDT pairs
-        let calculatedKlcPrice = 0.0003; // Default fallback
+        // Calculate KLC price from WKLC/USDT pairs - no hardcoded fallback
+        let calculatedKlcPrice = 0;
         let totalLiquidityUsd = 0;
 
         if (pairs.length > 0) {
