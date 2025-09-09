@@ -1,6 +1,15 @@
 import { createConnector } from 'wagmi'
 import { Address, Hash, TransactionRequest } from 'viem'
 import { kalychain } from '@/config/chains'
+import { arbitrum, bsc } from 'viem/chains'
+
+// Supported chains for internal wallet
+const SUPPORTED_CHAINS = [kalychain, bsc, arbitrum]
+
+// Helper function to get chain by ID
+const getChainById = (chainId: number) => {
+  return SUPPORTED_CHAINS.find(chain => chain.id === chainId)
+}
 
 // Internal wallet state management
 interface InternalWalletState {
@@ -269,10 +278,29 @@ export const internalWalletConnector = createConnector((config) => {
   },
 
   async switchChain({ chainId }) {
-    if (chainId !== kalychain.id) {
-      throw new Error('KalySwap Internal Wallet only supports KalyChain')
+    // Check if chain is supported
+    const targetChain = getChainById(chainId)
+    if (!targetChain) {
+      throw new Error(`Unsupported chain: ${chainId}. Supported chains: ${SUPPORTED_CHAINS.map(c => c.name).join(', ')}`)
     }
-    return kalychain
+
+    // Check if user has a wallet for this chain
+    const walletForChain = internalWalletState.availableWallets.find(w => w.chainId === chainId)
+
+    if (!walletForChain) {
+      throw new Error(`No wallet found for ${targetChain.name}. Please create a wallet for this chain first.`)
+    }
+
+    // Switch to wallet for the requested chain
+    internalWalletState.activeWallet = walletForChain
+    saveStateToStorage(internalWalletState)
+
+    // Emit chain changed event
+    eventTarget.dispatchEvent(new CustomEvent('chainChanged', {
+      detail: { chainId }
+    }))
+
+    return targetChain
   },
 
   onAccountsChanged(accounts) {
@@ -359,12 +387,15 @@ export const internalWalletConnector = createConnector((config) => {
 
         return result.data.sendContractTransaction.hash as Hash
       } else {
-        // Handle simple transfer (existing logic)
+        // Handle simple transfer with chain-specific native token
+        const chain = getChainById(internalWalletState.activeWallet.chainId)
+        const nativeTokenSymbol = chain?.nativeCurrency.symbol || 'ETH'
+
         const transactionInput = {
           walletId: internalWalletState.activeWallet.id,
           toAddress: parameters.to,
           amount: parameters.value?.toString() || '0',
-          asset: 'KLC', // Default to KLC for now
+          asset: nativeTokenSymbol, // Use chain-specific native token
           password: password,
           chainId: internalWalletState.activeWallet.chainId,
           gasLimit: parameters.gas?.toString(),
@@ -430,15 +461,18 @@ async function showWalletSelectionModal(wallets: Array<{ id: string; address: Ad
       <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
         <h3 class="text-lg font-semibold mb-4">Select Internal Wallet</h3>
         <div class="space-y-2">
-          ${wallets.map((wallet, index) => `
-            <button 
-              class="w-full p-3 text-left border rounded-lg hover:bg-gray-50 wallet-option" 
+          ${wallets.map((wallet, index) => {
+            const chain = getChainById(wallet.chainId)
+            return `
+            <button
+              class="w-full p-3 text-left border rounded-lg hover:bg-gray-50 wallet-option"
               data-wallet-index="${index}"
             >
               <div class="font-medium">${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}</div>
-              <div class="text-sm text-gray-500">KalyChain</div>
+              <div class="text-sm text-gray-500">${chain?.name || `Chain ${wallet.chainId}`}</div>
             </button>
-          `).join('')}
+            `
+          }).join('')}
         </div>
         <button class="mt-4 w-full px-4 py-2 bg-gray-200 rounded-lg cancel-btn">Cancel</button>
       </div>
@@ -531,6 +565,38 @@ export const internalWalletUtils = {
       saveStateToStorage(internalWalletState)
       eventTarget.dispatchEvent(new CustomEvent('accountsChanged', { detail: [wallet.address] }))
     }
+  },
+  addWallet: (wallet: { id: string; address: Address; chainId: number }) => {
+    initializeClientState()
+    // Check if wallet already exists
+    const exists = internalWalletState.availableWallets.some(w => w.id === wallet.id)
+    if (!exists) {
+      internalWalletState.availableWallets.push(wallet)
+      saveStateToStorage(internalWalletState)
+      eventTarget.dispatchEvent(new CustomEvent('walletsChanged', { detail: internalWalletState.availableWallets }))
+    }
+  },
+  removeWallet: (walletId: string) => {
+    initializeClientState()
+    internalWalletState.availableWallets = internalWalletState.availableWallets.filter(w => w.id !== walletId)
+    if (internalWalletState.activeWallet?.id === walletId) {
+      internalWalletState.activeWallet = null
+      internalWalletState.isConnected = false
+    }
+    saveStateToStorage(internalWalletState)
+    eventTarget.dispatchEvent(new CustomEvent('walletsChanged', { detail: internalWalletState.availableWallets }))
+  },
+  switchToChain: async (chainId: number) => {
+    initializeClientState()
+    const walletForChain = internalWalletState.availableWallets.find(w => w.chainId === chainId)
+    if (walletForChain) {
+      internalWalletState.activeWallet = walletForChain
+      saveStateToStorage(internalWalletState)
+      eventTarget.dispatchEvent(new CustomEvent('chainChanged', { detail: { chainId } }))
+      eventTarget.dispatchEvent(new CustomEvent('accountsChanged', { detail: [walletForChain.address] }))
+      return true
+    }
+    return false
   },
   addEventListener: (event: string, handler: EventListener) => {
     eventTarget.addEventListener(event, handler)

@@ -114,11 +114,18 @@ const ME_QUERY = `
         address
         chainId
         balance {
-          klc
+          native {
+            symbol
+            balance
+            formattedBalance
+          }
           tokens {
             symbol
             balance
             address
+            formattedBalance
+            decimals
+            name
           }
         }
         transactions(limit: 10) {
@@ -142,11 +149,25 @@ const ME_QUERY = `
 `;
 
 const CREATE_WALLET_MUTATION = `
-  mutation CreateWallet($password: String!) {
-    createWallet(password: $password) {
+  mutation CreateWallet($password: String!, $chainId: Int) {
+    createWallet(password: $password, chainId: $chainId) {
       id
       address
       chainId
+    }
+  }
+`;
+
+const SUPPORTED_CHAINS_QUERY = `
+  query SupportedChains {
+    supportedChains {
+      chainId
+      name
+      symbol
+      decimals
+      rpcUrl
+      blockExplorer
+      isTestnet
     }
   }
 `;
@@ -165,11 +186,30 @@ interface Token {
   symbol: string;
   balance: string;
   address: string;
+  formattedBalance: string;
+  decimals: number;
+  name: string;
+}
+
+interface NativeTokenBalance {
+  symbol: string;
+  balance: string;
+  formattedBalance: string;
 }
 
 interface WalletBalance {
-  klc: string;
+  native: NativeTokenBalance;
   tokens: Token[];
+}
+
+interface ChainInfo {
+  chainId: number;
+  name: string;
+  symbol: string;
+  decimals: number;
+  rpcUrl: string;
+  blockExplorer: string;
+  isTestnet: boolean;
 }
 
 interface Transaction {
@@ -206,9 +246,27 @@ interface User {
 export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
+
+  // Helper function to get chain name
+  const getChainName = (chainId: number): string => {
+    const chain = supportedChains.find(c => c.chainId === chainId);
+    return chain?.name || `Chain ${chainId}`;
+  };
+
+  // Helper function to get chain symbol
+  const getChainSymbol = (chainId: number): string => {
+    const chain = supportedChains.find(c => c.chainId === chainId);
+    return chain?.symbol || 'ETH';
+  };
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createWalletPassword, setCreateWalletPassword] = useState('');
+  const [selectedChainId, setSelectedChainId] = useState<number>(3888); // Default to KalyChain
+  const [supportedChains, setSupportedChains] = useState<ChainInfo[]>([
+    { chainId: 3888, name: 'KalyChain', symbol: 'KLC', decimals: 18, rpcUrl: '', blockExplorer: 'https://kalyscan.io', isTestnet: false },
+    { chainId: 56, name: 'BNB Smart Chain', symbol: 'BNB', decimals: 18, rpcUrl: '', blockExplorer: 'https://bscscan.com', isTestnet: false },
+    { chainId: 42161, name: 'Arbitrum One', symbol: 'ETH', decimals: 18, rpcUrl: '', blockExplorer: 'https://arbiscan.io', isTestnet: false }
+  ]);
   const [exportWalletId, setExportWalletId] = useState<string | null>(null);
   const [exportPassword, setExportPassword] = useState('');
   const [exportKeystore, setExportKeystore] = useState<string | null>(null);
@@ -222,7 +280,7 @@ export default function DashboardPage() {
   const [sendWalletId, setSendWalletId] = useState<string | null>(null);
   const [sendToAddress, setSendToAddress] = useState('');
   const [sendAmount, setSendAmount] = useState('');
-  const [sendAsset, setSendAsset] = useState('KLC');
+  const [sendAsset, setSendAsset] = useState(''); // Will be updated when wallet is selected
   const [sendPassword, setSendPassword] = useState('');
   const [sendError, setSendError] = useState<string | null>(null);
   const [sendingTransaction, setSendingTransaction] = useState(false);
@@ -267,6 +325,36 @@ export default function DashboardPage() {
     fetchUserData();
   }, [router]);
 
+  // Fetch supported chains
+  useEffect(() => {
+    const fetchSupportedChains = async () => {
+      try {
+        const response = await fetch('/api/graphql', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            query: SUPPORTED_CHAINS_QUERY,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (result.errors) {
+          console.error('Error fetching supported chains:', result.errors[0].message);
+          return;
+        }
+
+        setSupportedChains(result.data.supportedChains);
+      } catch (err) {
+        console.error('Error fetching supported chains:', err);
+      }
+    };
+
+    fetchSupportedChains();
+  }, []);
+
   // Handle wallet creation
   const handleCreateWallet = async () => {
     try {
@@ -295,6 +383,7 @@ export default function DashboardPage() {
           query: CREATE_WALLET_MUTATION,
           variables: {
             password: createWalletPassword,
+            chainId: selectedChainId,
           },
         }),
       });
@@ -444,19 +533,24 @@ export default function DashboardPage() {
         return;
       }
 
-      // Check if sending KLC and if balance is sufficient
-      if (sendAsset === 'KLC' && wallet.balance) {
-        const balance = parseFloat(wallet.balance.klc);
+      // Check if sending native token and if balance is sufficient
+      const chainSymbol = getChainSymbol(wallet.chainId);
+      if (sendAsset === chainSymbol && wallet.balance) {
+        const balance = parseFloat(
+          wallet.balance.native ?
+            wallet.balance.native.formattedBalance :
+            '0'
+        );
         const amount = parseFloat(sendAmount);
 
         if (amount > balance) {
-          setSendError('Insufficient KLC balance');
+          setSendError(`Insufficient ${chainSymbol} balance`);
           return;
         }
       }
 
       // Check if sending token and if balance is sufficient
-      if (sendAsset !== 'KLC' && wallet.balance) {
+      if (sendAsset !== getChainSymbol(wallet.chainId) && wallet.balance) {
         // sendAsset could be either a symbol or an address, find the token
         const token = wallet.balance.tokens.find(t =>
           t.symbol === sendAsset || t.address === sendAsset
@@ -604,9 +698,9 @@ export default function DashboardPage() {
                       <Card key={wallet.id} className="wallet-card">
                         <CardHeader className="wallet-header">
                           <div className="flex justify-between items-start">
-                            <CardTitle className="text-lg">KalyChain Wallet</CardTitle>
+                            <CardTitle className="text-lg">{getChainName(wallet.chainId)} Wallet</CardTitle>
                             <div className="text-xs bg-blue-500/20 text-blue-300 px-2 py-1 rounded-full border border-blue-500/30">
-                              Chain ID: {wallet.chainId}
+                              {getChainSymbol(wallet.chainId)} • {wallet.chainId}
                             </div>
                           </div>
                           <div className="wallet-address" title={wallet.address}>
@@ -624,11 +718,18 @@ export default function DashboardPage() {
                               <div>
                                 <div className="text-sm text-slate-400 mb-1">Balance</div>
                                 <div className="wallet-balance flex items-center gap-2">
-                                  <TokenIcon symbol="KLC" size={24} />
-                                  <span>{wallet.balance ? formatBalance(wallet.balance.klc) : '0'} KLC</span>
+                                  <TokenIcon symbol={getChainSymbol(wallet.chainId)} size={24} />
+                                  <span>
+                                    {wallet.balance ?
+                                      (wallet.balance.native ?
+                                        formatBalance(wallet.balance.native.formattedBalance) :
+                                        formatBalance('0')
+                                      ) : '0'
+                                    } {getChainSymbol(wallet.chainId)}
+                                  </span>
                                 </div>
 
-                                {wallet.balance && wallet.balance.tokens.length > 0 && (
+                                {wallet.balance && wallet.balance.tokens && wallet.balance.tokens.length > 0 && (
                                   <div className="token-list">
                                     <div className="text-sm text-slate-400 mb-2">Tokens</div>
                                     {wallet.balance.tokens.map((token, index) => (
@@ -638,7 +739,7 @@ export default function DashboardPage() {
                                         </div>
                                         <div className="token-details">
                                           <div className="token-symbol">{token.symbol}</div>
-                                          <div className="token-balance">{formatBalance(token.balance)}</div>
+                                          <div className="token-balance">{formatBalance(token.formattedBalance || token.balance)}</div>
                                         </div>
                                       </div>
                                     ))}
@@ -744,7 +845,7 @@ export default function DashboardPage() {
                                     setSendAmount('');
                                     setSendPassword('');
                                     setSendError(null);
-                                    setSendAsset('KLC');
+                                    setSendAsset(getChainSymbol(wallet.chainId)); // Set to chain's native token
                                   }}
                                 >
                                   <Send className="h-4 w-4 mr-1" />
@@ -777,7 +878,9 @@ export default function DashboardPage() {
                                         <SelectValue placeholder="Select asset" />
                                       </SelectTrigger>
                                       <SelectContent className="select-content">
-                                        <SelectItem value="KLC">KLC (Native)</SelectItem>
+                                        <SelectItem value={getChainSymbol(wallet.chainId)}>
+                                          {getChainSymbol(wallet.chainId)} (Native)
+                                        </SelectItem>
                                         {wallet.balance?.tokens
                                           .filter((token) => token.address && token.address.trim() !== '')
                                           .map((token, index) => (
@@ -823,7 +926,7 @@ export default function DashboardPage() {
                                         className="pr-16 bg-slate-800 border-slate-600 text-white placeholder:text-slate-400"
                                       />
                                       <div className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 pointer-events-none">
-                                        {sendAsset === 'KLC' ? 'KLC' : (() => {
+                                        {sendAsset === getChainSymbol(wallet.chainId) ? getChainSymbol(wallet.chainId) : (() => {
                                           const token = wallet.balance?.tokens.find(t => t.address === sendAsset);
                                           return token?.symbol || sendAsset;
                                         })()}
@@ -834,13 +937,17 @@ export default function DashboardPage() {
                                       <div className="flex justify-between mt-1">
                                         <span className="text-xs text-slate-400">
                                           Available: {
-                                            sendAsset === 'KLC'
-                                              ? `${formatBalance(wallet.balance.klc)} KLC`
+                                            sendAsset === getChainSymbol(wallet.chainId)
+                                              ? `${formatBalance(
+                                                  wallet.balance.native ?
+                                                    wallet.balance.native.formattedBalance :
+                                                    '0'
+                                                )} ${getChainSymbol(wallet.chainId)}`
                                               : (() => {
-                                                  const token = wallet.balance?.tokens.find(t =>
+                                                  const token = wallet.balance?.tokens?.find(t =>
                                                     t.symbol === sendAsset || t.address === sendAsset
                                                   );
-                                                  return `${formatBalance(token?.balance || '0')} ${token?.symbol || sendAsset}`;
+                                                  return `${formatBalance(token?.formattedBalance || token?.balance || '0')} ${token?.symbol || sendAsset}`;
                                                 })()
                                           }
                                         </span>
@@ -848,13 +955,17 @@ export default function DashboardPage() {
                                           type="button"
                                           className="text-xs text-blue-400 hover:underline hover:text-blue-300"
                                           onClick={() => {
-                                            if (sendAsset === 'KLC') {
-                                              setSendAmount(wallet.balance?.klc || '0');
+                                            if (sendAsset === getChainSymbol(wallet.chainId)) {
+                                              setSendAmount(
+                                                wallet.balance?.native ?
+                                                  wallet.balance.native.formattedBalance :
+                                                  '0'
+                                              );
                                             } else {
-                                              const token = wallet.balance?.tokens.find(t =>
+                                              const token = wallet.balance?.tokens?.find(t =>
                                                 t.symbol === sendAsset || t.address === sendAsset
                                               );
-                                              setSendAmount(token?.balance || '0');
+                                              setSendAmount(token?.formattedBalance || token?.balance || '0');
                                             }
                                           }}
                                         >
@@ -1018,7 +1129,7 @@ export default function DashboardPage() {
                         <DialogHeader>
                           <DialogTitle className="text-white">Create New Wallet</DialogTitle>
                           <DialogDescription className="text-slate-400">
-                            Create a new KalyChain wallet. Your password will be used to encrypt the private key.
+                            Create a new wallet for your selected blockchain. Your password will be used to encrypt the private key.
                           </DialogDescription>
                         </DialogHeader>
 
@@ -1029,20 +1140,43 @@ export default function DashboardPage() {
                           </div>
                         )}
 
-                        <div className="mt-4">
-                          <Label htmlFor="wallet-password">Password</Label>
-                          <Input
-                            id="wallet-password"
-                            type="password"
-                            value={createWalletPassword}
-                            onChange={(e) => setCreateWalletPassword(e.target.value)}
-                            placeholder="Enter a secure password (min 8 characters)"
-                            className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-400"
-                          />
-                          <p className="text-xs text-slate-400 mt-1">
-                            This password will be used to encrypt your wallet's private key.
-                            Make sure to use a strong password and keep it safe.
-                          </p>
+                        <div className="space-y-4 mt-4">
+                          {/* Chain Selection */}
+                          <div>
+                            <Label htmlFor="chain-select">Blockchain</Label>
+                            <select
+                              id="chain-select"
+                              value={selectedChainId}
+                              onChange={(e) => setSelectedChainId(parseInt(e.target.value))}
+                              className="w-full p-2 bg-slate-800 border border-slate-600 rounded-md text-white"
+                            >
+                              {supportedChains.map((chain) => (
+                                <option key={chain.chainId} value={chain.chainId}>
+                                  {chain.name} ({chain.symbol})
+                                </option>
+                              ))}
+                            </select>
+                            <p className="text-xs text-slate-400 mt-1">
+                              Select the blockchain network for your new wallet.
+                            </p>
+                          </div>
+
+                          {/* Password Input */}
+                          <div>
+                            <Label htmlFor="wallet-password">Password</Label>
+                            <Input
+                              id="wallet-password"
+                              type="password"
+                              value={createWalletPassword}
+                              onChange={(e) => setCreateWalletPassword(e.target.value)}
+                              placeholder="Enter a secure password (min 8 characters)"
+                              className="bg-slate-800 border-slate-600 text-white placeholder:text-slate-400"
+                            />
+                            <p className="text-xs text-slate-400 mt-1">
+                              This password will be used to encrypt your wallet's private key.
+                              Make sure to use a strong password and keep it safe.
+                            </p>
+                          </div>
                         </div>
 
                         <DialogFooter className="mt-4">
