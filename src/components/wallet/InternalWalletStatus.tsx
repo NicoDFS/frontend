@@ -39,11 +39,13 @@ export default function InternalWalletStatus() {
     internalWalletUtils.addEventListener('connect', handleStateChange)
     internalWalletUtils.addEventListener('disconnect', handleStateChange)
     internalWalletUtils.addEventListener('accountsChanged', handleStateChange)
+    internalWalletUtils.addEventListener('chainChanged', handleStateChange)
 
     return () => {
       internalWalletUtils.removeEventListener('connect', handleStateChange)
       internalWalletUtils.removeEventListener('disconnect', handleStateChange)
       internalWalletUtils.removeEventListener('accountsChanged', handleStateChange)
+      internalWalletUtils.removeEventListener('chainChanged', handleStateChange)
     }
   }, [])
 
@@ -71,39 +73,7 @@ export default function InternalWalletStatus() {
             </p>
           )}
         </div>
-        <div className="flex gap-2">
-          {internalWalletState.availableWallets.length > 1 && (
-            <button
-              onClick={() => {
-                // Show wallet selection
-                const walletOptions = internalWalletState.availableWallets
-                  .filter(w => w.address !== address)
-                  .map(w => ({
-                    label: `${w.address.slice(0, 6)}...${w.address.slice(-4)} (${getChainName(w.chainId)})`,
-                    value: w.id
-                  }))
-                
-                if (walletOptions.length > 0) {
-                  // Simple selection for now - in production, show a proper modal
-                  const selection = prompt(`Select wallet:\n${walletOptions.map((w, i) => `${i + 1}. ${w.label}`).join('\n')}`)
-                  const index = parseInt(selection || '0') - 1
-                  if (index >= 0 && index < walletOptions.length) {
-                    internalWalletUtils.selectWallet(walletOptions[index].value)
-                  }
-                }
-              }}
-              className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
-            >
-              Switch
-            </button>
-          )}
-          <button
-            onClick={() => disconnect()}
-            className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
-          >
-            Disconnect
-          </button>
-        </div>
+
       </div>
     </div>
   )

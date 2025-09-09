@@ -515,7 +515,7 @@ export default function SwapsPage() {
             {
               symbol: 'KLC',
               address: 'KLC',
-              balance: wallet.balance?.klc || '0',
+              balance: wallet.balance?.native?.formattedBalance || '0',
               isNative: true
             },
             ...(wallet.balance?.tokens || []).map((token: any) => ({

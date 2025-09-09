@@ -6,6 +6,7 @@ import { RainbowKitProvider } from '@rainbow-me/rainbowkit'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { wagmiConfig } from '@/config/wagmi.config'
 import { useHydration } from '@/hooks/useHydration'
+import { kalychain } from '@/config/chains'
 
 // Import Rainbow Kit styles
 import '@rainbow-me/rainbowkit/styles.css'
@@ -30,15 +31,19 @@ const queryClient = new QueryClient({
 function WalletProvidersClient({ children }: WalletProvidersClientProps) {
   const isHydrated = useHydration()
 
-  // Initialize internal wallet state on client side
+  // Initialize internal wallet state on client side after hydration
   useEffect(() => {
     if (isHydrated) {
-      // Dynamically import and initialize internal wallet to avoid SSR issues
-      import('@/connectors/internalWallet').then(({ internalWalletUtils }) => {
-        internalWalletUtils.initialize()
-      }).catch(error => {
-        console.warn('Failed to initialize internal wallet:', error)
-      })
+      // Use setTimeout to defer initialization until after React has finished hydrating
+      const timeoutId = setTimeout(() => {
+        import('@/connectors/internalWallet').then(({ internalWalletUtils }) => {
+          internalWalletUtils.initialize()
+        }).catch(error => {
+          console.warn('Failed to initialize internal wallet:', error)
+        })
+      }, 0)
+
+      return () => clearTimeout(timeoutId)
     }
   }, [isHydrated])
 
@@ -53,7 +58,7 @@ function WalletProvidersClient({ children }: WalletProvidersClientProps) {
         <RainbowKitProvider
           modalSize="compact"
           showRecentTransactions={true}
-          initialChain={wagmiConfig.chains[0]}
+          initialChain={kalychain}
         >
           {children}
         </RainbowKitProvider>

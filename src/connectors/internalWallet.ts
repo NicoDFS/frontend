@@ -300,6 +300,16 @@ export const internalWalletConnector = createConnector((config) => {
       detail: { chainId }
     }))
 
+    // Also emit connect event to force wagmi to re-sync
+    setTimeout(() => {
+      eventTarget.dispatchEvent(new CustomEvent('connect', {
+        detail: {
+          accounts: [walletForChain.address],
+          chainId: chainId
+        }
+      }))
+    }, 0)
+
     return targetChain
   },
 
@@ -594,6 +604,17 @@ export const internalWalletUtils = {
       saveStateToStorage(internalWalletState)
       eventTarget.dispatchEvent(new CustomEvent('chainChanged', { detail: { chainId } }))
       eventTarget.dispatchEvent(new CustomEvent('accountsChanged', { detail: [walletForChain.address] }))
+
+      // Also emit connect event to force wagmi to re-sync
+      setTimeout(() => {
+        eventTarget.dispatchEvent(new CustomEvent('connect', {
+          detail: {
+            accounts: [walletForChain.address],
+            chainId: chainId
+          }
+        }))
+      }, 0)
+
       return true
     }
     return false

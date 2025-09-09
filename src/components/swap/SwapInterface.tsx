@@ -200,6 +200,11 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
   const [isSwapping, setIsSwapping] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [currentStep, setCurrentStep] = useState<'idle' | 'approving' | 'swapping' | 'complete'>('idle');
+
+  // Check if user is using internal wallet and if it's on the correct chain
+  const isUsingInternalWallet = () => connector?.id === 'kalyswap-internal';
+  const internalWalletState = isUsingInternalWallet() ? internalWalletUtils.getState() : null;
+  const isWrongChain = isUsingInternalWallet() && internalWalletState?.activeWallet?.chainId !== 3888;
   const [currentTransactionHash, setCurrentTransactionHash] = useState<string | null>(null);
 
   // Enhanced error handling
@@ -246,10 +251,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
     return `external-${address?.slice(0, 10)}` || 'external-default';
   };
 
-  // Check if using internal wallet
-  const isUsingInternalWallet = () => {
-    return connector?.id === 'kalyswap-internal';
-  };
+
 
   // Helper function to prompt for password (similar to dashboard)
   const promptForPassword = (): Promise<string | null> => {
@@ -308,6 +310,11 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
         throw new Error('No internal wallet connected');
       }
 
+      // Ensure we're using a KalyChain wallet for swaps
+      if (internalWalletState.activeWallet.chainId !== 3888) {
+        throw new Error('Swaps are only available on KalyChain. Please switch to a KalyChain wallet.');
+      }
+
       // Get password from user
       const password = await promptForPassword();
       if (!password) {
@@ -357,7 +364,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
               value: value?.toString() || '0',
               data: data,
               password: password,
-              chainId: internalWalletState.activeWallet.chainId,
+              chainId: 3888, // Force KalyChain for swaps
               gasLimit: '300000'
             }
           }
@@ -951,6 +958,21 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
+        {/* Wrong chain warning */}
+        {isWrongChain && (
+          <div className="p-4 border rounded-lg bg-red-900/20 backdrop-blur-sm border-red-500/30">
+            <div className="flex items-center gap-2 text-red-400">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+              <span className="font-medium">Wrong Network</span>
+            </div>
+            <p className="text-sm text-red-300 mt-2">
+              Swaps are only available on KalyChain. Please switch to a KalyChain wallet to use the swap feature.
+            </p>
+          </div>
+        )}
+
         {/* Settings panel */}
         {showSettings && (
           <div className="p-4 border rounded-lg bg-gray-900/50 backdrop-blur-sm border-amber-500/30">
@@ -1152,7 +1174,7 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
         {/* Swap button */}
         <Button
           onClick={handleSwapClick}
-          disabled={isSwapping || !isConnected || !swapState.fromAmount || !swapState.toAmount}
+          disabled={isSwapping || !isConnected || !swapState.fromAmount || !swapState.toAmount || isWrongChain}
           className="w-full h-11 text-base font-medium"
         >
           {isSwapping ? (
@@ -1174,6 +1196,8 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
                 'Swap'
               }
             </>
+          ) : isWrongChain ? (
+            'Switch to KalyChain'
           ) : (
             isWrapOperation(swapState.fromToken, swapState.toToken) ? 'Wrap' :
             isUnwrapOperation(swapState.fromToken, swapState.toToken) ? 'Unwrap' :
