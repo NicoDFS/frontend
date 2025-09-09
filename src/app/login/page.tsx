@@ -62,38 +62,34 @@ export default function LoginPage() {
 
     try {
       setLoading(true);
+      setError('');
 
-      // Login user
-      const response = await fetch('/api/graphql', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query: LOGIN_MUTATION,
-          variables: {
-            username: formData.username,
-            password: formData.password,
-          },
-        }),
+      // Import auth utilities dynamically
+      const { fetchGraphQLWithAuth, setAuthToken, parseAuthError } = await import('@/utils/auth');
+
+      // Login user using enhanced GraphQL fetch
+      const result = await fetchGraphQLWithAuth(LOGIN_MUTATION, {
+        username: formData.username,
+        password: formData.password,
       });
-
-      const result = await response.json();
-
-      if (result.errors) {
-        throw new Error(result.errors[0].message);
-      }
 
       const { token } = result.data.login;
 
-      // Store token in localStorage
-      localStorage.setItem('auth_token', token);
+      // Store token using auth utility
+      setAuthToken(token);
 
       // Redirect to dashboard
       router.push('/dashboard');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
       console.error('Login error:', err);
+
+      // Parse error using auth utilities
+      import('@/utils/auth').then(({ parseAuthError }) => {
+        const authError = parseAuthError(err);
+        setError(authError.message);
+      }).catch(() => {
+        setError(err instanceof Error ? err.message : 'Login failed');
+      });
     } finally {
       setLoading(false);
     }

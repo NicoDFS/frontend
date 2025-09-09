@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import MainLayout from '@/components/layout/MainLayout';
+import { TokenExpirationWarning } from '@/components/auth/TokenExpirationWarning';
 import {
   Card,
   CardContent,
@@ -289,34 +290,31 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchUserData = async () => {
       try {
-        const token = localStorage.getItem('auth_token');
+        // Import auth utilities dynamically to avoid SSR issues
+        const { getAuthToken, fetchGraphQLWithAuth, parseAuthError } = await import('@/utils/auth');
+
+        const token = getAuthToken();
 
         if (!token) {
           router.push('/login');
           return;
         }
 
-        const response = await fetch('/api/graphql', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            query: ME_QUERY,
-          }),
-        });
-
-        const result = await response.json();
-
-        if (result.errors) {
-          throw new Error(result.errors[0].message);
-        }
-
+        const result = await fetchGraphQLWithAuth(ME_QUERY);
         setUser(result.data.me);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch user data');
         console.error('Error fetching user data:', err);
+
+        // Import auth utilities for error parsing
+        import('@/utils/auth').then(({ parseAuthError }) => {
+          const authError = parseAuthError(err);
+          setError(authError.message);
+
+          // Redirect to login if it's an authentication error
+          if (authError.shouldRedirectToLogin) {
+            setTimeout(() => router.push('/login'), 2000);
+          }
+        });
       } finally {
         setLoading(false);
       }
@@ -682,6 +680,9 @@ export default function DashboardPage() {
           </Card>
         ) : (
           <>
+            {/* Token Expiration Warning */}
+            <TokenExpirationWarning className="mb-6" />
+
             <div className="mb-6">
               <Tabs defaultValue="wallets" className="w-full">
                 <TabsList className="mb-4">

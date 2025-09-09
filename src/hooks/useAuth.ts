@@ -1,4 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  getAuthToken,
+  setAuthToken,
+  removeAuthToken,
+  fetchGraphQLWithAuth,
+  isTokenExpired,
+  parseAuthError
+} from '@/utils/auth';
 
 interface User {
   id: string;
@@ -10,120 +18,131 @@ interface UseAuthReturn {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  error: string | null;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
   checkAuth: () => Promise<void>;
+  clearError: () => void;
 }
 
 export function useAuth(): UseAuthReturn {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const isAuthenticated = !!user;
 
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
   // Check if user is authenticated on mount
-  const checkAuth = async () => {
+  const checkAuth = useCallback(async () => {
     try {
-      const token = localStorage.getItem('auth_token');
+      setError(null);
+      const token = getAuthToken();
+
       if (!token) {
+        setUser(null);
         setIsLoading(false);
         return;
       }
 
-      // Verify token with backend
-      const response = await fetch('/api/graphql', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          query: `
-            query Me {
-              me {
-                id
-                username
-                email
-              }
-            }
-          `
-        }),
-      });
-
-      const result = await response.json();
-      
-      if (result.errors || !result.data?.me) {
-        // Token is invalid, remove it
-        localStorage.removeItem('auth_token');
+      // Check if token is expired before making request
+      if (isTokenExpired(token)) {
+        console.warn('Token is expired, removing from storage');
+        removeAuthToken();
         setUser(null);
-      } else {
+        setIsLoading(false);
+        return;
+      }
+
+      // Verify token with backend using enhanced fetch
+      const result = await fetchGraphQLWithAuth(`
+        query Me {
+          me {
+            id
+            username
+            email
+          }
+        }
+      `);
+
+      if (result.data?.me) {
         setUser(result.data.me);
+      } else {
+        // No user data returned, token might be invalid
+        removeAuthToken();
+        setUser(null);
       }
     } catch (error) {
       console.error('Auth check failed:', error);
-      localStorage.removeItem('auth_token');
-      setUser(null);
+      const authError = parseAuthError(error);
+
+      // Set user-friendly error message
+      setError(authError.message);
+
+      // Clean up if it's an auth-related error
+      if (authError.shouldRedirectToLogin) {
+        removeAuthToken();
+        setUser(null);
+      }
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   // Login function
-  const login = async (username: string, password: string) => {
+  const login = useCallback(async (username: string, password: string) => {
     try {
-      const response = await fetch('/api/graphql', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query: `
-            mutation Login($username: String!, $password: String!) {
-              login(username: $username, password: $password) {
-                token
-                user {
-                  id
-                  username
-                  email
-                }
-              }
-            }
-          `,
-          variables: { username, password }
-        }),
-      });
+      setError(null);
+      setIsLoading(true);
 
-      const result = await response.json();
-      
-      if (result.errors) {
-        throw new Error(result.errors[0].message);
-      }
+      const result = await fetchGraphQLWithAuth(`
+        mutation Login($username: String!, $password: String!) {
+          login(username: $username, password: $password) {
+            token
+            user {
+              id
+              username
+              email
+            }
+          }
+        }
+      `, { username, password });
 
       const { token, user: userData } = result.data.login;
-      localStorage.setItem('auth_token', token);
+      setAuthToken(token);
       setUser(userData);
     } catch (error) {
-      throw error;
+      const authError = parseAuthError(error);
+      setError(authError.message);
+      throw new Error(authError.message);
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, []);
 
   // Logout function
-  const logout = () => {
-    localStorage.removeItem('auth_token');
+  const logout = useCallback(() => {
+    removeAuthToken();
     setUser(null);
-  };
+    setError(null);
+  }, []);
 
   // Check auth on mount
   useEffect(() => {
     checkAuth();
-  }, []);
+  }, [checkAuth]);
 
   return {
     user,
     isAuthenticated,
     isLoading,
+    error,
     login,
     logout,
-    checkAuth
+    checkAuth,
+    clearError
   };
 }

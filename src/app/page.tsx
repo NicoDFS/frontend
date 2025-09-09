@@ -13,11 +13,24 @@ export default function Home() {
   const router = useRouter();
 
   useEffect(() => {
-    // Check if user is logged in
-    const token = localStorage.getItem('auth_token');
-    if (token) {
-      router.push('/dashboard');
-    }
+    // Check if user is logged in with proper token validation
+    const checkAuthAndRedirect = async () => {
+      try {
+        // Import auth utilities dynamically to avoid SSR issues
+        const { getAuthToken } = await import('@/utils/auth');
+        const token = getAuthToken();
+
+        if (token) {
+          // Token exists and is valid, redirect to dashboard
+          router.push('/dashboard');
+        }
+      } catch (error) {
+        // Token is invalid or expired, stay on home page
+        console.log('No valid token found, staying on home page');
+      }
+    };
+
+    checkAuthAndRedirect();
   }, [router]);
 
   return (

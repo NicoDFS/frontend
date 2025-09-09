@@ -57,9 +57,17 @@ export default function Header() {
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('auth_token');
-    setIsLoggedIn(false);
-    window.location.href = '/';
+    // Import and use auth utilities for proper cleanup
+    import('@/utils/auth').then(({ removeAuthToken }) => {
+      removeAuthToken();
+      setIsLoggedIn(false);
+      window.location.href = '/';
+    }).catch(() => {
+      // Fallback to direct localStorage removal
+      localStorage.removeItem('auth_token');
+      setIsLoggedIn(false);
+      window.location.href = '/';
+    });
   };
 
   const toggleMobileMenu = () => {
