@@ -25,9 +25,9 @@ interface SwapInterfaceWrapperProps {
   onTokenChange?: (fromToken: Token | null, toToken: Token | null) => void;
 }
 
-// Dynamically import SwapInterface to prevent SSR issues with Wagmi
-const SwapInterface = dynamic(
-  () => import('./SwapInterface').catch(() => {
+// Dynamically import MultichainSwapInterface to prevent SSR issues with Wagmi
+const MultichainSwapInterface = dynamic(
+  () => import('./MultichainSwapInterface').catch(() => {
     // Fallback component if import fails
     return {
       default: () => (
@@ -47,8 +47,8 @@ const SwapInterface = dynamic(
       <Card className="w-full max-w-md">
         <CardContent className="pt-6">
           <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <span className="ml-3 text-gray-600">Loading swap interface...</span>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600"></div>
+            <span className="ml-3 text-gray-300">Loading multichain swap interface...</span>
           </div>
         </CardContent>
       </Card>
@@ -57,5 +57,5 @@ const SwapInterface = dynamic(
 );
 
 export default function SwapInterfaceWrapper({ fromToken, toToken, onTokenChange }: SwapInterfaceWrapperProps) {
-  return <SwapInterface fromToken={fromToken} toToken={toToken} onTokenChange={onTokenChange} />;
+  return <MultichainSwapInterface fromToken={fromToken} toToken={toToken} onTokenChange={onTokenChange} />;
 }

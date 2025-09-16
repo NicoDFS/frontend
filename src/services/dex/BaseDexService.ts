@@ -1,0 +1,262 @@
+// Base DEX service with common functionality
+// This provides shared logic for all DEX implementations
+
+import { IDexService, DexError, PairNotFoundError, UnsupportedTokenError } from './IDexService';
+import { Token, QuoteResult, SwapParams, PairInfo, DexConfig } from '@/config/dex/types';
+import { usePublicClient, useWalletClient } from 'wagmi';
+import { getContract, parseUnits, formatUnits } from 'viem';
+
+export abstract class BaseDexService implements IDexService {
+  protected config: DexConfig;
+
+  constructor(config: DexConfig) {
+    this.config = config;
+  }
+
+  // Abstract methods that must be implemented by subclasses
+  abstract getName(): string;
+  abstract getChainId(): number;
+  abstract executeSwap(params: SwapParams): Promise<string>;
+
+  // Common implementations
+  getTokenList(): Token[] {
+    return this.config.tokens;
+  }
+
+  getRouterAddress(): string {
+    return this.config.router;
+  }
+
+  getFactoryAddress(): string {
+    return this.config.factory;
+  }
+
+  getWethAddress(): string {
+    return this.config.wethAddress;
+  }
+
+  getSubgraphUrl(): string {
+    return this.config.subgraphUrl;
+  }
+
+  isTokenSupported(tokenAddress: string): boolean {
+    return this.config.tokens.some(token => 
+      token.address.toLowerCase() === tokenAddress.toLowerCase()
+    );
+  }
+
+  getAmountOutMin(amountOut: string, slippageTolerance: number): string {
+    const amount = parseFloat(amountOut);
+    const slippageMultiplier = (100 - slippageTolerance) / 100;
+    return (amount * slippageMultiplier).toString();
+  }
+
+  // Common quote implementation using router contract
+  async getQuote(tokenIn: Token, tokenOut: Token, amountIn: string): Promise<QuoteResult> {
+    try {
+      // Validate tokens
+      if (!this.isTokenSupported(tokenIn.address) && !tokenIn.isNative) {
+        throw new UnsupportedTokenError(this.getName(), tokenIn.address);
+      }
+      if (!this.isTokenSupported(tokenOut.address) && !tokenOut.isNative) {
+        throw new UnsupportedTokenError(this.getName(), tokenOut.address);
+      }
+
+      // Get swap route
+      const route = await this.getSwapRoute(tokenIn, tokenOut);
+      if (route.length === 0) {
+        throw new PairNotFoundError(this.getName(), tokenIn.symbol, tokenOut.symbol);
+      }
+
+      // Convert amount to proper units
+      const amountInWei = parseUnits(amountIn, tokenIn.decimals);
+
+      // Get quote from router contract
+      const publicClient = usePublicClient();
+      if (!publicClient) {
+        throw new DexError('Public client not available', 'NO_CLIENT', this.getName());
+      }
+
+      const routerContract = getContract({
+        address: this.config.router as `0x${string}`,
+        abi: this.config.routerABI,
+        client: publicClient,
+      });
+
+      // Call getAmountsOut on router
+      const amounts = await routerContract.read.getAmountsOut([amountInWei, route]) as bigint[];
+      const amountOut = amounts[amounts.length - 1];
+
+      // Format output amount
+      const formattedAmountOut = formatUnits(amountOut, tokenOut.decimals);
+
+      // Calculate price impact
+      const priceImpact = await this.calculatePriceImpact(tokenIn, tokenOut, amountIn);
+
+      return {
+        amountOut: formattedAmountOut,
+        priceImpact,
+        route: route,
+        gasEstimate: '200000', // Default gas estimate
+      };
+    } catch (error) {
+      console.error('Quote error:', error);
+      if (error instanceof DexError) {
+        throw error;
+      }
+      throw new DexError(`Failed to get quote: ${error}`, 'QUOTE_FAILED', this.getName());
+    }
+  }
+
+  // Common pair address calculation using factory contract
+  async getPairAddress(tokenA: Token, tokenB: Token): Promise<string | null> {
+    try {
+      const publicClient = usePublicClient();
+      if (!publicClient) {
+        throw new DexError('Public client not available', 'NO_CLIENT', this.getName());
+      }
+
+      const factoryContract = getContract({
+        address: this.config.factory as `0x${string}`,
+        abi: this.config.factoryABI,
+        client: publicClient,
+      });
+
+      // Handle native tokens by using wrapped address
+      const addressA = tokenA.isNative ? this.getWethAddress() : tokenA.address;
+      const addressB = tokenB.isNative ? this.getWethAddress() : tokenB.address;
+
+      const pairAddress = await factoryContract.read.getPair([
+        addressA as `0x${string}`,
+        addressB as `0x${string}`
+      ]) as string;
+
+      // Return null if pair doesn't exist (address is zero)
+      if (pairAddress === '0x0000000000000000000000000000000000000000') {
+        return null;
+      }
+
+      return pairAddress;
+    } catch (error) {
+      console.error('Get pair address error:', error);
+      return null;
+    }
+  }
+
+  // Common pair info implementation
+  async getPairInfo(tokenA: Token, tokenB: Token): Promise<PairInfo | null> {
+    try {
+      const pairAddress = await this.getPairAddress(tokenA, tokenB);
+      if (!pairAddress) {
+        return null;
+      }
+
+      const publicClient = usePublicClient();
+      if (!publicClient) {
+        throw new DexError('Public client not available', 'NO_CLIENT', this.getName());
+      }
+
+      // Get pair contract to read reserves
+      const pairContract = getContract({
+        address: pairAddress as `0x${string}`,
+        abi: [
+          {
+            "inputs": [],
+            "name": "getReserves",
+            "outputs": [
+              {"internalType": "uint112", "name": "_reserve0", "type": "uint112"},
+              {"internalType": "uint112", "name": "_reserve1", "type": "uint112"},
+              {"internalType": "uint32", "name": "_blockTimestampLast", "type": "uint32"}
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "totalSupply",
+            "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+            "stateMutability": "view",
+            "type": "function"
+          }
+        ],
+        client: publicClient,
+      });
+
+      const [reserves, totalSupply] = await Promise.all([
+        pairContract.read.getReserves() as Promise<[bigint, bigint, number]>,
+        pairContract.read.totalSupply() as Promise<bigint>
+      ]);
+
+      return {
+        token0: tokenA,
+        token1: tokenB,
+        pairAddress,
+        reserve0: reserves[0].toString(),
+        reserve1: reserves[1].toString(),
+        totalSupply: totalSupply.toString(),
+      };
+    } catch (error) {
+      console.error('Get pair info error:', error);
+      return null;
+    }
+  }
+
+  // Common price impact calculation
+  async calculatePriceImpact(tokenIn: Token, tokenOut: Token, amountIn: string): Promise<number> {
+    try {
+      const pairInfo = await this.getPairInfo(tokenIn, tokenOut);
+      if (!pairInfo) {
+        return 0; // No liquidity, can't calculate impact
+      }
+
+      const amountInWei = parseFloat(amountIn);
+      const reserve0 = parseFloat(formatUnits(BigInt(pairInfo.reserve0), tokenIn.decimals));
+      const reserve1 = parseFloat(formatUnits(BigInt(pairInfo.reserve1), tokenOut.decimals));
+
+      // Calculate price impact using constant product formula
+      const priceImpact = (amountInWei / (reserve0 + amountInWei)) * 100;
+      return Math.min(priceImpact, 100); // Cap at 100%
+    } catch (error) {
+      console.error('Price impact calculation error:', error);
+      return 0;
+    }
+  }
+
+  // Common swap route calculation
+  async getSwapRoute(tokenIn: Token, tokenOut: Token): Promise<string[]> {
+    // Handle native tokens
+    const addressIn = tokenIn.isNative ? this.getWethAddress() : tokenIn.address;
+    const addressOut = tokenOut.isNative ? this.getWethAddress() : tokenOut.address;
+
+    // Check if direct pair exists
+    const directPairExists = await this.canSwapDirectly(tokenIn, tokenOut);
+    if (directPairExists) {
+      return [addressIn, addressOut];
+    }
+
+    // Try routing through WETH/native token
+    const wethAddress = this.getWethAddress();
+    if (addressIn !== wethAddress && addressOut !== wethAddress) {
+      const wethToken = this.config.tokens.find(t => t.address.toLowerCase() === wethAddress.toLowerCase());
+      if (wethToken) {
+        const canRouteViaWeth = await Promise.all([
+          this.canSwapDirectly(tokenIn, wethToken),
+          this.canSwapDirectly(wethToken, tokenOut)
+        ]);
+
+        if (canRouteViaWeth[0] && canRouteViaWeth[1]) {
+          return [addressIn, wethAddress, addressOut];
+        }
+      }
+    }
+
+    // No route found
+    return [];
+  }
+
+  // Common direct swap check
+  async canSwapDirectly(tokenA: Token, tokenB: Token): Promise<boolean> {
+    const pairAddress = await this.getPairAddress(tokenA, tokenB);
+    return pairAddress !== null;
+  }
+}

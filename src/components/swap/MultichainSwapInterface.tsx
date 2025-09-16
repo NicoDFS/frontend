@@ -1,0 +1,651 @@
+'use client';
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { ArrowUpDown, Settings, Info, Wallet, AlertTriangle, CheckCircle, ChevronDown } from 'lucide-react';
+import TokenSelectorModal from './TokenSelectorModal';
+import SwapConfirmationModal from './SwapConfirmationModal';
+import ErrorDisplay from './ErrorDisplay';
+import { useSwapErrorHandler } from '@/hooks/useSwapErrorHandler';
+import { SwapErrorType } from '@/utils/swapErrors';
+import { useSwapTransactions } from '@/hooks/useSwapTransactions';
+
+// Wagmi imports for wallet interaction
+import { useAccount, useChainId, useSwitchChain } from 'wagmi';
+
+// New multichain DEX service imports
+import { DexService, Token, QuoteResult, SwapParams } from '@/services/dex';
+import { getTokenList, getDefaultTokenPair, isChainSupported } from '@/config/dex';
+
+// Custom hooks
+import { useMultichainTokenBalance } from '@/hooks/useMultichainTokenBalance';
+
+// Price impact utilities
+import { formatPriceImpact, getPriceImpactColor } from '@/utils/multichainPriceImpact';
+
+// Props interface for MultichainSwapInterface
+interface MultichainSwapInterfaceProps {
+  fromToken?: Token | null;
+  toToken?: Token | null;
+  onTokenChange?: (fromToken: Token | null, toToken: Token | null) => void;
+}
+
+// Swap state interface
+interface SwapState {
+  fromToken: Token | null;
+  toToken: Token | null;
+  fromAmount: string;
+  toAmount: string;
+  slippage: string;
+  deadline: string;
+}
+
+export default function MultichainSwapInterface({ 
+  fromToken: propFromToken, 
+  toToken: propToToken, 
+  onTokenChange 
+}: MultichainSwapInterfaceProps = {}) {
+  // Wagmi hooks for wallet interaction
+  const { address, isConnected } = useAccount();
+  const chainId = useChainId();
+  const { switchChain } = useSwitchChain();
+
+  // Get supported tokens for current chain
+  const supportedTokens = useMemo(() => {
+    if (!chainId || !isChainSupported(chainId)) {
+      return [];
+    }
+    return getTokenList(chainId);
+  }, [chainId]);
+
+  // Get default token pair for current chain
+  const defaultTokenPair = useMemo(() => {
+    if (!chainId || !isChainSupported(chainId)) {
+      return null;
+    }
+    return getDefaultTokenPair(chainId);
+  }, [chainId]);
+
+  // Component state - use props if provided, otherwise use defaults
+  const [swapState, setSwapState] = useState<SwapState>(() => {
+    if (propFromToken && propToToken) {
+      return {
+        fromToken: propFromToken,
+        toToken: propToToken,
+        fromAmount: '',
+        toAmount: '',
+        slippage: '0.5',
+        deadline: '20'
+      };
+    }
+
+    // Use default pair for current chain
+    const defaultPair = defaultTokenPair;
+    return {
+      fromToken: defaultPair?.tokenA || null,
+      toToken: defaultPair?.tokenB || null,
+      fromAmount: '',
+      toAmount: '',
+      slippage: '0.5',
+      deadline: '20'
+    };
+  });
+
+  // Update internal state when props change
+  useEffect(() => {
+    if (propFromToken !== undefined || propToToken !== undefined) {
+      setSwapState(prev => ({
+        ...prev,
+        fromToken: propFromToken !== undefined ? propFromToken : prev.fromToken,
+        toToken: propToToken !== undefined ? propToToken : prev.toToken,
+      }));
+    }
+  }, [propFromToken, propToToken]);
+
+  // Update tokens when chain changes
+  useEffect(() => {
+    if (!chainId || !isChainSupported(chainId)) {
+      return;
+    }
+
+    const newDefaultPair = getDefaultTokenPair(chainId);
+    if (newDefaultPair) {
+      setSwapState(prev => ({
+        ...prev,
+        fromToken: newDefaultPair.tokenA,
+        toToken: newDefaultPair.tokenB,
+        fromAmount: '',
+        toAmount: ''
+      }));
+
+      // Notify parent component of token change
+      if (onTokenChange) {
+        onTokenChange(newDefaultPair.tokenA, newDefaultPair.tokenB);
+      }
+    }
+  }, [chainId, onTokenChange]);
+
+  // Token balances
+  const { balances, getFormattedBalance, isLoading: balancesLoading, refreshBalances } = useMultichainTokenBalance(supportedTokens);
+
+  const [isSwapping, setIsSwapping] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [currentStep, setCurrentStep] = useState<'idle' | 'approving' | 'swapping' | 'complete'>('idle');
+  const [currentTransactionHash, setCurrentTransactionHash] = useState<string | null>(null);
+  const [quote, setQuote] = useState<QuoteResult | null>(null);
+  const [isLoadingQuote, setIsLoadingQuote] = useState(false);
+
+  // Enhanced error handling
+  const {
+    error,
+    isRetrying,
+    hasError,
+    handleError,
+    handleValidationError,
+    clearError,
+    reset,
+    retry,
+    validateSwap,
+    executeWithErrorHandling,
+    setRetryOperation
+  } = useSwapErrorHandler({
+    maxRetries: 3,
+    onRetrySuccess: () => {
+      console.log('✅ Retry successful');
+    },
+    onRetryFailed: (error) => {
+      console.error('❌ Retry failed after max attempts:', error);
+    }
+  });
+
+  // Transaction tracking
+  const {
+    addTransaction,
+    updateTransactionStatus
+  } = useSwapTransactions({
+    userAddress: address,
+    autoRefresh: true
+  });
+
+  // Check if current chain is supported
+  const isChainSupportedForSwap = chainId && isChainSupported(chainId);
+
+  // Get DEX name for current chain
+  const [dexName, setDexName] = useState<string>('');
+  useEffect(() => {
+    if (chainId && isChainSupported(chainId)) {
+      DexService.getDexName(chainId).then(setDexName);
+    }
+  }, [chainId]);
+
+  // Get quote when swap parameters change
+  useEffect(() => {
+    const getQuote = async () => {
+      if (!chainId || !isChainSupported(chainId) || !swapState.fromToken || !swapState.toToken || !swapState.fromAmount) {
+        setQuote(null);
+        return;
+      }
+
+      if (parseFloat(swapState.fromAmount) <= 0) {
+        setQuote(null);
+        return;
+      }
+
+      setIsLoadingQuote(true);
+      try {
+        const quoteResult = await DexService.getQuote(
+          chainId,
+          swapState.fromToken,
+          swapState.toToken,
+          swapState.fromAmount
+        );
+        setQuote(quoteResult);
+        setSwapState(prev => ({ ...prev, toAmount: quoteResult.amountOut }));
+      } catch (error) {
+        console.error('Quote error:', error);
+        setQuote(null);
+        setSwapState(prev => ({ ...prev, toAmount: '' }));
+      } finally {
+        setIsLoadingQuote(false);
+      }
+    };
+
+    // Debounce quote requests
+    const timeoutId = setTimeout(getQuote, 500);
+    return () => clearTimeout(timeoutId);
+  }, [chainId, swapState.fromToken, swapState.toToken, swapState.fromAmount]);
+
+  // Helper function to check if tokens are valid for current chain
+  const areTokensValidForChain = (fromToken: Token | null, toToken: Token | null): boolean => {
+    if (!chainId || !fromToken || !toToken) return false;
+    return fromToken.chainId === chainId && toToken.chainId === chainId;
+  };
+
+  // Handle token swap (flip from/to tokens)
+  const handleSwapTokens = () => {
+    setSwapState(prev => ({
+      ...prev,
+      fromToken: prev.toToken,
+      toToken: prev.fromToken,
+      fromAmount: prev.toAmount,
+      toAmount: prev.fromAmount
+    }));
+
+    // Notify parent component
+    if (onTokenChange) {
+      onTokenChange(swapState.toToken, swapState.fromToken);
+    }
+  };
+
+  // Handle amount input change
+  const handleFromAmountChange = (value: string) => {
+    setSwapState(prev => ({ ...prev, fromAmount: value }));
+  };
+
+  // Handle token selection
+  const handleTokenSelect = (token: Token, isFromToken: boolean) => {
+    if (isFromToken) {
+      setSwapState(prev => ({ ...prev, fromToken: token }));
+      if (onTokenChange) {
+        onTokenChange(token, swapState.toToken);
+      }
+    } else {
+      setSwapState(prev => ({ ...prev, toToken: token }));
+      if (onTokenChange) {
+        onTokenChange(swapState.fromToken, token);
+      }
+    }
+  };
+
+  // Execute swap
+  const handleSwap = async () => {
+    if (!chainId || !isChainSupported(chainId)) {
+      handleError(new Error('Chain not supported for swapping'), SwapErrorType.UNSUPPORTED_CHAIN);
+      return;
+    }
+
+    if (!isConnected || !address) {
+      handleError(new Error('Wallet not connected'), SwapErrorType.WALLET_NOT_CONNECTED);
+      return;
+    }
+
+    if (!swapState.fromToken || !swapState.toToken || !swapState.fromAmount || !quote) {
+      handleValidationError('Please fill in all required fields');
+      return;
+    }
+
+    if (!areTokensValidForChain(swapState.fromToken, swapState.toToken)) {
+      handleError(new Error('Tokens not valid for current chain'), SwapErrorType.INVALID_TOKEN);
+      return;
+    }
+
+    setIsSwapping(true);
+    setCurrentStep('swapping');
+
+    try {
+      // Calculate minimum amount out with slippage
+      const slippageMultiplier = (100 - parseFloat(swapState.slippage)) / 100;
+      const amountOutMin = (parseFloat(quote.amountOut) * slippageMultiplier).toString();
+
+      const swapParams: SwapParams = {
+        tokenIn: swapState.fromToken,
+        tokenOut: swapState.toToken,
+        amountIn: swapState.fromAmount,
+        amountOutMin,
+        to: address,
+        deadline: parseInt(swapState.deadline),
+        slippageTolerance: parseFloat(swapState.slippage)
+      };
+
+      // Execute swap using DEX service
+      const txHash = await DexService.executeSwap(chainId, swapParams);
+      setCurrentTransactionHash(txHash);
+
+      // Add transaction to tracking
+      addTransaction({
+        hash: txHash,
+        type: 'swap',
+        tokenIn: swapState.fromToken,
+        tokenOut: swapState.toToken,
+        amountIn: swapState.fromAmount,
+        amountOut: quote.amountOut,
+        timestamp: Date.now(),
+        status: 'pending'
+      });
+
+      setCurrentStep('complete');
+
+      // Reset form
+      setSwapState(prev => ({
+        ...prev,
+        fromAmount: '',
+        toAmount: ''
+      }));
+
+      // Refresh balances
+      refreshBalances();
+
+    } catch (error) {
+      console.error('Swap error:', error);
+      handleError(error as Error, SwapErrorType.SWAP_FAILED);
+      setCurrentStep('idle');
+    } finally {
+      setIsSwapping(false);
+    }
+  };
+
+  // Handle chain switch
+  const handleChainSwitch = async (targetChainId: number) => {
+    if (!switchChain) return;
+
+    try {
+      await switchChain({ chainId: targetChainId });
+    } catch (error) {
+      console.error('Chain switch error:', error);
+      handleError(error as Error, SwapErrorType.NETWORK_ERROR);
+    }
+  };
+
+  // Get formatted balance for a token
+  const getTokenBalance = (token: Token | null): string => {
+    if (!token) return '0';
+    return getFormattedBalance(token.address) || '0';
+  };
+
+  // Check if swap is possible
+  const canSwap = useMemo(() => {
+    return (
+      isConnected &&
+      isChainSupportedForSwap &&
+      swapState.fromToken &&
+      swapState.toToken &&
+      swapState.fromAmount &&
+      parseFloat(swapState.fromAmount) > 0 &&
+      quote &&
+      !isSwapping &&
+      !isLoadingQuote &&
+      areTokensValidForChain(swapState.fromToken, swapState.toToken)
+    );
+  }, [
+    isConnected,
+    isChainSupportedForSwap,
+    swapState.fromToken,
+    swapState.toToken,
+    swapState.fromAmount,
+    quote,
+    isSwapping,
+    isLoadingQuote
+  ]);
+
+  // Get swap button text
+  const getSwapButtonText = (): string => {
+    if (!isConnected) return 'Connect Wallet';
+    if (!isChainSupportedForSwap) return 'Unsupported Chain';
+    if (!swapState.fromToken || !swapState.toToken) return 'Select Tokens';
+    if (!swapState.fromAmount || parseFloat(swapState.fromAmount) <= 0) return 'Enter Amount';
+    if (isLoadingQuote) return 'Getting Quote...';
+    if (!quote) return 'No Quote Available';
+    if (isSwapping) return 'Swapping...';
+    return `Swap on ${dexName}`;
+  };
+
+  return (
+    <Card className="w-full max-w-md mx-auto bg-stone-900/95 border-amber-500/30">
+      <CardHeader className="pb-4">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-white">
+            Swap {dexName && `on ${dexName}`}
+          </CardTitle>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowSettings(!showSettings)}
+            className="text-gray-400 hover:text-white"
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* Chain indicator */}
+        {chainId && (
+          <div className="text-xs text-gray-400">
+            Chain: {chainId} {!isChainSupportedForSwap && '(Unsupported)'}
+          </div>
+        )}
+      </CardHeader>
+
+      <CardContent className="space-y-4">
+        {/* Error Display */}
+        {hasError && (
+          <ErrorDisplay
+            error={error}
+            onRetry={retry}
+            onDismiss={clearError}
+            isRetrying={isRetrying}
+          />
+        )}
+
+        {/* Chain not supported warning */}
+        {!isChainSupportedForSwap && (
+          <div className="p-3 bg-yellow-900/30 border border-yellow-500/30 rounded-lg">
+            <div className="flex items-center gap-2 text-yellow-400 text-sm">
+              <AlertTriangle className="h-4 w-4" />
+              <span>Chain not supported for swapping</span>
+            </div>
+            <div className="text-xs text-yellow-300 mt-1">
+              Please switch to KalyChain, BSC, or Arbitrum
+            </div>
+          </div>
+        )}
+
+        {/* From Token */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium text-gray-300">From</Label>
+          <div className="relative">
+            <div className="flex items-center justify-between p-3 bg-stone-800 border border-stone-700 rounded-lg">
+              <div className="flex items-center gap-3 flex-1">
+                <Button
+                  variant="ghost"
+                  className="flex items-center gap-2 p-2 h-auto text-white hover:bg-stone-700"
+                  onClick={() => {/* Open token selector */}}
+                  disabled={!isChainSupportedForSwap}
+                >
+                  {swapState.fromToken ? (
+                    <>
+                      <img
+                        src={swapState.fromToken.logoURI}
+                        alt={swapState.fromToken.symbol}
+                        className="w-6 h-6 rounded-full"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = '/tokens/default.png';
+                        }}
+                      />
+                      <span className="font-medium">{swapState.fromToken.symbol}</span>
+                    </>
+                  ) : (
+                    <span className="text-gray-400">Select token</span>
+                  )}
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="flex flex-col items-end">
+                <Input
+                  type="number"
+                  placeholder="0.0"
+                  value={swapState.fromAmount}
+                  onChange={(e) => handleFromAmountChange(e.target.value)}
+                  className="text-right bg-transparent border-none text-lg font-medium text-white placeholder-gray-500 p-0 h-auto"
+                  disabled={!isChainSupportedForSwap}
+                />
+                {swapState.fromToken && (
+                  <div className="text-xs text-gray-400 mt-1">
+                    Balance: {getTokenBalance(swapState.fromToken)}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Swap Direction Button */}
+        <div className="flex justify-center">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleSwapTokens}
+            className="rounded-full p-2 bg-stone-800 hover:bg-stone-700 border border-stone-600"
+            disabled={!isChainSupportedForSwap}
+          >
+            <ArrowUpDown className="h-4 w-4 text-white" />
+          </Button>
+        </div>
+
+        {/* To Token */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium text-gray-300">To</Label>
+          <div className="relative">
+            <div className="flex items-center justify-between p-3 bg-stone-800 border border-stone-700 rounded-lg">
+              <div className="flex items-center gap-3 flex-1">
+                <Button
+                  variant="ghost"
+                  className="flex items-center gap-2 p-2 h-auto text-white hover:bg-stone-700"
+                  onClick={() => {/* Open token selector */}}
+                  disabled={!isChainSupportedForSwap}
+                >
+                  {swapState.toToken ? (
+                    <>
+                      <img
+                        src={swapState.toToken.logoURI}
+                        alt={swapState.toToken.symbol}
+                        className="w-6 h-6 rounded-full"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.src = '/tokens/default.png';
+                        }}
+                      />
+                      <span className="font-medium">{swapState.toToken.symbol}</span>
+                    </>
+                  ) : (
+                    <span className="text-gray-400">Select token</span>
+                  )}
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="flex flex-col items-end">
+                <div className="text-lg font-medium text-white">
+                  {isLoadingQuote ? (
+                    <div className="animate-pulse">...</div>
+                  ) : (
+                    swapState.toAmount || '0.0'
+                  )}
+                </div>
+                {swapState.toToken && (
+                  <div className="text-xs text-gray-400 mt-1">
+                    Balance: {getTokenBalance(swapState.toToken)}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Quote Information */}
+        {quote && swapState.fromToken && swapState.toToken && (
+          <div className="p-3 bg-stone-800/50 border border-stone-700 rounded-lg space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-400">Price Impact</span>
+              <span className={`font-medium ${getPriceImpactColor(quote.priceImpact)}`}>
+                {formatPriceImpact(quote.priceImpact)}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-400">Route</span>
+              <span className="text-white text-xs">
+                {quote.route.length > 2 ? 'Multi-hop' : 'Direct'}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-400">Slippage</span>
+              <span className="text-white">{swapState.slippage}%</span>
+            </div>
+          </div>
+        )}
+
+        {/* Settings Panel */}
+        {showSettings && (
+          <div className="p-3 bg-stone-800/50 border border-stone-700 rounded-lg space-y-3">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-300">Slippage Tolerance</Label>
+              <div className="flex gap-2">
+                {['0.1', '0.5', '1.0'].map((value) => (
+                  <Button
+                    key={value}
+                    variant={swapState.slippage === value ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setSwapState(prev => ({ ...prev, slippage: value }))}
+                    className="text-xs"
+                  >
+                    {value}%
+                  </Button>
+                ))}
+                <Input
+                  type="number"
+                  placeholder="Custom"
+                  value={swapState.slippage}
+                  onChange={(e) => setSwapState(prev => ({ ...prev, slippage: e.target.value }))}
+                  className="w-20 text-xs"
+                  step="0.1"
+                  min="0.1"
+                  max="50"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium text-gray-300">Transaction Deadline</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  value={swapState.deadline}
+                  onChange={(e) => setSwapState(prev => ({ ...prev, deadline: e.target.value }))}
+                  className="w-20 text-xs"
+                  min="1"
+                  max="180"
+                />
+                <span className="text-xs text-gray-400">minutes</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Swap Button */}
+        <Button
+          onClick={handleSwap}
+          disabled={!canSwap}
+          className="w-full h-12 text-lg font-medium bg-amber-600 hover:bg-amber-700 disabled:bg-stone-700 disabled:text-gray-400"
+        >
+          {isSwapping && (
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+          )}
+          {getSwapButtonText()}
+        </Button>
+
+        {/* Transaction Status */}
+        {currentTransactionHash && (
+          <div className="p-3 bg-green-900/30 border border-green-500/30 rounded-lg">
+            <div className="flex items-center gap-2 text-green-400 text-sm">
+              <CheckCircle className="h-4 w-4" />
+              <span>Transaction Submitted</span>
+            </div>
+            <div className="text-xs text-green-300 mt-1 break-all">
+              Hash: {currentTransactionHash}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

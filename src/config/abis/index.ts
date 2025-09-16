@@ -1,4 +1,4 @@
-// ABI exports for KalySwap Launchpad
+// ABI exports for KalySwap and multichain DEX support
 // Organized by category for better maintainability
 
 // Import hardhat compilation artifacts and extract ABIs
@@ -14,6 +14,14 @@ import FactoryArtifact from './dex/factoryABI.json';
 import PairArtifact from './dex/pairABI.json';
 import WKLCArtifact from './dex/wklcABI.json';
 import StakingArtifact from './staking/stakingABI.json';
+
+// PancakeSwap ABIs
+import PancakeSwapRouterArtifact from './pancakeswap/router.json';
+import PancakeSwapFactoryArtifact from './pancakeswap/factory.json';
+
+// Uniswap V2 ABIs
+import UniswapV2RouterArtifact from './uniswap-v2/router.json';
+import UniswapV2FactoryArtifact from './uniswap-v2/factory.json';
 
 // Extract ABIs from hardhat artifacts (they have .abi property)
 // If it's a plain ABI array, use it directly
@@ -35,6 +43,14 @@ export const PairABI = extractABI(PairArtifact);
 export const WKLCABI = extractABI(WKLCArtifact);
 export const StakingABI = extractABI(StakingArtifact);
 
+// PancakeSwap ABIs
+export const PancakeSwapRouterABI = extractABI(PancakeSwapRouterArtifact);
+export const PancakeSwapFactoryABI = extractABI(PancakeSwapFactoryArtifact);
+
+// Uniswap V2 ABIs
+export const UniswapV2RouterABI = extractABI(UniswapV2RouterArtifact);
+export const UniswapV2FactoryABI = extractABI(UniswapV2FactoryArtifact);
+
 // Legacy exports for backward compatibility
 export const PRESALE_FACTORY_ABI = PresaleFactoryABI;
 export const PRESALE_ABI = PresaleABI;
@@ -48,6 +64,14 @@ export const FACTORY_ABI = FactoryABI;
 export const PAIR_ABI = PairABI;
 export const WKLC_ABI = WKLCABI;
 export const STAKING_ABI = StakingABI;
+
+// PancakeSwap legacy exports
+export const PANCAKESWAP_ROUTER_ABI = PancakeSwapRouterABI;
+export const PANCAKESWAP_FACTORY_ABI = PancakeSwapFactoryABI;
+
+// Uniswap V2 legacy exports
+export const UNISWAP_V2_ROUTER_ABI = UniswapV2RouterABI;
+export const UNISWAP_V2_FACTORY_ABI = UniswapV2FactoryABI;
 
 // Contract ABIs object for easy access
 export const CONTRACT_ABIS = {
@@ -63,6 +87,12 @@ export const CONTRACT_ABIS = {
   PAIR: PAIR_ABI,
   WKLC: WKLC_ABI,
   STAKING: STAKING_ABI,
+  // PancakeSwap ABIs
+  PANCAKESWAP_ROUTER: PANCAKESWAP_ROUTER_ABI,
+  PANCAKESWAP_FACTORY: PANCAKESWAP_FACTORY_ABI,
+  // Uniswap V2 ABIs
+  UNISWAP_V2_ROUTER: UNISWAP_V2_ROUTER_ABI,
+  UNISWAP_V2_FACTORY: UNISWAP_V2_FACTORY_ABI,
 } as const;
 
 // Helper function to get ABI by contract name
