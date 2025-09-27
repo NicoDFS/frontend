@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTokenLists } from '@/hooks/useTokenLists';
 import MainLayout from '@/components/layout/MainLayout';
 import {
   Card,
@@ -164,10 +165,10 @@ export default function SwapsPage() {
   // Use wallet hook to get connection status and address
   const { isConnected, address: userAddress } = useWallet();
 
-  // Swap state
+  // Swap state - tokens will be set dynamically by useTokenLists
   const [swapState, setSwapState] = useState<SwapState>({
-    fromToken: KALYCHAIN_TOKENS[0], // KLC
-    toToken: KALYCHAIN_TOKENS[3], // USDT
+    fromToken: null, // Will be set by dynamic token loading
+    toToken: null,   // Will be set by dynamic token loading
     fromAmount: '',
     toAmount: '',
     slippage: '0.5',
@@ -777,6 +778,17 @@ function SwapsPageContent({
   SendTokenSelector: any;
   SendTokenIcon: any;
 }) {
+  // Load dynamic tokens for KalyChain
+  const { tokens: dynamicTokens, loading: tokensLoading, error: tokensError } = useTokenLists({ chainId: 3888 });
+
+  // Debug: Log token loading status
+  console.log('🪙 Swaps page token status:', {
+    tokensLoading,
+    tokensError,
+    tokenCount: dynamicTokens?.length || 0,
+    tokens: dynamicTokens?.map(t => t.symbol).join(', ') || 'none'
+  });
+
   // Get real-time pair-specific market stats (now inside the provider)
   const {
     price: pairPrice,
@@ -787,6 +799,81 @@ function SwapsPageContent({
     error: pairStatsError,
     pairAddress
   } = usePairMarketStats(swapState.fromToken || undefined, swapState.toToken || undefined);
+
+  // Create default token pair from dynamic tokens
+  const defaultTokenPair = useMemo(() => {
+    if (!dynamicTokens || dynamicTokens.length === 0) return null;
+
+    // Find KLC token
+    const klcToken = dynamicTokens.find(token => token.symbol === 'KLC');
+
+    // Find USDT token (handle both USDT and USDt symbols)
+    const usdtToken = dynamicTokens.find(token => token.symbol === 'USDT' || token.symbol === 'USDt');
+
+    if (klcToken && usdtToken) {
+      return { tokenA: klcToken, tokenB: usdtToken };
+    }
+
+    // Fallback to first two tokens
+    return { tokenA: dynamicTokens[0], tokenB: dynamicTokens[1] };
+  }, [dynamicTokens]);
+
+  // Update swapState when dynamic tokens load and we don't have tokens set
+  useEffect(() => {
+    if (defaultTokenPair && (!swapState.fromToken || !swapState.toToken)) {
+      setSwapState(prev => ({
+        ...prev,
+        fromToken: defaultTokenPair.tokenA,
+        toToken: defaultTokenPair.tokenB
+      }));
+    }
+  }, [defaultTokenPair, swapState.fromToken, swapState.toToken, setSwapState]);
+
+  // Memoize token change handler to prevent infinite re-renders
+  const handleTokenChange = useMemo(() => (fromToken: Token | null, toToken: Token | null) => {
+    console.log(`🔄 Token change: ${fromToken?.symbol}/${toToken?.symbol}`);
+    setSwapState(prev => ({
+      ...prev,
+      fromToken,
+      toToken
+    }));
+  }, [setSwapState]);
+
+  // Show loading state while tokens are loading
+  if (tokensLoading) {
+    return (
+      <MainLayout>
+        <div className="swaps-layout min-h-screen bg-gradient-to-b from-slate-50 to-white">
+          <div className="container mx-auto px-4 py-8">
+            <div className="flex items-center justify-center min-h-[400px]">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading tokens...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  // Show error state if tokens failed to load
+  if (tokensError) {
+    return (
+      <MainLayout>
+        <div className="swaps-layout min-h-screen bg-gradient-to-b from-slate-50 to-white">
+          <div className="container mx-auto px-4 py-8">
+            <div className="flex items-center justify-center min-h-[400px]">
+              <div className="text-center">
+                <p className="text-red-600 mb-4">Failed to load tokens: {tokensError}</p>
+                <Button onClick={() => window.location.reload()}>Retry</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
@@ -857,14 +944,7 @@ function SwapsPageContent({
                   <SwapInterfaceWrapper
                     fromToken={swapState.fromToken}
                     toToken={swapState.toToken}
-                    onTokenChange={(fromToken, toToken) => {
-                      console.log(`🔄 Token change: ${fromToken?.symbol}/${toToken?.symbol}`);
-                      setSwapState(prev => ({
-                        ...prev,
-                        fromToken,
-                        toToken
-                      }));
-                    }}
+                    onTokenChange={handleTokenChange}
                   />
                 </TabsContent>
 

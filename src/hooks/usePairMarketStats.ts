@@ -93,7 +93,9 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
       const foundPairAddress = await findPairAddress(tokenA, tokenB);
 
       if (!foundPairAddress) {
-        throw new Error(`No pair found for ${tokenA.symbol}/${tokenB.symbol}`);
+        console.log(`⚠️ No pair found for ${tokenA.symbol}/${tokenB.symbol} - this is normal for tokens without liquidity`);
+        setIsLoading(false);
+        return; // Exit gracefully instead of throwing error
       }
 
       setPairAddress(foundPairAddress);

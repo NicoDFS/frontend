@@ -9,12 +9,11 @@ import {
   PriceScaleMode,
   IChartApi,
   ISeriesApi,
-  CandlestickData,
-  LineData,
   Time,
   CandlestickSeries,
   LineSeries,
   HistogramSeries,
+  LineData,
 } from 'lightweight-charts';
 import { Button } from '@/components/ui/button';
 import {
@@ -40,15 +39,7 @@ interface Token {
   isNative?: boolean;
 }
 
-// Chart data interfaces
-interface PriceData {
-  time: Time;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume?: number;
-}
+
 
 interface ChartProps {
   tokenA?: Token | null;
@@ -69,36 +60,7 @@ const CHART_TYPES = [
   { label: 'Candlestick', value: 'candlestick', icon: BarChart3 },
 ];
 
-// Generate mock price data for demonstration
-const generateMockData = (symbol: string = 'KLC', baseSymbol: string = 'USDT'): PriceData[] => {
-  const data: PriceData[] = [];
-  const now = Math.floor(Date.now() / 1000);
-  const basePrice = symbol === 'KLC' ? 0.0003 : 1.0;
 
-  // Generate 100 data points (last 100 periods)
-  for (let i = 99; i >= 0; i--) {
-    const time = (now - (i * 3600)) as Time; // 1 hour intervals
-    const randomFactor = 0.95 + Math.random() * 0.1; // ±5% variation
-    const price = basePrice * randomFactor;
-    const volatility = 0.02; // 2% volatility
-
-    const open = price;
-    const close = price * (0.98 + Math.random() * 0.04); // ±2% from open
-    const high = Math.max(open, close) * (1 + Math.random() * volatility);
-    const low = Math.min(open, close) * (1 - Math.random() * volatility);
-
-    data.push({
-      time,
-      open: parseFloat(open.toFixed(8)),
-      high: parseFloat(high.toFixed(8)),
-      low: parseFloat(low.toFixed(8)),
-      close: parseFloat(close.toFixed(8)),
-      volume: Math.floor(Math.random() * 1000000),
-    });
-  }
-
-  return data;
-};
 
 export default function TradingChart({
   tokenA,
@@ -117,16 +79,20 @@ export default function TradingChart({
   const [selectedChartType, setSelectedChartType] = useState('line');
 
   // Use Token objects if provided, otherwise fall back to legacy string props
+  // This ensures backward compatibility while supporting multichain tokens
   const currentTokenA = tokenA || (symbol ? { symbol, chainId: 3888, address: '', decimals: 18, name: symbol, logoURI: '' } as Token : null);
   const currentTokenB = tokenB || (baseSymbol ? { symbol: baseSymbol, chainId: 3888, address: '', decimals: 18, name: baseSymbol, logoURI: '' } as Token : null);
 
-  // Fetch real historical price data from DEX subgraph
+  // Check if we have valid tokens to display chart
+  const hasValidTokens = currentTokenA && currentTokenB;
+
+  // Fetch real historical price data from DEX subgraph only if we have valid tokens
   const {
     priceData: historicalData,
     isLoading: dataLoading,
     error: dataError,
     refetch: refetchData
-  } = useHistoricalPriceData(currentTokenA, currentTokenB);
+  } = useHistoricalPriceData(hasValidTokens ? currentTokenA : null, hasValidTokens ? currentTokenB : null);
 
   // Get real-time pair-specific market stats for accurate 24hr volume
   const {
@@ -147,6 +113,8 @@ export default function TradingChart({
     volumeLoading,
     timestamp: new Date().toISOString()
   });
+
+
 
   // Use real historical data from subgraph
   const chartData = React.useMemo(() => {
@@ -207,6 +175,7 @@ export default function TradingChart({
     }
 
     try {
+
       const chart = createChart(chartContainerRef.current, {
         layout: {
           background: { type: ColorType.Solid, color: 'transparent' },
@@ -265,18 +234,41 @@ export default function TradingChart({
       });
 
       chartRef.current = chart;
-      console.log('✅ Chart initialized successfully');
+
+      // Create series based on chart type
+      let series: ISeriesApi<'Candlestick'> | ISeriesApi<'Line'>;
+
+      if (selectedChartType === 'candlestick') {
+        series = chart.addSeries(CandlestickSeries, {
+          upColor: '#10b981',
+          downColor: '#ef4444',
+          borderDownColor: '#ef4444',
+          borderUpColor: '#10b981',
+          wickDownColor: '#ef4444',
+          wickUpColor: '#10b981',
+        });
+      } else {
+        series = chart.addSeries(LineSeries, {
+          color: '#3b82f6',
+          lineWidth: 2,
+        });
+      }
+
+      seriesRef.current = series;
 
       return () => {
         if (chartRef.current) {
           chartRef.current.remove();
           chartRef.current = null;
         }
+        if (seriesRef.current) {
+          seriesRef.current = null;
+        }
       };
     } catch (error) {
       console.error('Failed to initialize chart:', error);
     }
-  }, [dataLoading, dataError, historicalData.length]);
+  }, [dataLoading, dataError, historicalData.length, selectedChartType]);
 
   // Update chart data when data changes
   useEffect(() => {
@@ -445,6 +437,32 @@ export default function TradingChart({
             <h3 className="text-lg font-medium text-gray-900 mb-2">Failed to Load Chart Data</h3>
             <p className="text-gray-500 max-w-sm">
               {dataError}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show fallback when no valid tokens are provided
+  if (!hasValidTokens) {
+    return (
+      <div className={`bg-white rounded-lg border ${className}`}>
+        <div className="p-4 border-b">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Select Tokens for Chart
+            </h3>
+          </div>
+        </div>
+        <div className="flex items-center justify-center" style={{ height: `${height}px` }}>
+          <div className="text-center">
+            <BarChart3 className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              No Tokens Selected
+            </h3>
+            <p className="text-gray-500 max-w-sm">
+              Please select tokens in the swap interface to view price charts and trading data.
             </p>
           </div>
         </div>

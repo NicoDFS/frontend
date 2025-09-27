@@ -79,37 +79,32 @@ export function usePriceData(pair: TokenPair, timeframe: string = '1h') {
         return;
       }
 
-      // Get token addresses
-      const tokenAddressMap: Record<string, string> = {
-        'KLC': '0x069255299bb729399f3cecabdc73d15d3d10a2a3', // wKLC address (KLC = wKLC for pricing)
-        'wKLC': '0x069255299bb729399f3cecabdc73d15d3d10a2a3',
-        'USDT': '0x2ca775c77b922a51fcf3097f52bffdbc0250d99a',
-        'KSWAP': '0xcc93b84ceed74dc28c746b7697d6fa477ffff65a',
-        'DAI': '0x6e92cac380f7a7b86f4163fad0df2f277b16edc6',
-        'CLISHA': '0x376e0ac0b55aa79f9b30aac8842e5e84ff06360c'
-      };
+      // Get current chain and DEX config first
+      const chainId = await publicClient.getChainId();
+      const { getDexConfig, findTokenBySymbol } = await import('@/config/dex');
+      const dexConfig = getDexConfig(chainId);
 
-      const baseTokenAddress = tokenAddressMap[pair.baseToken];
-      const quoteTokenAddress = tokenAddressMap[pair.quoteToken];
-
-      if (!baseTokenAddress || !quoteTokenAddress) {
-        console.log(`⚠️ Token addresses not found for ${pair.baseToken}/${pair.quoteToken}`);
+      if (!dexConfig) {
+        console.log(`⚠️ Chain ${chainId} not supported for price data - no DEX configuration found`);
         return;
       }
 
-      // Get pair address from factory contract
-      const factoryAddress = '0xD42Af909d323D88e0E933B6c50D3e91c279004ca';
+      // Find token addresses from DEX config
+      const baseToken = findTokenBySymbol(pair.baseToken, chainId);
+      const quoteToken = findTokenBySymbol(pair.quoteToken, chainId);
+
+      if (!baseToken || !quoteToken) {
+        console.log(`⚠️ Tokens not found in DEX config for ${pair.baseToken}/${pair.quoteToken} on chain ${chainId}`);
+        return;
+      }
+
+      const baseTokenAddress = baseToken.isNative ? dexConfig.wethAddress : baseToken.address;
+      const quoteTokenAddress = quoteToken.isNative ? dexConfig.wethAddress : quoteToken.address;
+
+      // Get pair address from factory contract using chain-specific config
       const factoryContract = {
-        address: factoryAddress as `0x${string}`,
-        abi: [
-          {
-            "constant": true,
-            "inputs": [{"name": "tokenA", "type": "address"}, {"name": "tokenB", "type": "address"}],
-            "name": "getPair",
-            "outputs": [{"name": "pair", "type": "address"}],
-            "type": "function"
-          }
-        ]
+        address: dexConfig.factory as `0x${string}`,
+        abi: dexConfig.factoryABI
       };
 
       const pairAddress = await publicClient.readContract({
@@ -420,13 +415,7 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
   const [error, setError] = useState<string | null>(null);
   const [pairAddress, setPairAddress] = useState<string | null>(null);
 
-  console.log('🔍 useHistoricalPriceData called with:', {
-    tokenA: tokenA?.symbol,
-    tokenB: tokenB?.symbol,
-    tokenAAddress: tokenA?.address,
-    tokenBAddress: tokenB?.address,
-    timestamp: new Date().toISOString()
-  });
+
 
   // Safely get publicClient - will be null if not in Wagmi context
   let publicClient: any = null;
@@ -475,17 +464,9 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
   }, [tokenA, tokenB, hasValidTokens, publicClient]);
 
   const fetchHistoricalData = useCallback(async () => {
-    console.log('🔍 fetchHistoricalData called with:', {
-      tokenA: tokenA?.symbol,
-      tokenB: tokenB?.symbol,
-      pairAddress,
-      hasValidTokens,
-      timestamp: new Date().toISOString()
-    });
 
     // If no valid tokens, show no data
     if (!hasValidTokens) {
-      console.log('⚠️ No valid tokens');
       setPriceData([]);
       setError('Invalid token pair');
       setIsLoading(false);
@@ -500,14 +481,11 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
 
       // For other pairs, try subgraph data
       if (!pairAddress) {
-        console.log('⚠️ No pair exists for this token combination');
         setPriceData([]);
         setError('No liquidity pool exists for this token pair');
         setIsLoading(false);
         return;
       }
-
-      console.log('🔍 Fetching historical price data from subgraph...');
 
       // Import the direct subgraph functions
       const { getPairHourData, getPairData } = await import('@/lib/subgraph-client');
@@ -517,6 +495,20 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
         getPairHourData(pairAddress.toLowerCase(), 168, 0),
         getPairData(pairAddress.toLowerCase())
       ]);
+
+      console.log('🔍 Subgraph response:', {
+        pairAddress: pairAddress.toLowerCase(),
+        hourDataLength: hourData?.length || 0,
+        pairDataExists: !!pairData,
+        hourDataSample: hourData?.slice(0, 2),
+        pairDataSample: pairData ? {
+          id: pairData.id,
+          token0: pairData.token0?.symbol,
+          token1: pairData.token1?.symbol,
+          reserve0: pairData.reserve0,
+          reserve1: pairData.reserve1
+        } : null
+      });
 
       console.log('📊 Direct subgraph response:', {
         hourDataLength: hourData?.length || 0,

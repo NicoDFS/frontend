@@ -18,10 +18,11 @@ import { useAccount, useChainId, useSwitchChain } from 'wagmi';
 
 // New multichain DEX service imports
 import { DexService, Token, QuoteResult, SwapParams } from '@/services/dex';
-import { getTokenList, getDefaultTokenPair, isChainSupported } from '@/config/dex';
+import { getDefaultTokenPair, isChainSupported } from '@/config/dex';
 
 // Custom hooks
 import { useMultichainTokenBalance } from '@/hooks/useMultichainTokenBalance';
+import { useTokenLists } from '@/hooks/useTokenLists';
 
 // Price impact utilities
 import { formatPriceImpact, getPriceImpactColor } from '@/utils/multichainPriceImpact';
@@ -53,21 +54,32 @@ export default function MultichainSwapInterface({
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
 
-  // Get supported tokens for current chain
-  const supportedTokens = useMemo(() => {
-    if (!chainId || !isChainSupported(chainId)) {
-      return [];
-    }
-    return getTokenList(chainId);
-  }, [chainId]);
+  // Use dynamic token lists instead of hardcoded tokens
+  const { tokens: supportedTokens, loading: tokensLoading, error: tokensError } = useTokenLists({ chainId });
 
-  // Get default token pair for current chain
+  // Get default token pair for current chain using dynamic tokens
   const defaultTokenPair = useMemo(() => {
-    if (!chainId || !isChainSupported(chainId)) {
+    if (!chainId || !isChainSupported(chainId) || supportedTokens.length < 2) {
       return null;
     }
-    return getDefaultTokenPair(chainId);
-  }, [chainId]);
+
+    console.log('🔍 MultichainSwapInterface supportedTokens:', supportedTokens.map(t => ({ symbol: t.symbol, isNative: t.isNative })));
+
+    // Find native token and stablecoin from dynamic token list
+    const nativeToken = supportedTokens.find(token => token.isNative);
+    const stablecoin = supportedTokens.find(token =>
+      token.symbol === 'USDT' || token.symbol === 'USDt'
+    );
+
+    console.log('🔍 MultichainSwapInterface defaultTokenPair:', { nativeToken: nativeToken?.symbol, stablecoin: stablecoin?.symbol });
+
+    if (nativeToken && stablecoin) {
+      return { tokenA: nativeToken, tokenB: stablecoin };
+    }
+
+    // Fallback to first two tokens if no native/stablecoin pair found
+    return { tokenA: supportedTokens[0], tokenB: supportedTokens[1] };
+  }, [chainId, supportedTokens]);
 
   // Component state - use props if provided, otherwise use defaults
   const [swapState, setSwapState] = useState<SwapState>(() => {
@@ -105,28 +117,28 @@ export default function MultichainSwapInterface({
     }
   }, [propFromToken, propToToken]);
 
-  // Update tokens when chain changes
+  // Update tokens when chain changes or when dynamic tokens load
   useEffect(() => {
-    if (!chainId || !isChainSupported(chainId)) {
+    if (!chainId || !isChainSupported(chainId) || tokensLoading) {
       return;
     }
 
-    const newDefaultPair = getDefaultTokenPair(chainId);
-    if (newDefaultPair) {
+    // Use dynamic default token pair
+    if (defaultTokenPair) {
       setSwapState(prev => ({
         ...prev,
-        fromToken: newDefaultPair.tokenA,
-        toToken: newDefaultPair.tokenB,
+        fromToken: defaultTokenPair.tokenA,
+        toToken: defaultTokenPair.tokenB,
         fromAmount: '',
         toAmount: ''
       }));
 
       // Notify parent component of token change
       if (onTokenChange) {
-        onTokenChange(newDefaultPair.tokenA, newDefaultPair.tokenB);
+        onTokenChange(defaultTokenPair.tokenA, defaultTokenPair.tokenB);
       }
     }
-  }, [chainId, onTokenChange]);
+  }, [chainId, defaultTokenPair, tokensLoading, onTokenChange]);
 
   // Token balances
   const { balances, getFormattedBalance, isLoading: balancesLoading, refreshBalances } = useMultichainTokenBalance(supportedTokens);
@@ -137,6 +149,10 @@ export default function MultichainSwapInterface({
   const [currentTransactionHash, setCurrentTransactionHash] = useState<string | null>(null);
   const [quote, setQuote] = useState<QuoteResult | null>(null);
   const [isLoadingQuote, setIsLoadingQuote] = useState(false);
+
+  // Token selector modal state
+  const [showFromTokenSelector, setShowFromTokenSelector] = useState(false);
+  const [showToTokenSelector, setShowToTokenSelector] = useState(false);
 
   // Enhanced error handling
   const {
@@ -245,18 +261,34 @@ export default function MultichainSwapInterface({
     setSwapState(prev => ({ ...prev, fromAmount: value }));
   };
 
-  // Handle token selection
-  const handleTokenSelect = (token: Token, isFromToken: boolean) => {
-    if (isFromToken) {
-      setSwapState(prev => ({ ...prev, fromToken: token }));
-      if (onTokenChange) {
-        onTokenChange(token, swapState.toToken);
-      }
-    } else {
-      setSwapState(prev => ({ ...prev, toToken: token }));
-      if (onTokenChange) {
-        onTokenChange(swapState.fromToken, token);
-      }
+  // Handle token selection from modal
+  const handleFromTokenSelect = (token: Token) => {
+    setSwapState(prev => ({
+      ...prev,
+      fromToken: token,
+      fromAmount: '',
+      toAmount: ''
+    }));
+    setQuote(null);
+    setShowFromTokenSelector(false);
+
+    if (onTokenChange) {
+      onTokenChange(token, swapState.toToken);
+    }
+  };
+
+  const handleToTokenSelect = (token: Token) => {
+    setSwapState(prev => ({
+      ...prev,
+      toToken: token,
+      fromAmount: '',
+      toAmount: ''
+    }));
+    setQuote(null);
+    setShowToTokenSelector(false);
+
+    if (onTokenChange) {
+      onTokenChange(swapState.fromToken, token);
     }
   };
 
@@ -393,7 +425,8 @@ export default function MultichainSwapInterface({
   };
 
   return (
-    <Card className="w-full max-w-md mx-auto bg-stone-900/95 border-amber-500/30">
+    <>
+      <Card className="w-full max-w-md mx-auto bg-stone-900/95 border-amber-500/30">
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
           <CardTitle className="text-white">
@@ -418,6 +451,26 @@ export default function MultichainSwapInterface({
       </CardHeader>
 
       <CardContent className="space-y-4">
+        {/* Token Loading State */}
+        {tokensLoading && (
+          <div className="p-3 bg-blue-900/30 border border-blue-500/30 rounded-lg">
+            <div className="flex items-center gap-2 text-blue-400 text-sm">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
+              <span>Loading tokens...</span>
+            </div>
+          </div>
+        )}
+
+        {/* Token Loading Error */}
+        {tokensError && (
+          <div className="p-3 bg-red-900/30 border border-red-500/30 rounded-lg">
+            <div className="flex items-center gap-2 text-red-400 text-sm">
+              <AlertTriangle className="h-4 w-4" />
+              <span>Failed to load tokens: {tokensError}</span>
+            </div>
+          </div>
+        )}
+
         {/* Error Display */}
         {hasError && (
           <ErrorDisplay
@@ -450,7 +503,7 @@ export default function MultichainSwapInterface({
                 <Button
                   variant="ghost"
                   className="flex items-center gap-2 p-2 h-auto text-white hover:bg-stone-700"
-                  onClick={() => {/* Open token selector */}}
+                  onClick={() => setShowFromTokenSelector(true)}
                   disabled={!isChainSupportedForSwap}
                 >
                   {swapState.fromToken ? (
@@ -513,7 +566,7 @@ export default function MultichainSwapInterface({
                 <Button
                   variant="ghost"
                   className="flex items-center gap-2 p-2 h-auto text-white hover:bg-stone-700"
-                  onClick={() => {/* Open token selector */}}
+                  onClick={() => setShowToTokenSelector(true)}
                   disabled={!isChainSupportedForSwap}
                 >
                   {swapState.toToken ? (
@@ -645,7 +698,31 @@ export default function MultichainSwapInterface({
             </div>
           </div>
         )}
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+
+      {/* Token Selector Modals */}
+      <TokenSelectorModal
+        isOpen={showFromTokenSelector}
+        onClose={() => setShowFromTokenSelector(false)}
+        onTokenSelect={handleFromTokenSelect}
+        selectedToken={swapState.fromToken}
+        tokens={supportedTokens}
+        title="Select From Token"
+        balances={balances}
+        getFormattedBalance={getFormattedBalance}
+      />
+
+      <TokenSelectorModal
+        isOpen={showToTokenSelector}
+        onClose={() => setShowToTokenSelector(false)}
+        onTokenSelect={handleToTokenSelect}
+        selectedToken={swapState.toToken}
+        tokens={supportedTokens}
+        title="Select To Token"
+        balances={balances}
+        getFormattedBalance={getFormattedBalance}
+      />
+    </>
   );
 }

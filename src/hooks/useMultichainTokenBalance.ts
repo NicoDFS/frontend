@@ -1,7 +1,7 @@
 // Multichain token balance hook
 // This hook provides token balances for any supported chain
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAccount, useChainId, usePublicClient } from 'wagmi';
 import { getContract, formatUnits } from 'viem';
 import { Token } from '@/config/dex/types';
@@ -36,8 +36,11 @@ export function useMultichainTokenBalance(
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Filter tokens for current chain
-  const chainTokens = tokens.filter(token => token.chainId === chainId);
+  // Filter tokens for current chain - memoized to prevent unnecessary re-renders
+  const chainTokens = useMemo(() =>
+    tokens.filter(token => token.chainId === chainId),
+    [tokens, chainId]
+  );
 
   const fetchTokenBalance = useCallback(async (token: Token): Promise<TokenBalance | null> => {
     if (!address || !publicClient || !isConnected) {

@@ -29,9 +29,24 @@ export const UNISWAP_V2_CONSTANTS = {
 
 // Helper functions for Uniswap V2
 export function getUniswapV2PairAddress(tokenA: string, tokenB: string): string {
-  // This would calculate the pair address using CREATE2
-  // For now, return empty string - will be implemented in service layer
-  return '';
+  // Calculate pair address using CREATE2
+  const { getCreate2Address } = require('viem');
+
+  // Sort tokens (Uniswap V2 standard)
+  const [token0, token1] = tokenA.toLowerCase() < tokenB.toLowerCase()
+    ? [tokenA, tokenB]
+    : [tokenB, tokenA];
+
+  // Encode packed for salt
+  const salt = require('viem').keccak256(
+    require('viem').encodePacked(['address', 'address'], [token0 as `0x${string}`, token1 as `0x${string}`])
+  );
+
+  return getCreate2Address({
+    from: UNISWAP_V2_CONFIG.factory as `0x${string}`,
+    salt,
+    bytecodeHash: UNISWAP_V2_CONSTANTS.INIT_CODE_HASH as `0x${string}`,
+  });
 }
 
 export function isUniswapV2Token(address: string): boolean {
