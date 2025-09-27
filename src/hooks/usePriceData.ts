@@ -4,7 +4,15 @@ import { useState, useEffect, useCallback } from 'react';
 import { usePublicClient } from 'wagmi';
 import { ethers } from 'ethers';
 import { getPairAddress } from '@/utils/priceImpact';
-import { getFactoryData, getPairsData, getKalyswapDayData, getPairDayData } from '@/lib/subgraph-client';
+import { getFactoryData, getPairsData, getKalyswapDayData, getPairDayData, getPairHourData } from '@/lib/subgraph-client';
+import {
+  shouldUseCoinGecko,
+  areTokensSupportedByCoinGecko,
+  getCoinGeckoOHLC,
+  convertCoinGeckoToChartData,
+  getCoinGeckoPrice
+} from '@/lib/coingecko-client';
+import { Token } from '@/config/dex/types';
 
 // Import DEX contract ABIs
 import pairABI from '@/config/abis/dex/pairABI.json';
@@ -450,12 +458,23 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
         setPairAddress(address);
         console.log('🔍 Pair address resolved:', {
           tokenA: tokenA!.symbol,
+          tokenAChainId: tokenA!.chainId,
+          tokenAAddress: tokenA!.address,
           tokenB: tokenB!.symbol,
+          tokenBChainId: tokenB!.chainId,
+          tokenBAddress: tokenB!.address,
           pairAddress: address,
-          exists: !!address
+          exists: !!address,
+          publicClientChainId: publicClient ? await publicClient.getChainId() : 'unknown'
         });
       } catch (error) {
-        console.error('Error getting pair address:', error);
+        console.error('❌ Error getting pair address:', {
+          tokenA: tokenA!.symbol,
+          tokenAChainId: tokenA!.chainId,
+          tokenB: tokenB!.symbol,
+          tokenBChainId: tokenB!.chainId,
+          error: error instanceof Error ? error.message : error
+        });
         setPairAddress(null);
       }
     };
@@ -477,9 +496,50 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
     setError(null);
 
     try {
-      // All pairs now use subgraph data - no more CoinGecko dependency
+      // Determine chainId from tokens for multichain support
+      const chainId = tokenA?.chainId || tokenB?.chainId || 3888;
 
-      // For other pairs, try subgraph data
+      console.log('🔗 Fetching chart data for chain:', {
+        chainId,
+        tokenA: tokenA?.symbol,
+        tokenB: tokenB?.symbol,
+        pairAddress: pairAddress?.toLowerCase()
+      });
+
+      // Route between CoinGecko (BSC/Arbitrum) and Subgraph (KalyChain)
+      if (shouldUseCoinGecko(chainId)) {
+        console.log('🦎 Using CoinGecko API for external chain:', chainId);
+
+        // Check if tokens are supported by CoinGecko
+        if (!areTokensSupportedByCoinGecko(tokenA!, tokenB!)) {
+          setPriceData([]);
+          setError(`Chart data not available - ${tokenA?.symbol}/${tokenB?.symbol} pair not supported by CoinGecko`);
+          setIsLoading(false);
+          return;
+        }
+
+        // Fetch OHLC data from CoinGecko
+        const ohlcData = await getCoinGeckoOHLC(tokenA!, tokenB!, 7); // 7 days
+
+        if (ohlcData.length === 0) {
+          setPriceData([]);
+          setError(`Chart data not available - no CoinGecko data for ${tokenA?.symbol}/${tokenB?.symbol}`);
+          setIsLoading(false);
+          return;
+        }
+
+        // Convert CoinGecko data to our chart format
+        const chartData = convertCoinGeckoToChartData(ohlcData);
+
+        console.log(`✅ CoinGecko: Processed ${chartData.length} price points for ${tokenA?.symbol}/${tokenB?.symbol}`);
+        setPriceData(chartData);
+        setIsLoading(false);
+        return;
+      }
+
+      // Use subgraph for KalyChain (chainId 3888)
+      console.log('📊 Using subgraph for KalyChain');
+
       if (!pairAddress) {
         setPriceData([]);
         setError('No liquidity pool exists for this token pair');
@@ -491,9 +551,10 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
       const { getPairHourData, getPairData } = await import('@/lib/subgraph-client');
 
       // Fetch hourly data for better chart granularity (168 hours = 7 days)
+      // Pass chainId to use the correct subgraph
       const [hourData, pairData] = await Promise.all([
-        getPairHourData(pairAddress.toLowerCase(), 168, 0),
-        getPairData(pairAddress.toLowerCase())
+        getPairHourData(pairAddress.toLowerCase(), 168, 0, chainId),
+        getPairData(pairAddress.toLowerCase(), chainId)
       ]);
 
       console.log('🔍 Subgraph response:', {
@@ -653,7 +714,7 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
     } finally {
       setIsLoading(false);
     }
-  }, [tokenA, tokenB, pairAddress, hasValidTokens]);
+  }, [tokenA, tokenB, pairAddress, hasValidTokens, tokenA?.chainId, tokenB?.chainId]);
 
   useEffect(() => {
     fetchHistoricalData();

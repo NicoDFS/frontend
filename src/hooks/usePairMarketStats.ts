@@ -9,6 +9,7 @@ interface Token {
   address: string;
   symbol: string;
   decimals: number;
+  chainId?: number;
   isNative?: boolean;
 }
 
@@ -99,9 +100,13 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
       }
 
       setPairAddress(foundPairAddress);
-      console.log(`📊 Fetching pair stats for ${tokenA.symbol}/${tokenB.symbol} (${foundPairAddress})`);
 
-      const stats = await getPairMarketStats(foundPairAddress);
+      // Determine chainId from tokens for multichain support
+      const chainId = tokenA.chainId || tokenB.chainId || 3888;
+
+      console.log(`📊 Fetching pair stats for ${tokenA.symbol}/${tokenB.symbol} on chain ${chainId} (${foundPairAddress})`);
+
+      const stats = await getPairMarketStats(foundPairAddress, chainId);
 
       if (!stats) {
         throw new Error('Failed to fetch pair stats');

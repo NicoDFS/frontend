@@ -16,13 +16,28 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 export default function MultichainTokenTest() {
   const [selectedChainId, setSelectedChainId] = useState<number>(3888);
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   // Load tokens for selected chain
   const { tokens, loading: tokensLoading, error: tokensError } = useTokenLists({ chainId: selectedChainId });
+
+
   
-  // Get wallet info
-  const { address, isConnected } = useAccount();
-  const currentChainId = useChainId();
+  // Get wallet info (safely handle if not in WagmiProvider)
+  let address: string | undefined;
+  let isConnected: boolean = false;
+  let currentChainId: number | undefined;
+
+  try {
+    const account = useAccount();
+    address = account.address;
+    isConnected = account.isConnected;
+    currentChainId = useChainId();
+  } catch (error) {
+    console.log('Not in WagmiProvider context, using fallback values');
+    address = undefined;
+    isConnected = false;
+    currentChainId = undefined;
+  }
   
   // Load balances for tokens
   const { balances, getFormattedBalance, isLoading: balancesLoading } = useMultichainTokenBalance(tokens, isConnected);
@@ -246,6 +261,8 @@ export default function MultichainTokenTest() {
         </Card>
 
         {/* Debug Info */}
+
+
         <Card className="mt-6 bg-slate-800 border-slate-600">
           <CardHeader>
             <CardTitle className="text-white">Debug Information</CardTitle>

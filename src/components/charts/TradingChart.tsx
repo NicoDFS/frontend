@@ -27,6 +27,7 @@ import { TrendingUp, BarChart3, Maximize2, RefreshCw } from 'lucide-react';
 import { useHistoricalPriceData, formatTokenPrice, formatPriceChange } from '@/hooks/usePriceData';
 import { usePriceDataContext } from '@/contexts/PriceDataContext';
 import { usePairMarketStats } from '@/hooks/usePairMarketStats';
+import { useChainId } from 'wagmi';
 
 // Token interface
 interface Token {
@@ -78,10 +79,13 @@ export default function TradingChart({
 
   const [selectedChartType, setSelectedChartType] = useState('line');
 
+  // Get current chainId from wagmi for multichain support
+  const currentChainId = useChainId();
+
   // Use Token objects if provided, otherwise fall back to legacy string props
   // This ensures backward compatibility while supporting multichain tokens
-  const currentTokenA = tokenA || (symbol ? { symbol, chainId: 3888, address: '', decimals: 18, name: symbol, logoURI: '' } as Token : null);
-  const currentTokenB = tokenB || (baseSymbol ? { symbol: baseSymbol, chainId: 3888, address: '', decimals: 18, name: baseSymbol, logoURI: '' } as Token : null);
+  const currentTokenA = tokenA || (symbol ? { symbol, chainId: currentChainId || 3888, address: '', decimals: 18, name: symbol, logoURI: '' } as Token : null);
+  const currentTokenB = tokenB || (baseSymbol ? { symbol: baseSymbol, chainId: currentChainId || 3888, address: '', decimals: 18, name: baseSymbol, logoURI: '' } as Token : null);
 
   // Check if we have valid tokens to display chart
   const hasValidTokens = currentTokenA && currentTokenB;
@@ -473,6 +477,19 @@ export default function TradingChart({
   // Show "No data" message if no chart data and no loading
   if (!dataLoading && historicalData.length === 0) {
     const isLiquidityError = dataError?.includes('No liquidity pool exists');
+    const isAuthError = dataError?.includes('auth error') || dataError?.includes('authorization');
+    const isSubgraphError = dataError?.includes('subgraph') || dataError?.includes('indexed');
+    const isCoinGeckoError = dataError?.includes('CoinGecko') || dataError?.includes('not supported by CoinGecko');
+
+    // Helper to get chain name
+    const getChainName = (chainId?: number) => {
+      switch (chainId) {
+        case 3888: return 'KalyChain';
+        case 56: return 'BSC';
+        case 42161: return 'Arbitrum';
+        default: return 'Unknown';
+      }
+    };
 
     return (
       <div className={`bg-white rounded-lg border ${className}`}>
@@ -480,6 +497,9 @@ export default function TradingChart({
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900">
               {currentTokenA?.symbol || 'TOKEN1'}/{currentTokenB?.symbol || 'TOKEN2'}
+              <span className="text-sm text-gray-500 ml-2">
+                (Chain: {currentTokenA?.chainId || currentTokenB?.chainId || 'Unknown'})
+              </span>
             </h3>
           </div>
         </div>
@@ -492,7 +512,13 @@ export default function TradingChart({
             <p className="text-gray-500 max-w-sm">
               {isLiquidityError
                 ? `No liquidity pool exists for ${currentTokenA?.symbol}/${currentTokenB?.symbol}. This pair is not available for trading.`
-                : `Chart data for ${currentTokenA?.symbol || 'TOKEN1'}/${currentTokenB?.symbol || 'TOKEN2'} is not available`
+                : isCoinGeckoError
+                ? `Chart data not available from CoinGecko. The ${currentTokenA?.symbol}/${currentTokenB?.symbol} pair may not be supported or have sufficient trading data.`
+                : isAuthError
+                ? `Subgraph authorization error. The ${getChainName(currentTokenA?.chainId || currentTokenB?.chainId)} subgraph requires API authentication.`
+                : isSubgraphError
+                ? `Pair not indexed in subgraph yet. The ${currentTokenA?.symbol}/${currentTokenB?.symbol} pair may be new or not available on this DEX.`
+                : `Chart data for ${currentTokenA?.symbol || 'TOKEN1'}/${currentTokenB?.symbol || 'TOKEN2'} is not available. Error: ${dataError || 'Unknown error'}`
               }
             </p>
           </div>
