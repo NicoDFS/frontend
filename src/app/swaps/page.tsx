@@ -39,6 +39,8 @@ import { formatTokenPrice, formatPriceChange } from '@/hooks/usePriceData';
 import { usePairMarketStats } from '@/hooks/usePairMarketStats';
 import { useWallet } from '@/hooks/useWallet';
 import { PriceDataProvider } from '@/contexts/PriceDataContext';
+import { useChainId } from 'wagmi';
+import { useHydration } from '@/hooks/useHydration';
 import './swaps.css';
 
 // Token interface based on KalyChain official tokenlist
@@ -778,11 +780,27 @@ function SwapsPageContent({
   SendTokenSelector: any;
   SendTokenIcon: any;
 }) {
-  // Load dynamic tokens for KalyChain
-  const { tokens: dynamicTokens, loading: tokensLoading, error: tokensError } = useTokenLists({ chainId: 3888 });
+  // Check if client is hydrated
+  const isHydrated = useHydration();
+
+  // Get current chain ID from wallet with error handling
+  let wagmiChainId: number | undefined;
+  try {
+    wagmiChainId = useChainId();
+  } catch (error) {
+    console.warn('Wagmi not available, using fallback chain ID:', error);
+    wagmiChainId = undefined;
+  }
+
+  // Use wagmi chain ID if available and hydrated, otherwise fallback to KalyChain
+  const chainId = isHydrated && wagmiChainId ? wagmiChainId : 3888;
+
+  // Load dynamic tokens for current chain
+  const { tokens: dynamicTokens, loading: tokensLoading, error: tokensError } = useTokenLists({ chainId });
 
   // Debug: Log token loading status
   console.log('🪙 Swaps page token status:', {
+    chainId,
     tokensLoading,
     tokensError,
     tokenCount: dynamicTokens?.length || 0,
@@ -800,23 +818,44 @@ function SwapsPageContent({
     pairAddress
   } = usePairMarketStats(swapState.fromToken || undefined, swapState.toToken || undefined);
 
-  // Create default token pair from dynamic tokens
+  // Create default token pair from dynamic tokens based on chain
   const defaultTokenPair = useMemo(() => {
-    if (!dynamicTokens || dynamicTokens.length === 0) return null;
+    if (!dynamicTokens || dynamicTokens.length === 0 || !chainId) return null;
 
-    // Find KLC token
-    const klcToken = dynamicTokens.find(token => token.symbol === 'KLC');
+    let tokenA, tokenB;
 
-    // Find USDT token (handle both USDT and USDt symbols)
-    const usdtToken = dynamicTokens.find(token => token.symbol === 'USDT' || token.symbol === 'USDt');
+    if (chainId === 3888) {
+      // KalyChain: KLC/USDT
+      tokenA = dynamicTokens.find(token => token.symbol === 'KLC');
+      tokenB = dynamicTokens.find(token => token.symbol === 'USDT' || token.symbol === 'USDt');
+    } else if (chainId === 56) {
+      // BSC: WBNB/USDT
+      tokenA = dynamicTokens.find(token => token.symbol === 'WBNB' || token.symbol === 'BNB');
+      tokenB = dynamicTokens.find(token => token.symbol === 'USDT');
+    } else if (chainId === 42161) {
+      // Arbitrum: WETH/USDC
+      tokenA = dynamicTokens.find(token => token.symbol === 'WETH' || token.symbol === 'ETH');
+      tokenB = dynamicTokens.find(token => token.symbol === 'USDC');
+    }
 
-    if (klcToken && usdtToken) {
-      return { tokenA: klcToken, tokenB: usdtToken };
+    if (tokenA && tokenB) {
+      return { tokenA, tokenB };
     }
 
     // Fallback to first two tokens
-    return { tokenA: dynamicTokens[0], tokenB: dynamicTokens[1] };
-  }, [dynamicTokens]);
+    if (dynamicTokens.length >= 2) {
+      return { tokenA: dynamicTokens[0], tokenB: dynamicTokens[1] };
+    }
+
+    return null;
+  }, [dynamicTokens, chainId]);
+
+  // Debug: Log default token pair
+  useEffect(() => {
+    console.log('🎯 Default token pair for chain', chainId, ':',
+      defaultTokenPair ? `${defaultTokenPair.tokenA.symbol}/${defaultTokenPair.tokenB.symbol}` : 'none'
+    );
+  }, [defaultTokenPair, chainId]);
 
   // Update swapState when dynamic tokens load and we don't have tokens set
   useEffect(() => {

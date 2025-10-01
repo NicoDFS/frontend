@@ -61,7 +61,12 @@ class TokenListService {
 
       // Fetch from URL using existing networkUtils
       // Use absolute URL for backend API calls
-      const apiUrl = url.startsWith('/api/') ? `http://localhost:3000${url}` : url;
+      let apiUrl: string;
+      if (url.startsWith('/api/')) {
+        apiUrl = `http://localhost:3000${url}`;
+      } else {
+        apiUrl = url;
+      }
 
       const tokenList = await fetchJSON<TokenList>(apiUrl, {
         timeout: this.REQUEST_TIMEOUT,

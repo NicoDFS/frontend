@@ -12,6 +12,29 @@ import { useAccount, useChainId } from 'wagmi';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Token } from '@/config/dex/types';
+
+// TokenIcon component with gradient fallback
+function TokenIcon({ token }: { token: Token }) {
+  const [imageError, setImageError] = useState(false);
+
+  if (imageError) {
+    return (
+      <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-xs">
+        {token.symbol.charAt(0)}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={token.logoURI}
+      alt={token.symbol}
+      className="w-8 h-8 rounded-full"
+      onError={() => setImageError(true)}
+    />
+  );
+}
 
 export default function MultichainTokenTest() {
   const [selectedChainId, setSelectedChainId] = useState<number>(3888);
@@ -214,15 +237,7 @@ export default function MultichainTokenTest() {
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <img
-                        src={token.logoURI}
-                        alt={token.symbol}
-                        className="w-8 h-8 rounded-full"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.src = '/tokens/default.png';
-                        }}
-                      />
+                      <TokenIcon token={token} />
                       <div>
                         <div className="font-medium text-white flex items-center gap-2">
                           {token.symbol}

@@ -7,11 +7,14 @@ import { getPairAddress } from '@/utils/priceImpact';
 import { getFactoryData, getPairsData, getKalyswapDayData, getPairDayData, getPairHourData } from '@/lib/subgraph-client';
 import {
   shouldUseCoinGecko,
-  areTokensSupportedByCoinGecko,
-  getCoinGeckoOHLC,
-  convertCoinGeckoToChartData,
   getCoinGeckoPrice
 } from '@/lib/coingecko-client';
+import {
+  isChainSupported as isGeckoTerminalSupported,
+  findPoolAddress,
+  getGeckoTerminalOHLC,
+  convertGeckoTerminalToChartData
+} from '@/lib/geckoterminal-client';
 import { Token } from '@/config/dex/types';
 
 // Import DEX contract ABIs
@@ -506,32 +509,38 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
         pairAddress: pairAddress?.toLowerCase()
       });
 
-      // Route between CoinGecko (BSC/Arbitrum) and Subgraph (KalyChain)
-      if (shouldUseCoinGecko(chainId)) {
-        console.log('🦎 Using CoinGecko API for external chain:', chainId);
+      // Route between GeckoTerminal (BSC/Arbitrum) and Subgraph (KalyChain)
+      if (isGeckoTerminalSupported(chainId)) {
+        console.log('🦎 Using GeckoTerminal API for external chain:', chainId);
 
-        // Check if tokens are supported by CoinGecko
-        if (!areTokensSupportedByCoinGecko(tokenA!, tokenB!)) {
+        // Find pool address if not provided
+        let poolAddr = pairAddress;
+        if (!poolAddr) {
+          console.log('🔍 Searching for pool address...');
+          poolAddr = await findPoolAddress(chainId, tokenA!, tokenB!);
+
+          if (!poolAddr) {
+            setPriceData([]);
+            setError(`No liquidity pool found for ${tokenA?.symbol}/${tokenB?.symbol} on this DEX`);
+            setIsLoading(false);
+            return;
+          }
+        }
+
+        // Fetch OHLC data from GeckoTerminal (168 hours = 7 days)
+        const ohlcvList = await getGeckoTerminalOHLC(chainId, poolAddr, 'hour', 1, 168);
+
+        if (ohlcvList.length === 0) {
           setPriceData([]);
-          setError(`Chart data not available - ${tokenA?.symbol}/${tokenB?.symbol} pair not supported by CoinGecko`);
+          setError(`Chart data not available for ${tokenA?.symbol}/${tokenB?.symbol}`);
           setIsLoading(false);
           return;
         }
 
-        // Fetch OHLC data from CoinGecko
-        const ohlcData = await getCoinGeckoOHLC(tokenA!, tokenB!, 7); // 7 days
+        // Convert GeckoTerminal data to our chart format
+        const chartData = convertGeckoTerminalToChartData(ohlcvList);
 
-        if (ohlcData.length === 0) {
-          setPriceData([]);
-          setError(`Chart data not available - no CoinGecko data for ${tokenA?.symbol}/${tokenB?.symbol}`);
-          setIsLoading(false);
-          return;
-        }
-
-        // Convert CoinGecko data to our chart format
-        const chartData = convertCoinGeckoToChartData(ohlcData);
-
-        console.log(`✅ CoinGecko: Processed ${chartData.length} price points for ${tokenA?.symbol}/${tokenB?.symbol}`);
+        console.log(`✅ GeckoTerminal: Processed ${chartData.length} price points for ${tokenA?.symbol}/${tokenB?.symbol}`);
         setPriceData(chartData);
         setIsLoading(false);
         return;

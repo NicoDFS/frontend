@@ -108,8 +108,16 @@ const TOKEN_TO_COINGECKO_ID: Record<string, Record<string, string>> = {
 
 /**
  * Get CoinGecko coin ID for a token
+ * First checks if token has coingeckoId property, then falls back to hardcoded mapping
  */
 function getTokenCoinGeckoId(token: Token): string | null {
+  // First priority: use coingeckoId from token (from CoinGecko exchange API)
+  if ('coingeckoId' in token && token.coingeckoId) {
+    console.log(`🎯 Using token coingeckoId: ${token.symbol} -> ${token.coingeckoId}`);
+    return token.coingeckoId;
+  }
+
+  // Fallback: use hardcoded mapping
   const chainMapping = TOKEN_TO_COINGECKO_ID[token.chainId.toString()];
   if (!chainMapping) {
     console.warn(`⚠️ No CoinGecko mapping for chain ${token.chainId}`);

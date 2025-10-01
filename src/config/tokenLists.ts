@@ -24,7 +24,7 @@ const TOKEN_LIST_URLS = {
  * Higher priority lists override lower priority ones for duplicate tokens
  */
 export const TOKEN_LIST_CONFIGS: Record<number, TokenListConfig[]> = {
-  // KalyChain (3888)
+  // KalyChain (3888) - Use traditional token list
   3888: [
     {
       name: 'KalySwap Default',
@@ -47,7 +47,7 @@ export const TOKEN_LIST_CONFIGS: Record<number, TokenListConfig[]> = {
     // }
   ],
 
-  // Binance Smart Chain (56)
+  // Binance Smart Chain (56) - Use official PancakeSwap token list
   56: [
     {
       name: 'PancakeSwap Extended',
@@ -57,7 +57,7 @@ export const TOKEN_LIST_CONFIGS: Record<number, TokenListConfig[]> = {
     }
   ],
 
-  // Arbitrum (42161)
+  // Arbitrum (42161) - Use official Uniswap token list
   42161: [
     {
       name: 'Uniswap Default',

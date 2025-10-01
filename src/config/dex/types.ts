@@ -8,6 +8,7 @@ export interface Token {
   symbol: string;
   logoURI: string;
   isNative?: boolean;
+  coingeckoId?: string; // CoinGecko coin ID for dynamic chart data
 }
 
 export interface DexConfig {

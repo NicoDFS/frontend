@@ -42,37 +42,21 @@ export interface UseTokenListsOptions {
  * Fetches tokens from token lists and merges with subgraph data
  */
 export function useTokenLists(options: UseTokenListsOptions = {}): UseTokenListsReturn {
-  // Use provided chainId or try to get from wagmi, fallback to KalyChain
-  const [chainId, setChainId] = useState<number>(options.chainId || 3888);
+  // Use provided chainId or fallback to KalyChain
+  const chainId = options.chainId || 3888;
   const [tokens, setTokens] = useState<EnhancedToken[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Get chain ID from wagmi if available and no override provided
+  // Debug: Log chainId changes
   useEffect(() => {
-    if (options.chainId) {
-      // Use provided chainId
-      setChainId(options.chainId);
-      return;
-    }
+    console.log('🔗 useTokenLists chainId changed:', {
+      providedChainId: options.chainId,
+      effectiveChainId: chainId
+    });
+  }, [options.chainId, chainId]);
 
-    // Try to get from wagmi
-    try {
-      // Dynamic import to avoid SSR issues
-      import('wagmi').then(({ useChainId }) => {
-        try {
-          const currentChainId = useChainId();
-          setChainId(currentChainId);
-        } catch (hookError) {
-          console.warn('useChainId hook not available, using default KalyChain');
-        }
-      }).catch(() => {
-        console.warn('Wagmi not available, using default KalyChain');
-      });
-    } catch (error) {
-      console.warn('Using default chain ID (KalyChain):', error);
-    }
-  }, [options.chainId]);
+
 
   /**
    * Fetch tokens from subgraph (existing logic from useTokens)

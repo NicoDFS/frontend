@@ -27,6 +27,28 @@ import { useTokenLists } from '@/hooks/useTokenLists';
 // Price impact utilities
 import { formatPriceImpact, getPriceImpactColor } from '@/utils/multichainPriceImpact';
 
+// TokenIcon component with gradient fallback
+function TokenIcon({ token }: { token: Token }) {
+  const [imageError, setImageError] = React.useState(false);
+
+  if (imageError) {
+    return (
+      <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-xs">
+        {token.symbol.charAt(0)}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={token.logoURI}
+      alt={token.symbol}
+      className="w-6 h-6 rounded-full"
+      onError={() => setImageError(true)}
+    />
+  );
+}
+
 // Props interface for MultichainSwapInterface
 interface MultichainSwapInterfaceProps {
   fromToken?: Token | null;
@@ -54,8 +76,28 @@ export default function MultichainSwapInterface({
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
 
+  // Debug: Log chain ID changes
+  useEffect(() => {
+    console.log('🔗 MultichainSwapInterface chainId changed:', {
+      chainId,
+      isConnected,
+      address: address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'none'
+    });
+  }, [chainId, isConnected, address]);
+
   // Use dynamic token lists instead of hardcoded tokens
   const { tokens: supportedTokens, loading: tokensLoading, error: tokensError } = useTokenLists({ chainId });
+
+  // Debug logging for token loading
+  useEffect(() => {
+    console.log('🔍 MultichainSwapInterface token loading status:', {
+      chainId,
+      tokensLoading,
+      tokensError,
+      supportedTokensCount: supportedTokens?.length || 0,
+      supportedTokens: supportedTokens?.map(t => ({ symbol: t.symbol, address: t.address, chainId: t.chainId })) || []
+    });
+  }, [chainId, tokensLoading, tokensError, supportedTokens]);
 
   // Get default token pair for current chain using dynamic tokens
   const defaultTokenPair = useMemo(() => {
@@ -508,15 +550,7 @@ export default function MultichainSwapInterface({
                 >
                   {swapState.fromToken ? (
                     <>
-                      <img
-                        src={swapState.fromToken.logoURI}
-                        alt={swapState.fromToken.symbol}
-                        className="w-6 h-6 rounded-full"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.src = '/tokens/default.png';
-                        }}
-                      />
+                      <TokenIcon token={swapState.fromToken} />
                       <span className="font-medium">{swapState.fromToken.symbol}</span>
                     </>
                   ) : (
@@ -571,15 +605,7 @@ export default function MultichainSwapInterface({
                 >
                   {swapState.toToken ? (
                     <>
-                      <img
-                        src={swapState.toToken.logoURI}
-                        alt={swapState.toToken.symbol}
-                        className="w-6 h-6 rounded-full"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.src = '/tokens/default.png';
-                        }}
-                      />
+                      <TokenIcon token={swapState.toToken} />
                       <span className="font-medium">{swapState.toToken.symbol}</span>
                     </>
                   ) : (
