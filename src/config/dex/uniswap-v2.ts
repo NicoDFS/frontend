@@ -4,8 +4,8 @@ import { UNISWAP_V2_ROUTER_ABI, UNISWAP_V2_FACTORY_ABI } from '../abis';
 
 export const UNISWAP_V2_CONFIG: DexConfig = {
   name: 'Uniswap V2',
-  factory: '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f',
-  router: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D',
+  factory: '0xf1D7CC64Fb4452F05c498126312eBE29f30Fbcf9', // Uniswap V2 Factory on Arbitrum
+  router: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D', // Uniswap V2 Router on Arbitrum
   subgraphUrl: 'https://gateway.thegraph.com/api/subgraphs/id/CStW6CSQbHoXsgKuVCrk3uShGA4JX3CAzzv2x9zaGf8w',
   tokens: ARBITRUM_TOKENS,
   routerABI: UNISWAP_V2_ROUTER_ABI,
