@@ -83,6 +83,7 @@ function getNetworkId(chainId: number): string | null {
 /**
  * Search for a pool address given two token addresses
  * Tries searching both tokens to maximize chances of finding the pool
+ * Returns the pool address - chart will always show the same data regardless of token order
  */
 export async function findPoolAddress(
   chainId: number,
@@ -199,6 +200,9 @@ export async function getGeckoTerminalOHLC(
  * Convert GeckoTerminal OHLC data to our chart format
  * GeckoTerminal format: [timestamp, open, high, low, close, volume]
  * Our format: { time, open, high, low, close, value }
+ *
+ * Industry standard: Chart always shows the same pool data regardless of token order
+ * The swap interface handles the conversion math for users
  */
 export function convertGeckoTerminalToChartData(ohlcvList: any[]): any[] {
   if (!Array.isArray(ohlcvList)) {

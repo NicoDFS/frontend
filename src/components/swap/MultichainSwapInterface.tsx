@@ -10,19 +10,19 @@ import TokenSelectorModal from './TokenSelectorModal';
 import SwapConfirmationModal from './SwapConfirmationModal';
 import ErrorDisplay from './ErrorDisplay';
 import { useSwapErrorHandler } from '@/hooks/useSwapErrorHandler';
-import { SwapErrorType } from '@/utils/swapErrors';
 import { useSwapTransactions } from '@/hooks/useSwapTransactions';
 
 // Wagmi imports for wallet interaction
 import { useAccount, useChainId, useSwitchChain } from 'wagmi';
 
 // New multichain DEX service imports
-import { DexService, Token, QuoteResult, SwapParams } from '@/services/dex';
+import { Token, QuoteResult, SwapParams } from '@/services/dex';
 import { getDefaultTokenPair, isChainSupported } from '@/config/dex';
 
 // Custom hooks
 import { useMultichainTokenBalance } from '@/hooks/useMultichainTokenBalance';
 import { useTokenLists } from '@/hooks/useTokenLists';
+import { useDexSwap } from '@/hooks/useDexSwap';
 
 // Price impact utilities
 import { formatPriceImpact, getPriceImpactColor } from '@/utils/multichainPriceImpact';
@@ -185,6 +185,9 @@ export default function MultichainSwapInterface({
   // Token balances
   const { balances, getFormattedBalance, isLoading: balancesLoading, refreshBalances } = useMultichainTokenBalance(supportedTokens);
 
+  // DEX swap hook with proper client injection
+  const { getQuote: dexGetQuote, executeSwap: dexExecuteSwap, isInternalWallet } = useDexSwap(chainId || 3888);
+
   const [isSwapping, setIsSwapping] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [currentStep, setCurrentStep] = useState<'idle' | 'approving' | 'swapping' | 'complete'>('idle');
@@ -202,7 +205,6 @@ export default function MultichainSwapInterface({
     isRetrying,
     hasError,
     handleError,
-    handleValidationError,
     clearError,
     reset,
     retry,
@@ -232,10 +234,13 @@ export default function MultichainSwapInterface({
   const isChainSupportedForSwap = chainId && isChainSupported(chainId);
 
   // Get DEX name for current chain
-  const [dexName, setDexName] = useState<string>('');
-  useEffect(() => {
-    if (chainId && isChainSupported(chainId)) {
-      DexService.getDexName(chainId).then(setDexName);
+  const dexName = useMemo(() => {
+    if (!chainId || !isChainSupported(chainId)) return '';
+    switch (chainId) {
+      case 3888: return 'KalySwap';
+      case 56: return 'PancakeSwap';
+      case 42161: return 'Uniswap V2';
+      default: return '';
     }
   }, [chainId]);
 
@@ -254,8 +259,7 @@ export default function MultichainSwapInterface({
 
       setIsLoadingQuote(true);
       try {
-        const quoteResult = await DexService.getQuote(
-          chainId,
+        const quoteResult = await dexGetQuote(
           swapState.fromToken,
           swapState.toToken,
           swapState.fromAmount
@@ -337,22 +341,22 @@ export default function MultichainSwapInterface({
   // Execute swap
   const handleSwap = async () => {
     if (!chainId || !isChainSupported(chainId)) {
-      handleError(new Error('Chain not supported for swapping'), SwapErrorType.UNSUPPORTED_CHAIN);
+      handleError(new Error('Chain not supported for swapping'));
       return;
     }
 
     if (!isConnected || !address) {
-      handleError(new Error('Wallet not connected'), SwapErrorType.WALLET_NOT_CONNECTED);
+      handleError(new Error('Wallet not connected'));
       return;
     }
 
     if (!swapState.fromToken || !swapState.toToken || !swapState.fromAmount || !quote) {
-      handleValidationError('Please fill in all required fields');
+      handleError(new Error('Please fill in all required fields'));
       return;
     }
 
     if (!areTokensValidForChain(swapState.fromToken, swapState.toToken)) {
-      handleError(new Error('Tokens not valid for current chain'), SwapErrorType.INVALID_TOKEN);
+      handleError(new Error('Tokens not valid for current chain'));
       return;
     }
 
@@ -371,22 +375,27 @@ export default function MultichainSwapInterface({
         amountOutMin,
         to: address,
         deadline: parseInt(swapState.deadline),
-        slippageTolerance: parseFloat(swapState.slippage)
+        slippageTolerance: parseFloat(swapState.slippage),
+        route: quote.route // Include pre-calculated route from quote
       };
 
-      // Execute swap using DEX service
-      const txHash = await DexService.executeSwap(chainId, swapParams);
+      // Execute swap using DEX service with proper client injection
+      const txHash = await dexExecuteSwap(swapParams);
       setCurrentTransactionHash(txHash);
 
       // Add transaction to tracking
       addTransaction({
         hash: txHash,
-        type: 'swap',
-        tokenIn: swapState.fromToken,
-        tokenOut: swapState.toToken,
-        amountIn: swapState.fromAmount,
-        amountOut: quote.amountOut,
-        timestamp: Date.now(),
+        type: 'SWAP',
+        fromToken: swapState.fromToken,
+        toToken: swapState.toToken,
+        fromAmount: swapState.fromAmount,
+        toAmount: quote.amountOut,
+        fromAmountFormatted: swapState.fromAmount,
+        toAmountFormatted: quote.amountOut,
+        slippage: swapState.slippage,
+        priceImpact: quote.priceImpact.toString(),
+        userAddress: address,
         status: 'pending'
       });
 
@@ -404,7 +413,7 @@ export default function MultichainSwapInterface({
 
     } catch (error) {
       console.error('Swap error:', error);
-      handleError(error as Error, SwapErrorType.SWAP_FAILED);
+      handleError(error as Error);
       setCurrentStep('idle');
     } finally {
       setIsSwapping(false);
@@ -419,7 +428,7 @@ export default function MultichainSwapInterface({
       await switchChain({ chainId: targetChainId });
     } catch (error) {
       console.error('Chain switch error:', error);
-      handleError(error as Error, SwapErrorType.NETWORK_ERROR);
+      handleError(error as Error);
     }
   };
 
@@ -559,22 +568,63 @@ export default function MultichainSwapInterface({
                   <ChevronDown className="h-4 w-4" />
                 </Button>
               </div>
-              <div className="flex flex-col items-end">
+              <div className="flex flex-col items-end flex-1">
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   placeholder="0.0"
                   value={swapState.fromAmount}
-                  onChange={(e) => handleFromAmountChange(e.target.value)}
-                  className="text-right bg-transparent border-none text-lg font-medium text-white placeholder-gray-500 p-0 h-auto"
+                  onChange={(e) => {
+                    // Only allow numbers and decimal point
+                    const value = e.target.value.replace(/[^0-9.]/g, '');
+                    handleFromAmountChange(value);
+                  }}
+                  className="text-right bg-transparent border-none text-lg font-medium text-white placeholder-gray-500 p-0 h-auto w-full"
                   disabled={!isChainSupportedForSwap}
                 />
                 {swapState.fromToken && (
-                  <div className="text-xs text-gray-400 mt-1">
-                    Balance: {getTokenBalance(swapState.fromToken)}
+                  <div className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+                    <span>Balance: {getTokenBalance(swapState.fromToken)}</span>
                   </div>
                 )}
               </div>
             </div>
+            {/* Percentage buttons */}
+            {swapState.fromToken && (
+              <div className="flex gap-1 mt-2">
+                {[25, 50, 75].map((percentage) => (
+                  <Button
+                    key={percentage}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const balance = getTokenBalance(swapState.fromToken!);
+                      const numBalance = parseFloat(balance);
+                      if (!isNaN(numBalance)) {
+                        const amount = (numBalance * percentage / 100).toString();
+                        handleFromAmountChange(amount);
+                      }
+                    }}
+                    className="flex-1 text-xs h-7 bg-stone-800 border-stone-600 hover:bg-stone-700 text-gray-300"
+                    disabled={!isChainSupportedForSwap}
+                  >
+                    {percentage}%
+                  </Button>
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const balance = getTokenBalance(swapState.fromToken!);
+                    handleFromAmountChange(balance);
+                  }}
+                  className="flex-1 text-xs h-7 bg-stone-800 border-stone-600 hover:bg-stone-700 text-gray-300 font-semibold"
+                  disabled={!isChainSupportedForSwap}
+                >
+                  MAX
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -614,12 +664,29 @@ export default function MultichainSwapInterface({
                   <ChevronDown className="h-4 w-4" />
                 </Button>
               </div>
-              <div className="flex flex-col items-end">
-                <div className="text-lg font-medium text-white">
+              <div className="flex flex-col items-end flex-1 min-w-0">
+                <div className="text-lg font-medium text-white truncate w-full text-right">
                   {isLoadingQuote ? (
                     <div className="animate-pulse">...</div>
                   ) : (
-                    swapState.toAmount || '0.0'
+                    (() => {
+                      // Format toAmount to prevent overflow
+                      if (!swapState.toAmount || swapState.toAmount === '0.0') return '0.0';
+                      const num = parseFloat(swapState.toAmount);
+                      if (isNaN(num)) return '0.0';
+
+                      // Format based on magnitude
+                      if (num >= 1000000) {
+                        return num.toExponential(4); // Scientific notation for very large numbers
+                      } else if (num >= 1) {
+                        return num.toLocaleString('en-US', { maximumFractionDigits: 6, minimumFractionDigits: 2 });
+                      } else if (num >= 0.0001) {
+                        return num.toFixed(6);
+                      } else if (num > 0) {
+                        return num.toExponential(4); // Scientific notation for very small numbers
+                      }
+                      return '0.0';
+                    })()
                   )}
                 </div>
                 {swapState.toToken && (

@@ -5,8 +5,8 @@ import { BaseDexService } from './BaseDexService';
 import { SwapParams, Token } from '@/config/dex/types';
 import { UNISWAP_V2_CONFIG } from '@/config/dex/uniswap-v2';
 import { DexError, SwapFailedError } from './IDexService';
-import { useWalletClient } from 'wagmi';
 import { getContract, parseUnits } from 'viem';
+import type { WalletClient, PublicClient } from 'viem';
 
 export class UniswapV2Service extends BaseDexService {
   constructor() {
@@ -21,15 +21,14 @@ export class UniswapV2Service extends BaseDexService {
     return 42161; // Arbitrum
   }
 
-  async executeSwap(params: SwapParams): Promise<string> {
+  async executeSwap(params: SwapParams, walletClient: WalletClient): Promise<string> {
     try {
-      const walletClient = useWalletClient();
-      if (!walletClient.data) {
+      if (!walletClient) {
         throw new DexError('Wallet client not available', 'NO_WALLET', this.getName());
       }
 
       // Get swap route
-      const route = await this.getSwapRoute(params.tokenIn, params.tokenOut);
+      const route = params.route || await this.getSwapRoute(params.tokenIn, params.tokenOut, walletClient as any);
       if (route.length === 0) {
         throw new SwapFailedError(this.getName(), 'No swap route available');
       }
@@ -42,7 +41,7 @@ export class UniswapV2Service extends BaseDexService {
       const routerContract = getContract({
         address: this.config.router as `0x${string}`,
         abi: this.config.routerABI,
-        client: walletClient.data,
+        client: walletClient,
       });
 
       // Calculate deadline (current time + deadline minutes)
@@ -149,12 +148,12 @@ export class UniswapV2Service extends BaseDexService {
   }
 
   // Override route calculation for Uniswap V2-specific routing
-  async getSwapRoute(tokenIn: Token, tokenOut: Token): Promise<string[]> {
+  async getSwapRoute(tokenIn: Token, tokenOut: Token, publicClient: PublicClient): Promise<string[]> {
     const addressIn = tokenIn.isNative ? this.getWethAddress() : tokenIn.address;
     const addressOut = tokenOut.isNative ? this.getWethAddress() : tokenOut.address;
 
     // Check direct pair first
-    const directPairExists = await this.canSwapDirectly(tokenIn, tokenOut);
+    const directPairExists = await this.canSwapDirectly(tokenIn, tokenOut, publicClient);
     if (directPairExists) {
       return [addressIn, addressOut];
     }
@@ -165,8 +164,8 @@ export class UniswapV2Service extends BaseDexService {
       const wethToken = this.config.tokens.find(t => t.address.toLowerCase() === wethAddress.toLowerCase());
       if (wethToken) {
         const canRouteViaWETH = await Promise.all([
-          this.canSwapDirectly(tokenIn, wethToken),
-          this.canSwapDirectly(wethToken, tokenOut)
+          this.canSwapDirectly(tokenIn, wethToken, publicClient),
+          this.canSwapDirectly(wethToken, tokenOut, publicClient)
         ]);
 
         if (canRouteViaWETH[0] && canRouteViaWETH[1]) {
@@ -179,8 +178,8 @@ export class UniswapV2Service extends BaseDexService {
     const usdcToken = this.config.tokens.find(t => t.symbol === 'USDC');
     if (usdcToken && addressIn !== usdcToken.address && addressOut !== usdcToken.address) {
       const canRouteViaUSDC = await Promise.all([
-        this.canSwapDirectly(tokenIn, usdcToken),
-        this.canSwapDirectly(usdcToken, tokenOut)
+        this.canSwapDirectly(tokenIn, usdcToken, publicClient),
+        this.canSwapDirectly(usdcToken, tokenOut, publicClient)
       ]);
 
       if (canRouteViaUSDC[0] && canRouteViaUSDC[1]) {
@@ -192,8 +191,8 @@ export class UniswapV2Service extends BaseDexService {
     const usdtToken = this.config.tokens.find(t => t.symbol === 'USDT');
     if (usdtToken && addressIn !== usdtToken.address && addressOut !== usdtToken.address) {
       const canRouteViaUSDT = await Promise.all([
-        this.canSwapDirectly(tokenIn, usdtToken),
-        this.canSwapDirectly(usdtToken, tokenOut)
+        this.canSwapDirectly(tokenIn, usdtToken, publicClient),
+        this.canSwapDirectly(usdtToken, tokenOut, publicClient)
       ]);
 
       if (canRouteViaUSDT[0] && canRouteViaUSDT[1]) {

@@ -43,6 +43,7 @@ export interface SwapParams {
   to: string;
   deadline: number;
   slippageTolerance: number;
+  route?: string[]; // Optional pre-calculated route
 }
 
 export interface PairInfo {

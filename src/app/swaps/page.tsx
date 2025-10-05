@@ -818,6 +818,29 @@ function SwapsPageContent({
     pairAddress
   } = usePairMarketStats(swapState.fromToken || undefined, swapState.toToken || undefined);
 
+  // Determine the base token for consistent price formatting
+  // Always use the non-stablecoin token for formatting
+  const baseTokenForFormatting = useMemo(() => {
+    if (!swapState.fromToken || !swapState.toToken) return null;
+
+    const stablecoins = ['USDT', 'USDC', 'DAI', 'BUSD'];
+
+    // If fromToken is a stablecoin, use toToken as base
+    if (stablecoins.includes(swapState.fromToken.symbol)) {
+      return swapState.toToken;
+    }
+    // If toToken is a stablecoin, use fromToken as base
+    else if (stablecoins.includes(swapState.toToken.symbol)) {
+      return swapState.fromToken;
+    }
+    // If neither is a stablecoin, use alphabetically first by address
+    else {
+      const addrFrom = swapState.fromToken.address.toLowerCase();
+      const addrTo = swapState.toToken.address.toLowerCase();
+      return addrFrom < addrTo ? swapState.fromToken : swapState.toToken;
+    }
+  }, [swapState.fromToken?.address, swapState.fromToken?.symbol, swapState.toToken?.address, swapState.toToken?.symbol]);
+
   // Create default token pair from dynamic tokens based on chain
   const defaultTokenPair = useMemo(() => {
     if (!dynamicTokens || dynamicTokens.length === 0 || !chainId) return null;
@@ -1111,7 +1134,7 @@ function SwapsPageContent({
                       ) : (
                         <>
                           <span className="font-medium">
-                            {pairPrice > 0 ? formatTokenPrice(pairPrice, swapState.toToken?.symbol || '') : '0.00000000'}
+                            {pairPrice > 0 ? formatTokenPrice(pairPrice, baseTokenForFormatting?.symbol || '') : '0.00000000'}
                           </span>
                           {priceChange24h !== 0 && (
                             <span

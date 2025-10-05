@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { getPairMarketStats } from '@/lib/subgraph-client';
 import { usePriceDataContext } from '@/contexts/PriceDataContext';
 import { fetchGraphQL, safeApiCall, isNetworkError } from '@/utils/networkUtils';
@@ -28,6 +28,7 @@ const WKLC_ADDRESS = '0x069255299Bb729399f3CECaBdc73d15d3D10a2A3';
 
 /**
  * Hook to get market stats for a specific trading pair
+ * Industry standard: Always shows the same price/stats regardless of token order
  */
 export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketStats {
   const [price, setPrice] = useState<number>(0);
@@ -39,6 +40,19 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
 
   // Use shared price change from context
   const { priceChange24h } = usePriceDataContext();
+
+  // Normalize token order to ensure consistent stats regardless of swap direction
+  // This ensures KLC/USDT and USDT/KLC show the same price/volume/liquidity
+  const [normalizedTokenA, normalizedTokenB] = useMemo(() => {
+    if (!tokenA || !tokenB) return [tokenA, tokenB];
+
+    // Sort tokens by address (lowercase for case-insensitive comparison)
+    const addrA = tokenA.address.toLowerCase();
+    const addrB = tokenB.address.toLowerCase();
+
+    // Return tokens in consistent order
+    return addrA < addrB ? [tokenA, tokenB] : [tokenB, tokenA];
+  }, [tokenA?.address, tokenB?.address]);
 
   // Convert native KLC to WKLC address
   const getTokenAddress = useCallback((token: Token): string => {
@@ -82,7 +96,7 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
   }, [getTokenAddress]);
 
   const fetchPairStats = useCallback(async () => {
-    if (!tokenA || !tokenB) {
+    if (!normalizedTokenA || !normalizedTokenB) {
       setIsLoading(false);
       return;
     }
@@ -91,10 +105,11 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
       setIsLoading(true);
       setError(null);
 
-      const foundPairAddress = await findPairAddress(tokenA, tokenB);
+      // Use normalized tokens for consistent pair lookup
+      const foundPairAddress = await findPairAddress(normalizedTokenA, normalizedTokenB);
 
       if (!foundPairAddress) {
-        console.log(`⚠️ No pair found for ${tokenA.symbol}/${tokenB.symbol} - this is normal for tokens without liquidity`);
+        console.log(`⚠️ No pair found for ${normalizedTokenA.symbol}/${normalizedTokenB.symbol} - this is normal for tokens without liquidity`);
         setIsLoading(false);
         return; // Exit gracefully instead of throwing error
       }
@@ -102,9 +117,9 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
       setPairAddress(foundPairAddress);
 
       // Determine chainId from tokens for multichain support
-      const chainId = tokenA.chainId || tokenB.chainId || 3888;
+      const chainId = normalizedTokenA.chainId || normalizedTokenB.chainId || 3888;
 
-      console.log(`📊 Fetching pair stats for ${tokenA.symbol}/${tokenB.symbol} on chain ${chainId} (${foundPairAddress})`);
+      console.log(`📊 Fetching pair stats (normalized order) for ${normalizedTokenA.symbol}/${normalizedTokenB.symbol} on chain ${chainId} (${foundPairAddress})`);
 
       const stats = await getPairMarketStats(foundPairAddress, chainId);
 
@@ -203,23 +218,33 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
         real24hrVolume = stats.volume24h || 0;
       }
 
-      // Calculate price from reserves
+      // Calculate price from reserves using NORMALIZED tokens for consistency
       const reserve0 = parseFloat(stats.pair.reserve0);
       const reserve1 = parseFloat(stats.pair.reserve1);
 
       let calculatedPrice = 0;
       if (reserve0 > 0 && reserve1 > 0) {
-        // Determine which token is which
-        const token0Address = getTokenAddress(tokenA);
-        const token1Address = getTokenAddress(tokenB);
+        // Use normalized tokens to ensure consistent price calculation
+        const token0Address = getTokenAddress(normalizedTokenA);
+        const token1Address = getTokenAddress(normalizedTokenB);
 
         if (stats.pair.token0.id.toLowerCase() === token0Address.toLowerCase()) {
-          // tokenA is token0, tokenB is token1
-          calculatedPrice = reserve1 / reserve0; // tokenB per tokenA
+          // normalizedTokenA is token0, normalizedTokenB is token1
+          calculatedPrice = reserve1 / reserve0; // normalizedTokenB per normalizedTokenA
         } else {
-          // tokenA is token1, tokenB is token0
-          calculatedPrice = reserve0 / reserve1; // tokenB per tokenA
+          // normalizedTokenA is token1, normalizedTokenB is token0
+          calculatedPrice = reserve0 / reserve1; // normalizedTokenB per normalizedTokenA
         }
+
+        console.log(`💰 Price calculation (normalized):`, {
+          displayPair: tokenA && tokenB ? `${tokenA.symbol}/${tokenB.symbol}` : 'unknown',
+          normalizedPair: `${normalizedTokenA.symbol}/${normalizedTokenB.symbol}`,
+          token0: stats.pair.token0.symbol,
+          token1: stats.pair.token1.symbol,
+          reserve0,
+          reserve1,
+          calculatedPrice: calculatedPrice.toFixed(8)
+        });
       }
 
       setPrice(calculatedPrice);
@@ -257,17 +282,18 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
       
       setLiquidity(calculatedLiquidity);
 
-      console.log(`✅ Pair stats updated for ${tokenA.symbol}/${tokenB.symbol}:`, {
+      console.log(`✅ Pair stats updated (normalized):`, {
+        displayPair: tokenA && tokenB ? `${tokenA.symbol}/${tokenB.symbol}` : 'unknown',
+        normalizedPair: `${normalizedTokenA.symbol}/${normalizedTokenB.symbol}`,
         price: calculatedPrice,
-        priceChange24h: stats.priceChange24h,
-        volume24h: stats.volume24h,
+        volume24h: real24hrVolume,
         liquidity: calculatedLiquidity
       });
 
     } catch (err) {
       console.error('❌ Error fetching pair stats:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch pair stats');
-      
+
       // Reset to default values
       setPrice(0);
       setVolume24h(0);
@@ -275,7 +301,7 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
     } finally {
       setIsLoading(false);
     }
-  }, [tokenA, tokenB, findPairAddress, getTokenAddress]);
+  }, [normalizedTokenA, normalizedTokenB, findPairAddress, getTokenAddress]); // Only normalized tokens
 
   // Fetch stats when tokens change
   useEffect(() => {

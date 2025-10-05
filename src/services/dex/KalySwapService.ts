@@ -5,8 +5,8 @@ import { BaseDexService } from './BaseDexService';
 import { SwapParams, Token } from '@/config/dex/types';
 import { KALYSWAP_CONFIG } from '@/config/dex/kalyswap';
 import { DexError, SwapFailedError } from './IDexService';
-import { useWalletClient } from 'wagmi';
 import { getContract, parseUnits } from 'viem';
+import type { WalletClient, PublicClient } from 'viem';
 
 export class KalySwapService extends BaseDexService {
   constructor() {
@@ -21,15 +21,15 @@ export class KalySwapService extends BaseDexService {
     return 3888; // KalyChain
   }
 
-  async executeSwap(params: SwapParams): Promise<string> {
+  async executeSwap(params: SwapParams, walletClient: WalletClient): Promise<string> {
     try {
-      const walletClient = useWalletClient();
-      if (!walletClient.data) {
+      if (!walletClient) {
         throw new DexError('Wallet client not available', 'NO_WALLET', this.getName());
       }
 
-      // Get swap route
-      const route = await this.getSwapRoute(params.tokenIn, params.tokenOut);
+      // Get swap route - we'll need publicClient for this, but for now use a workaround
+      // The route calculation will be done at a higher level
+      const route = params.route || await this.getSwapRoute(params.tokenIn, params.tokenOut, walletClient as any);
       if (route.length === 0) {
         throw new SwapFailedError(this.getName(), 'No swap route available');
       }
@@ -42,7 +42,7 @@ export class KalySwapService extends BaseDexService {
       const routerContract = getContract({
         address: this.config.router as `0x${string}`,
         abi: this.config.routerABI,
-        client: walletClient.data,
+        client: walletClient,
       });
 
       // Calculate deadline (current time + deadline minutes)
@@ -51,9 +51,10 @@ export class KalySwapService extends BaseDexService {
       let txHash: string;
 
       // Handle different swap scenarios
+      // KalySwap uses KLC instead of ETH in function names
       if (params.tokenIn.isNative) {
-        // ETH/KLC to Token
-        txHash = await routerContract.write.swapExactETHForTokens([
+        // KLC to Token
+        txHash = await routerContract.write.swapExactKLCForTokens([
           amountOutMin,
           route,
           params.to as `0x${string}`,
@@ -62,8 +63,8 @@ export class KalySwapService extends BaseDexService {
           value: amountIn
         }) as string;
       } else if (params.tokenOut.isNative) {
-        // Token to ETH/KLC
-        txHash = await routerContract.write.swapExactTokensForETH([
+        // Token to KLC
+        txHash = await routerContract.write.swapExactTokensForKLC([
           amountIn,
           amountOutMin,
           route,
@@ -149,12 +150,12 @@ export class KalySwapService extends BaseDexService {
   }
 
   // Override route calculation for KalySwap-specific routing
-  async getSwapRoute(tokenIn: Token, tokenOut: Token): Promise<string[]> {
+  async getSwapRoute(tokenIn: Token, tokenOut: Token, publicClient: PublicClient): Promise<string[]> {
     const addressIn = tokenIn.isNative ? this.getWethAddress() : tokenIn.address;
     const addressOut = tokenOut.isNative ? this.getWethAddress() : tokenOut.address;
 
     // Check direct pair first
-    const directPairExists = await this.canSwapDirectly(tokenIn, tokenOut);
+    const directPairExists = await this.canSwapDirectly(tokenIn, tokenOut, publicClient);
     if (directPairExists) {
       return [addressIn, addressOut];
     }
@@ -165,8 +166,8 @@ export class KalySwapService extends BaseDexService {
       const wklcToken = this.config.tokens.find(t => t.address.toLowerCase() === wklcAddress.toLowerCase());
       if (wklcToken) {
         const canRouteViaWKLC = await Promise.all([
-          this.canSwapDirectly(tokenIn, wklcToken),
-          this.canSwapDirectly(wklcToken, tokenOut)
+          this.canSwapDirectly(tokenIn, wklcToken, publicClient),
+          this.canSwapDirectly(wklcToken, tokenOut, publicClient)
         ]);
 
         if (canRouteViaWKLC[0] && canRouteViaWKLC[1]) {
@@ -179,8 +180,8 @@ export class KalySwapService extends BaseDexService {
     const usdtToken = this.config.tokens.find(t => t.symbol === 'USDT');
     if (usdtToken && addressIn !== usdtToken.address && addressOut !== usdtToken.address) {
       const canRouteViaUSDT = await Promise.all([
-        this.canSwapDirectly(tokenIn, usdtToken),
-        this.canSwapDirectly(usdtToken, tokenOut)
+        this.canSwapDirectly(tokenIn, usdtToken, publicClient),
+        this.canSwapDirectly(usdtToken, tokenOut, publicClient)
       ]);
 
       if (canRouteViaUSDT[0] && canRouteViaUSDT[1]) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { usePublicClient } from 'wagmi';
 import { ethers } from 'ethers';
 import { getPairAddress } from '@/utils/priceImpact';
@@ -440,6 +440,20 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
   // Check if we have valid tokens
   const hasValidTokens = tokenA && tokenB && tokenA.address !== tokenB.address;
 
+  // Normalize token order to ensure consistent pool lookup regardless of swap direction
+  // This ensures KLC/USDT and USDT/KLC both fetch the same pool data
+  // Sort by address to get consistent ordering
+  const [normalizedTokenA, normalizedTokenB] = useMemo(() => {
+    if (!tokenA || !tokenB) return [tokenA, tokenB];
+
+    // Sort tokens by address (lowercase for case-insensitive comparison)
+    const addrA = tokenA.address.toLowerCase();
+    const addrB = tokenB.address.toLowerCase();
+
+    // Return tokens in consistent order
+    return addrA < addrB ? [tokenA, tokenB] : [tokenB, tokenA];
+  }, [tokenA?.address, tokenB?.address]);
+
   // Get pair address dynamically from factory contract (like Uniswap)
   useEffect(() => {
     const fetchPairAddress = async () => {
@@ -455,27 +469,22 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
       }
 
       try {
-        // Use factory contract to get pair address dynamically
-        const address = await getPairAddress(publicClient, tokenA!, tokenB!);
+        // Use normalized token order for consistent pair lookup
+        const address = await getPairAddress(publicClient, normalizedTokenA!, normalizedTokenB!);
 
         setPairAddress(address);
-        console.log('🔍 Pair address resolved:', {
-          tokenA: tokenA!.symbol,
-          tokenAChainId: tokenA!.chainId,
-          tokenAAddress: tokenA!.address,
-          tokenB: tokenB!.symbol,
-          tokenBChainId: tokenB!.chainId,
-          tokenBAddress: tokenB!.address,
+        console.log('🔍 Pair address resolved (normalized order):', {
+          originalTokenA: tokenA!.symbol,
+          originalTokenB: tokenB!.symbol,
+          normalizedTokenA: normalizedTokenA!.symbol,
+          normalizedTokenB: normalizedTokenB!.symbol,
           pairAddress: address,
-          exists: !!address,
-          publicClientChainId: publicClient ? await publicClient.getChainId() : 'unknown'
+          exists: !!address
         });
       } catch (error) {
         console.error('❌ Error getting pair address:', {
           tokenA: tokenA!.symbol,
-          tokenAChainId: tokenA!.chainId,
           tokenB: tokenB!.symbol,
-          tokenBChainId: tokenB!.chainId,
           error: error instanceof Error ? error.message : error
         });
         setPairAddress(null);
@@ -483,7 +492,7 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
     };
 
     fetchPairAddress();
-  }, [tokenA, tokenB, hasValidTokens, publicClient]);
+  }, [normalizedTokenA, normalizedTokenB, hasValidTokens, publicClient]);
 
   const fetchHistoricalData = useCallback(async () => {
 
@@ -500,12 +509,14 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
 
     try {
       // Determine chainId from tokens for multichain support
-      const chainId = tokenA?.chainId || tokenB?.chainId || 3888;
+      const chainId = normalizedTokenA?.chainId || normalizedTokenB?.chainId || 3888;
 
-      console.log('🔗 Fetching chart data for chain:', {
+      console.log('🔗 Fetching chart data for chain (using normalized tokens):', {
         chainId,
-        tokenA: tokenA?.symbol,
-        tokenB: tokenB?.symbol,
+        originalTokenA: tokenA?.symbol,
+        originalTokenB: tokenB?.symbol,
+        normalizedTokenA: normalizedTokenA?.symbol,
+        normalizedTokenB: normalizedTokenB?.symbol,
         pairAddress: pairAddress?.toLowerCase()
       });
 
@@ -515,9 +526,11 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
 
         // Find pool address if not provided
         let poolAddr = pairAddress;
+
         if (!poolAddr) {
-          console.log('🔍 Searching for pool address...');
-          poolAddr = await findPoolAddress(chainId, tokenA!, tokenB!);
+          console.log('🔍 Searching for pool address using normalized token order...');
+          // Use normalized tokens for consistent pool lookup
+          poolAddr = await findPoolAddress(chainId, normalizedTokenA!, normalizedTokenB!);
 
           if (!poolAddr) {
             setPriceData([]);
@@ -538,9 +551,14 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
         }
 
         // Convert GeckoTerminal data to our chart format
+        // Industry standard: Chart always shows the same pool data regardless of token order
         const chartData = convertGeckoTerminalToChartData(ohlcvList);
 
-        console.log(`✅ GeckoTerminal: Processed ${chartData.length} price points for ${tokenA?.symbol}/${tokenB?.symbol}`);
+        console.log(`✅ GeckoTerminal: Processed ${chartData.length} price points (normalized order)`, {
+          displayPair: `${tokenA?.symbol}/${tokenB?.symbol}`,
+          normalizedPair: `${normalizedTokenA?.symbol}/${normalizedTokenB?.symbol}`,
+          dataPoints: chartData.length
+        });
         setPriceData(chartData);
         setIsLoading(false);
         return;
@@ -649,22 +667,20 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
                 return null; // Skip invalid data
               }
 
-              // Calculate price correctly based on which token we want the price for
-              // If we want tokenA price in terms of tokenB:
-              // - If tokenA is token0, price = reserve1/reserve0 (token1 per token0)
-              // - If tokenA is token1, price = reserve0/reserve1 (token0 per token1)
-
+              // Calculate price using NORMALIZED tokens for consistency
+              // This ensures the chart shows the same price regardless of pair flip
+              // Always calculate based on normalizedTokenA (the base token)
               let price = 0;
               let calculation = '';
 
-              if (pairInfo?.token0?.symbol === tokenA?.symbol) {
-                // tokenA is token0, so price = reserve1/reserve0 (how much token1 per token0)
+              if (pairInfo?.token0?.symbol === normalizedTokenA?.symbol) {
+                // normalizedTokenA is token0, so price = reserve1/reserve0 (token1 per token0)
                 price = reserve1 / reserve0;
-                calculation = `${reserve1}/${reserve0} (${tokenA?.symbol} is token0)`;
-              } else if (pairInfo?.token1?.symbol === tokenA?.symbol) {
-                // tokenA is token1, so price = reserve0/reserve1 (how much token0 per token1)
+                calculation = `${reserve1}/${reserve0} (${normalizedTokenA?.symbol} is token0)`;
+              } else if (pairInfo?.token1?.symbol === normalizedTokenA?.symbol) {
+                // normalizedTokenA is token1, so price = reserve0/reserve1 (token0 per token1)
                 price = reserve0 / reserve1;
-                calculation = `${reserve0}/${reserve1} (${tokenA?.symbol} is token1)`;
+                calculation = `${reserve0}/${reserve1} (${normalizedTokenA?.symbol} is token1)`;
               } else {
                 // Fallback: assume we want token1 price in token0
                 price = reserve1 / reserve0;
@@ -673,9 +689,9 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
 
               // Log the first calculation for debugging
               if (hourData.indexOf(hour) === 0) {
-                console.log('💰 Price calculation debug:', {
-                  tokenA: tokenA?.symbol,
-                  tokenB: tokenB?.symbol,
+                console.log('💰 Price calculation debug (using normalized tokens):', {
+                  displayPair: `${tokenA?.symbol}/${tokenB?.symbol}`,
+                  normalizedPair: `${normalizedTokenA?.symbol}/${normalizedTokenB?.symbol}`,
                   token0: pairInfo?.token0?.symbol,
                   token1: pairInfo?.token1?.symbol,
                   reserve0,
@@ -723,7 +739,7 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
     } finally {
       setIsLoading(false);
     }
-  }, [tokenA, tokenB, pairAddress, hasValidTokens, tokenA?.chainId, tokenB?.chainId]);
+  }, [normalizedTokenA, normalizedTokenB, pairAddress, hasValidTokens]); // Only normalized tokens to prevent re-fetch on flip
 
   useEffect(() => {
     fetchHistoricalData();

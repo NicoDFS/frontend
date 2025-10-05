@@ -90,6 +90,26 @@ export default function TradingChart({
   // Check if we have valid tokens to display chart
   const hasValidTokens = currentTokenA && currentTokenB;
 
+  // Normalize token order for consistent display formatting
+  // Always use the base token (non-stablecoin) for price formatting
+  const normalizedBaseToken = React.useMemo(() => {
+    if (!currentTokenA || !currentTokenB) return currentTokenA;
+
+    // Stablecoins should never be the base token for formatting
+    const stablecoins = ['USDT', 'USDC', 'DAI', 'BUSD'];
+
+    if (stablecoins.includes(currentTokenA.symbol)) {
+      return currentTokenB; // Use tokenB as base
+    } else if (stablecoins.includes(currentTokenB.symbol)) {
+      return currentTokenA; // Use tokenA as base
+    }
+
+    // If neither is a stablecoin, use alphabetically first by address
+    const addrA = currentTokenA.address.toLowerCase();
+    const addrB = currentTokenB.address.toLowerCase();
+    return addrA < addrB ? currentTokenA : currentTokenB;
+  }, [currentTokenA?.address, currentTokenA?.symbol, currentTokenB?.address, currentTokenB?.symbol]);
+
   // Fetch real historical price data from DEX subgraph only if we have valid tokens
   const {
     priceData: historicalData,
@@ -136,10 +156,19 @@ export default function TradingChart({
   const { setPriceChange24h: setSharedPriceChange } = usePriceDataContext();
 
   const priceChange24h = React.useMemo(() => {
-    if (historicalData.length >= 2) {
+    if (historicalData.length >= 25) { // Need at least 25 hours of data
       const latest = historicalData[historicalData.length - 1];
-      const previous = historicalData[historicalData.length - 2];
-      const change = ((latest.close - previous.close) / previous.close) * 100;
+      // Get price from 24 hours ago (24 data points back since we have hourly data)
+      const price24hAgo = historicalData[historicalData.length - 25];
+      const change = ((latest.close - price24hAgo.close) / price24hAgo.close) * 100;
+
+      console.log('📊 24h Price Change Calculation:', {
+        currentPrice: latest.close,
+        price24hAgo: price24hAgo.close,
+        change: change.toFixed(2) + '%',
+        dataPoints: historicalData.length
+      });
+
       return change;
     }
     return 0;
@@ -312,6 +341,11 @@ export default function TradingChart({
     }));
 
     // Create new series based on chart type
+    // Use normalizedBaseToken for consistent precision/minMove regardless of pair order
+    const isKLC = normalizedBaseToken?.symbol === 'KLC' || normalizedBaseToken?.symbol === 'wKLC';
+    const precision = isKLC ? 8 : 4;
+    const minMove = isKLC ? 0.00000001 : 0.0001;
+
     if (selectedChartType === 'candlestick') {
       const candlestickSeries = chartRef.current.addSeries(CandlestickSeries, {
         upColor: '#10b981',
@@ -322,8 +356,8 @@ export default function TradingChart({
         wickUpColor: '#10b981',
         priceFormat: {
           type: 'price',
-          precision: (currentTokenA?.symbol === 'KLC' || currentTokenA?.symbol === 'wKLC') ? 8 : 4,
-          minMove: (currentTokenA?.symbol === 'KLC' || currentTokenA?.symbol === 'wKLC') ? 0.00000001 : 0.0001,
+          precision: precision,
+          minMove: minMove,
         },
       });
 
@@ -366,8 +400,8 @@ export default function TradingChart({
         lineWidth: 2,
         priceFormat: {
           type: 'price',
-          precision: (currentTokenA?.symbol === 'KLC' || currentTokenA?.symbol === 'wKLC') ? 8 : 4,
-          minMove: (currentTokenA?.symbol === 'KLC' || currentTokenA?.symbol === 'wKLC') ? 0.00000001 : 0.0001,
+          precision: precision,
+          minMove: minMove,
         },
       });
 
@@ -539,7 +573,7 @@ export default function TradingChart({
             {currentPrice && (
               <div className="flex items-center gap-2">
                 <span className="text-xl font-bold text-gray-900">
-                  ${formatTokenPrice(currentPrice, currentTokenA?.symbol || 'TOKEN1')}
+                  ${formatTokenPrice(currentPrice, normalizedBaseToken?.symbol || 'TOKEN1')}
                 </span>
                 {priceChange24h !== null && (
                   <span
