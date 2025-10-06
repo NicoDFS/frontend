@@ -344,6 +344,46 @@ export function convertGeckoTerminalToChartData(ohlcvList: any[], invert: boolea
 }
 
 /**
+ * Get recent trades for a pool
+ * @param chainId - Chain ID (56 for BSC, 42161 for Arbitrum)
+ * @param poolAddress - Pool/pair address
+ * @param limit - Number of trades to return (default: 20, max: 100)
+ * @returns Array of recent trades
+ */
+export async function getPoolTrades(
+  chainId: number,
+  poolAddress: string,
+  limit: number = 20
+): Promise<any[]> {
+  try {
+    const networkId = getNetworkId(chainId);
+    if (!networkId) {
+      console.warn(`⚠️ GeckoTerminal: Unsupported chain ${chainId}`);
+      return [];
+    }
+
+    const url = `${GECKOTERMINAL_API_BASE}/networks/${networkId}/pools/${poolAddress.toLowerCase()}/trades?trade_volume_in_usd_greater_than=0`;
+
+    console.log(`🦎 GeckoTerminal: Fetching recent trades from ${url}`);
+
+    const response = await rateLimitedFetch(url);
+
+    if (!response?.data || !Array.isArray(response.data)) {
+      console.warn('⚠️ GeckoTerminal: Invalid trades response format');
+      return [];
+    }
+
+    const trades = response.data.slice(0, limit);
+    console.log(`✅ GeckoTerminal: Fetched ${trades.length} recent trades`);
+
+    return trades;
+  } catch (error) {
+    console.error('❌ GeckoTerminal: Error fetching trades:', error);
+    return [];
+  }
+}
+
+/**
  * Check if a chain is supported by GeckoTerminal
  */
 export function isChainSupported(chainId: number): boolean {
