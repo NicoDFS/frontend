@@ -95,6 +95,111 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
     }
   }, [getTokenAddress]);
 
+  // Fetch market stats from GeckoTerminal for BSC and Arbitrum
+  const fetchGeckoTerminalStats = useCallback(async (
+    chainId: number,
+    tokenA: Token,
+    tokenB: Token
+  ) => {
+    try {
+      console.log(`🦎 Fetching GeckoTerminal stats for ${tokenA.symbol}/${tokenB.symbol} on chain ${chainId}`);
+
+      // Import GeckoTerminal client functions
+      const { findPoolAddress: findGeckoPool, getPoolInfo } = await import('@/lib/geckoterminal-client');
+
+      // Find the pool address
+      const poolAddress = await findGeckoPool(chainId, tokenA, tokenB);
+
+      if (!poolAddress) {
+        console.log(`⚠️ No GeckoTerminal pool found for ${tokenA.symbol}/${tokenB.symbol} - pair may not have liquidity`);
+        // Reset stats to zero instead of showing error
+        setPrice(0);
+        setVolume24h(0);
+        setLiquidity(0);
+        setPairAddress(null);
+        setIsLoading(false);
+        return;
+      }
+
+      setPairAddress(poolAddress);
+      console.log(`✅ Found GeckoTerminal pool: ${poolAddress}`);
+
+      // Get pool info with market stats
+      const poolInfo = await getPoolInfo(chainId, poolAddress);
+
+      if (!poolInfo?.attributes) {
+        console.warn('⚠️ No pool attributes found - pool may not be indexed yet');
+        // Reset stats to zero instead of showing error
+        setPrice(0);
+        setVolume24h(0);
+        setLiquidity(0);
+        setIsLoading(false);
+        return;
+      }
+
+      const attrs = poolInfo.attributes;
+
+      // Get base and quote token addresses from pool
+      const poolBaseToken = poolInfo.relationships?.base_token?.data?.id?.split('_')[1]?.toLowerCase();
+      const poolQuoteToken = poolInfo.relationships?.quote_token?.data?.id?.split('_')[1]?.toLowerCase();
+
+      // GeckoTerminal provides:
+      // - base_token_price_usd: BASE token price in USD
+      // - base_token_price_quote_currency: BASE token price in QUOTE token terms
+      // - base_token_price_native_currency: BASE token price in native token
+      const baseTokenPriceUsd = parseFloat(attrs.base_token_price_usd || '0');
+      const baseTokenPriceInQuote = parseFloat(attrs.base_token_price_quote_currency || '0');
+
+      console.log('🔍 GeckoTerminal pool structure:', {
+        userPair: `${tokenA.symbol}/${tokenB.symbol}`,
+        poolBase: poolBaseToken,
+        poolQuote: poolQuoteToken,
+        baseTokenPriceUsd,
+        baseTokenPriceInQuote,
+        allAttributes: Object.keys(attrs)
+      });
+
+      // For market stats display, we want to show the price in USD terms
+      // Use the base token's USD price directly
+      const currentPrice = baseTokenPriceUsd;
+
+      const priceChange = parseFloat(attrs.price_change_percentage?.h24 || '0');
+      const volume = parseFloat(attrs.volume_usd?.h24 || '0');
+      const tvl = parseFloat(attrs.reserve_in_usd || '0');
+
+      console.log(`📊 GeckoTerminal Market Stats for ${tokenA.symbol}/${tokenB.symbol}:`, {
+        price: `$${currentPrice.toFixed(2)}`,
+        priceChange24h: `${priceChange.toFixed(2)}%`,
+        volume24h: `$${volume.toLocaleString()}`,
+        liquidity: `$${tvl.toLocaleString()}`
+      });
+
+      // Update state
+      setPrice(currentPrice);
+      setVolume24h(volume);
+      setLiquidity(tvl);
+      // Note: priceChange24h comes from context, set by TradingChart
+
+      setIsLoading(false);
+    } catch (error) {
+      // Only log actual errors, not 404s (missing pools are expected)
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (!errorMessage.includes('404')) {
+        console.error('❌ Error fetching GeckoTerminal stats:', error);
+        setError('Failed to fetch market stats');
+      } else {
+        console.log(`⚠️ Pool not found on GeckoTerminal for ${tokenA.symbol}/${tokenB.symbol}`);
+      }
+
+      // Reset stats to zero
+      setPrice(0);
+      setVolume24h(0);
+      setLiquidity(0);
+      setPairAddress(null);
+      setIsLoading(false);
+    }
+  }, []);
+
   const fetchPairStats = useCallback(async () => {
     if (!normalizedTokenA || !normalizedTokenB) {
       setIsLoading(false);
@@ -105,6 +210,18 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
       setIsLoading(true);
       setError(null);
 
+      // Determine chainId from tokens for multichain support
+      const chainId = normalizedTokenA.chainId || normalizedTokenB.chainId || 3888;
+
+      console.log(`📊 Fetching pair stats (normalized order) for ${normalizedTokenA.symbol}/${normalizedTokenB.symbol} on chain ${chainId}`);
+
+      // For BSC and Arbitrum, use GeckoTerminal API
+      if (chainId === 56 || chainId === 42161) {
+        await fetchGeckoTerminalStats(chainId, normalizedTokenA, normalizedTokenB);
+        return;
+      }
+
+      // For KalyChain, use subgraph (existing logic)
       // Use normalized tokens for consistent pair lookup
       const foundPairAddress = await findPairAddress(normalizedTokenA, normalizedTokenB);
 
@@ -116,10 +233,7 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
 
       setPairAddress(foundPairAddress);
 
-      // Determine chainId from tokens for multichain support
-      const chainId = normalizedTokenA.chainId || normalizedTokenB.chainId || 3888;
-
-      console.log(`📊 Fetching pair stats (normalized order) for ${normalizedTokenA.symbol}/${normalizedTokenB.symbol} on chain ${chainId} (${foundPairAddress})`);
+      console.log(`📊 Fetching KalyChain pair stats for ${normalizedTokenA.symbol}/${normalizedTokenB.symbol} (${foundPairAddress})`);
 
       const stats = await getPairMarketStats(foundPairAddress, chainId);
 
@@ -130,91 +244,101 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
       // Get real 24hr volume using the same method as admin panel
       let real24hrVolume = 0;
 
-      // Get KLC price from DEX data instead of CoinGecko
-      let klcPriceUSD = 0.0003; // Default fallback price
+      // Get KLC price from DEX data (ONLY for KalyChain)
+      let klcPriceUSD = 0.0003; // Default fallback price for KalyChain
 
-      try {
-        // Calculate KLC price from WKLC/USDT pair reserves
-        const reserve0 = parseFloat(stats.pair.reserve0);
-        const reserve1 = parseFloat(stats.pair.reserve1);
+      // Only calculate KLC price for KalyChain (chainId 3888)
+      if (chainId === 3888) {
+        try {
+          // Calculate KLC price from WKLC/USDT pair reserves
+          const reserve0 = parseFloat(stats.pair.reserve0);
+          const reserve1 = parseFloat(stats.pair.reserve1);
 
-        if (reserve0 > 0 && reserve1 > 0) {
-          // Check if this is the WKLC/USDT pair we can use for KLC pricing
-          const isWklcUsdtPair = (stats.pair.token0.symbol === 'WKLC' && stats.pair.token1.symbol === 'USDT') ||
-                                 (stats.pair.token0.symbol === 'USDT' && stats.pair.token1.symbol === 'WKLC');
+          if (reserve0 > 0 && reserve1 > 0) {
+            // Check if this is the WKLC/USDT pair we can use for KLC pricing
+            const isWklcUsdtPair = (stats.pair.token0.symbol === 'WKLC' && stats.pair.token1.symbol === 'USDT') ||
+                                   (stats.pair.token0.symbol === 'USDT' && stats.pair.token1.symbol === 'WKLC');
 
-          if (isWklcUsdtPair) {
-            // Calculate KLC price from this pair's reserves
-            if (stats.pair.token0.symbol === 'WKLC') {
-              klcPriceUSD = reserve1 / reserve0; // USDT per WKLC
-            } else {
-              klcPriceUSD = reserve0 / reserve1; // USDT per WKLC
+            if (isWklcUsdtPair) {
+              // Calculate KLC price from this pair's reserves
+              if (stats.pair.token0.symbol === 'WKLC') {
+                klcPriceUSD = reserve1 / reserve0; // USDT per WKLC
+              } else {
+                klcPriceUSD = reserve0 / reserve1; // USDT per WKLC
+              }
+              console.log(`📊 Using KLC price from DEX reserves: $${klcPriceUSD.toFixed(6)}`);
             }
-            console.log(`📊 Using KLC price from DEX reserves: $${klcPriceUSD.toFixed(6)}`);
           }
-        }
 
-        // Sanity check for reasonable KLC price range
-        if (klcPriceUSD < 0.0001 || klcPriceUSD > 0.01) {
-          console.warn(`KLC price ${klcPriceUSD} outside reasonable range, using fallback`);
-          klcPriceUSD = 0.0003;
-        }
+          // Sanity check for reasonable KLC price range
+          if (klcPriceUSD < 0.0001 || klcPriceUSD > 0.01) {
+            console.warn(`KLC price ${klcPriceUSD} outside reasonable range, using fallback`);
+            klcPriceUSD = 0.0003;
+          }
 
-      } catch (priceError) {
-        console.warn('Failed to calculate KLC price from DEX, using fallback:', priceError);
-        klcPriceUSD = 0.0003; // Use fallback price
+        } catch (priceError) {
+          console.warn('Failed to calculate KLC price from DEX, using fallback:', priceError);
+          klcPriceUSD = 0.0003; // Use fallback price
+        }
       }
 
-      // Now try to get volume data with the KLC price (fallback or real)
-      try {
+      // Get volume data - only use backend GraphQL for KalyChain
+      if (chainId === 3888) {
+        try {
+          // Query the backend for real 24hr volume using the same method as admin
+          // Use the actual token symbols from the pair data, not the input tokens
+          const token0Symbol = stats.pair.token0.symbol;
+          const token1Symbol = stats.pair.token1.symbol;
 
-        // Query the backend for real 24hr volume using the same method as admin
-        // Use the actual token symbols from the pair data, not the input tokens
-        const token0Symbol = stats.pair.token0.symbol;
-        const token1Symbol = stats.pair.token1.symbol;
+          console.log(`🔍 KalyChain: Using pair token symbols: ${token0Symbol}/${token1Symbol} for volume calculation`);
 
-        console.log(`🔍 Using pair token symbols: ${token0Symbol}/${token1Symbol} for volume calculation`);
-
-        // Backend GraphQL call with proper error handling
-        const volumeData = await fetchGraphQL<any>(
-          'http://localhost:3000/api/graphql',
-          `
-            query GetPairVolume($pairs: [PairInput!]!, $klcPriceUSD: Float!) {
-              multiplePairs24hrVolume(pairs: $pairs, klcPriceUSD: $klcPriceUSD) {
-                pairAddress
-                token0Symbol
-                token1Symbol
-                volume24hrUSD
-                swapCount
+          // Backend GraphQL call with proper error handling
+          const volumeData = await fetchGraphQL<any>(
+            'http://localhost:3000/api/graphql',
+            `
+              query GetPairVolume($pairs: [PairInput!]!, $klcPriceUSD: Float!) {
+                multiplePairs24hrVolume(pairs: $pairs, klcPriceUSD: $klcPriceUSD) {
+                  pairAddress
+                  token0Symbol
+                  token1Symbol
+                  volume24hrUSD
+                  swapCount
+                }
               }
-            }
-          `,
-          {
-            pairs: [{
-              address: foundPairAddress.toLowerCase(),
-              token0Symbol: token0Symbol,
-              token1Symbol: token1Symbol
-            }],
-            klcPriceUSD: klcPriceUSD
-          },
-          { timeout: 8000, retries: 1 }
-        );
+            `,
+            {
+              pairs: [{
+                address: foundPairAddress.toLowerCase(),
+                token0Symbol: token0Symbol,
+                token1Symbol: token1Symbol
+              }],
+              klcPriceUSD: klcPriceUSD
+            },
+            { timeout: 8000, retries: 1 }
+          );
 
-        const pairVolumeData = volumeData?.multiplePairs24hrVolume?.[0];
+          const pairVolumeData = volumeData?.multiplePairs24hrVolume?.[0];
 
-        if (pairVolumeData) {
-          real24hrVolume = parseFloat(pairVolumeData.volume24hrUSD) || 0;
-          console.log(`✅ Real 24hr volume for ${tokenA.symbol}/${tokenB.symbol}: $${real24hrVolume.toFixed(2)}`);
+          if (pairVolumeData) {
+            real24hrVolume = parseFloat(pairVolumeData.volume24hrUSD) || 0;
+            console.log(`✅ Real 24hr volume for ${tokenA.symbol}/${tokenB.symbol}: $${real24hrVolume.toFixed(2)}`);
+          }
+        } catch (volumeError) {
+          console.error('Failed to fetch real 24hr volume from backend:', volumeError);
+
+          // Handle network errors gracefully
+          if (isNetworkError(volumeError)) {
+            console.warn('Network error fetching volume, using fallback');
+          }
+
+          // Fallback to subgraph volume if available
+          real24hrVolume = stats.volume24h || 0;
         }
-      } catch (volumeError) {
-        console.error('Failed to fetch real 24hr volume:', volumeError);
-
-        // Handle network errors gracefully
-        if (isNetworkError(volumeError)) {
-          console.warn('Network error fetching volume, using fallback');
-        }
-
-        // Fallback to subgraph volume if available
+      } else {
+        // For non-KalyChain networks, use GeckoTerminal volume data
+        console.log(`🦎 Using GeckoTerminal volume for chain ${chainId}`);
+        // Volume will be fetched from GeckoTerminal in the chart component
+        // For now, use subgraph volume as fallback
         real24hrVolume = stats.volume24h || 0;
       }
 
@@ -256,8 +380,12 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
       // Calculate liquidity manually since reserveUSD might be 0
       let calculatedLiquidity = 0;
 
-      // Find which reserve corresponds to stablecoins (USDT, USDC, DAI)
-      const stablecoins = ['USDT', 'USDC', 'DAI'];
+      // Find which reserve corresponds to stablecoins
+      // For KalyChain: USDT, USDC, DAI
+      // For other chains: dynamically detect any stablecoin (USDT, USDC, DAI, BUSD, etc.)
+      const stablecoins = chainId === 3888
+        ? ['USDT', 'USDC', 'DAI']
+        : ['USDT', 'USDC', 'DAI', 'BUSD', 'USDC.e', 'USDbC'];
       let stablecoinReserve = 0;
 
       if (stablecoins.includes(stats.pair.token0.symbol)) {

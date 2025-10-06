@@ -251,24 +251,40 @@ export function useTokenLists(options: UseTokenListsOptions = {}): UseTokenLists
       console.log(`🚀 Loading tokens for chain ${chainId}`);
 
       // Fetch tokens from token lists
-      const tokenListTokens = await tokenListService.getTokensForChain(chainId);
-      
+      let tokenListTokens = await tokenListService.getTokensForChain(chainId);
+
+      // For BSC, ensure BUSD is included (it was deprecated but still has liquidity)
+      if (chainId === 56) {
+        const hasBUSD = tokenListTokens.some(t => t.symbol === 'BUSD');
+        if (!hasBUSD) {
+          console.log('⚠️ BUSD not in token list, adding manually');
+          tokenListTokens.push({
+            chainId: 56,
+            address: '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56',
+            decimals: 18,
+            name: 'BUSD Token',
+            symbol: 'BUSD',
+            logoURI: '/tokens/busd.png'
+          });
+        }
+      }
+
       // Skip subgraph tokens for now due to GraphQL schema mismatch
       const subgraphTokens: EnhancedToken[] = [];
-      
+
       // Merge token lists with subgraph data
       let allTokens = mergeTokenLists(tokenListTokens, subgraphTokens);
-      
+
       // Add native token if missing
       allTokens = addNativeTokenIfMissing(allTokens);
-      
+
       console.log(`✅ Successfully loaded ${allTokens.length} tokens for chain ${chainId}`);
       setTokens(allTokens);
-      
+
     } catch (err) {
       console.error('❌ Error loading tokens:', err);
       setError(err instanceof Error ? err.message : 'Failed to load tokens');
-      
+
       // Fallback: try to get tokens from token lists only
       try {
         const fallbackTokens = await tokenListService.getTokensForChain(chainId);
@@ -280,7 +296,7 @@ export function useTokenLists(options: UseTokenListsOptions = {}): UseTokenLists
           txCount: undefined,
           priceUSD: undefined
         }));
-        
+
         setTokens(addNativeTokenIfMissing(enhancedFallbackTokens));
         console.log(`⚠️ Using fallback tokens: ${enhancedFallbackTokens.length} tokens loaded`);
       } catch (fallbackErr) {

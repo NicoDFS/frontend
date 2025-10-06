@@ -1,34 +1,18 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { usePublicClient } from 'wagmi';
 import { ethers } from 'ethers';
 import { getPairAddress } from '@/utils/priceImpact';
-import { getFactoryData, getPairsData, getKalyswapDayData, getPairDayData, getPairHourData } from '@/lib/subgraph-client';
-import {
-  shouldUseCoinGecko,
-  getCoinGeckoPrice
-} from '@/lib/coingecko-client';
+import { getFactoryData, getPairsData, getKalyswapDayData, getPairDayData } from '@/lib/subgraph-client';
 import {
   isChainSupported as isGeckoTerminalSupported,
   findPoolAddress,
   getGeckoTerminalOHLC,
-  convertGeckoTerminalToChartData
+  convertGeckoTerminalToChartData,
+  getPoolInfo
 } from '@/lib/geckoterminal-client';
 import { Token } from '@/config/dex/types';
-
-// Import DEX contract ABIs
-import pairABI from '@/config/abis/dex/pairABI.json';
-import routerABI from '@/config/abis/dex/routerABI.json';
-import erc20ABI from '@/config/abis/dex/erc20ABI.json';
-
-// DEX Contract addresses
-const DEX_CONTRACTS = {
-  ROUTER: '0x183F288BF7EEBe1A3f318F4681dF4a4681dF4a70ef32B2f3',
-  WKLC_USDT_PAIR: '0x25FDDaF836d12dC5e285823a644bb86E0b79c8e2',
-  WKLC: '0x069255299Bb729399f3CECaBdc73d15d3D10a2A3', // Actual wKLC token address from pair
-  USDT: '0x2CA775C77B922A51FcF3097F52bFFdbc0250D99A', // USDT token address
-};
 
 // RPC endpoint for KalyChain
 const RPC_URL = 'https://rpc.kalychain.io/rpc';
@@ -144,7 +128,7 @@ export function usePriceData(pair: TokenPair, timeframe: string = '1h') {
 
       // Convert subgraph data to chart format
       // Note: Subgraph provides daily data, so we'll create OHLC from daily prices
-      const formattedData: PricePoint[] = pairDayData.map((dayData: any) => {
+      const rawData: PricePoint[] = pairDayData.map((dayData: any) => {
         // Calculate price from reserves (token1Price is quoteToken price in baseToken)
         const price = parseFloat(dayData.reserve1) > 0 && parseFloat(dayData.reserve0) > 0
           ? parseFloat(dayData.reserve1) / parseFloat(dayData.reserve0)
@@ -159,6 +143,14 @@ export function usePriceData(pair: TokenPair, timeframe: string = '1h') {
           volume: parseFloat(dayData.dailyVolumeUSD || '0')
         };
       }).reverse(); // Reverse to get chronological order
+
+      // Deduplicate by timestamp - keep the last occurrence for each unique timestamp
+      const formattedData = Array.from(
+        rawData.reduce((map, point) => {
+          map.set(point.time, point); // Overwrites if duplicate timestamp exists
+          return map;
+        }, new Map<number, PricePoint>()).values()
+      );
 
       setPriceData(formattedData);
 
@@ -494,7 +486,13 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
     fetchPairAddress();
   }, [normalizedTokenA, normalizedTokenB, hasValidTokens, publicClient]);
 
+  // Use a ref to track if the current fetch should be cancelled
+  const cancelFetchRef = useRef<{ cancel: boolean }>({ cancel: false });
+
   const fetchHistoricalData = useCallback(async () => {
+    // Reset cancel flag for this fetch
+    cancelFetchRef.current = { cancel: false };
+    const currentFetch = cancelFetchRef.current;
 
     // If no valid tokens, show no data
     if (!hasValidTokens) {
@@ -513,10 +511,10 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
 
       console.log('🔗 Fetching chart data for chain (using normalized tokens):', {
         chainId,
-        originalTokenA: tokenA?.symbol,
-        originalTokenB: tokenB?.symbol,
         normalizedTokenA: normalizedTokenA?.symbol,
         normalizedTokenB: normalizedTokenB?.symbol,
+        normalizedTokenAChainId: normalizedTokenA?.chainId,
+        normalizedTokenBChainId: normalizedTokenB?.chainId,
         pairAddress: pairAddress?.toLowerCase()
       });
 
@@ -533,34 +531,153 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
           poolAddr = await findPoolAddress(chainId, normalizedTokenA!, normalizedTokenB!);
 
           if (!poolAddr) {
-            setPriceData([]);
-            setError(`No liquidity pool found for ${tokenA?.symbol}/${tokenB?.symbol} on this DEX`);
-            setIsLoading(false);
+            if (!currentFetch.cancel) {
+              setPriceData([]);
+              setError(`No liquidity pool found for ${tokenA?.symbol}/${tokenB?.symbol} on this DEX`);
+              setIsLoading(false);
+            }
             return;
           }
+        }
+
+        // Check if cancelled before async operations
+        if (currentFetch.cancel) return;
+
+        // Get pool info to determine base/quote tokens
+        const poolInfo = await getPoolInfo(chainId, poolAddr);
+
+        if (currentFetch.cancel) return;
+
+        if (!poolInfo) {
+          if (!currentFetch.cancel) {
+            setPriceData([]);
+            setError(`Could not fetch pool information for ${tokenA?.symbol}/${tokenB?.symbol}`);
+            setIsLoading(false);
+          }
+          return;
         }
 
         // Fetch OHLC data from GeckoTerminal (168 hours = 7 days)
         const ohlcvList = await getGeckoTerminalOHLC(chainId, poolAddr, 'hour', 1, 168);
 
+        if (currentFetch.cancel) return;
+
         if (ohlcvList.length === 0) {
-          setPriceData([]);
-          setError(`Chart data not available for ${tokenA?.symbol}/${tokenB?.symbol}`);
-          setIsLoading(false);
+          if (!currentFetch.cancel) {
+            setPriceData([]);
+            setError(`Chart data not available for ${tokenA?.symbol}/${tokenB?.symbol}`);
+            setIsLoading(false);
+          }
           return;
         }
 
-        // Convert GeckoTerminal data to our chart format
-        // Industry standard: Chart always shows the same pool data regardless of token order
-        const chartData = convertGeckoTerminalToChartData(ohlcvList);
+        // Determine if we need to invert prices based on user's token order vs pool's base/quote
+        // User wants to see tokenA/tokenB (tokenA price in tokenB terms)
+        // GeckoTerminal shows base/quote (base price in quote terms)
+        // If user's tokenA matches pool's base, no inversion needed
+        // If user's tokenA matches pool's quote, we need to invert
 
-        console.log(`✅ GeckoTerminal: Processed ${chartData.length} price points (normalized order)`, {
-          displayPair: `${tokenA?.symbol}/${tokenB?.symbol}`,
-          normalizedPair: `${normalizedTokenA?.symbol}/${normalizedTokenB?.symbol}`,
-          dataPoints: chartData.length
+        const userTokenAAddr = tokenA!.address.toLowerCase();
+        const userTokenBAddr = tokenB!.address.toLowerCase();
+
+        // Extract base and quote token addresses from the full API response
+        const poolBaseToken = poolInfo.relationships?.base_token?.data?.id?.split('_')[1]?.toLowerCase();
+        const poolQuoteToken = poolInfo.relationships?.quote_token?.data?.id?.split('_')[1]?.toLowerCase();
+
+        if (!poolBaseToken || !poolQuoteToken) {
+          if (!currentFetch.cancel) {
+            setPriceData([]);
+            setError(`Could not extract token information from pool data`);
+            setIsLoading(false);
+          }
+          return;
+        }
+
+        // Wrapped token addresses for native token matching
+        // CRITICAL: Native tokens (BNB, ETH, KLC) = Wrapped tokens (WBNB, WETH, WKLC)
+        const WBNB = '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c'; // BSC
+        const WETH = '0x82af49447d8a07e3bd95bd0d56f35241523fbab1'; // Arbitrum
+        const WKLC = '0x069255299Bb729399f3CECaBdc73d15d3D10a2A3'; // KalyChain
+        const NATIVE_ADDR = '0x0000000000000000000000000000000000000000';
+
+        // Helper function to check if two addresses match (considering native/wrapped equivalence)
+        // BNB = WBNB, ETH = WETH, KLC = WKLC - they are THE SAME TOKEN
+        const addressMatches = (userAddr: string, poolAddr: string): boolean => {
+          if (userAddr === poolAddr) return true;
+
+          // Check if user has native and pool has wrapped (or vice versa)
+          if (userAddr === NATIVE_ADDR && (poolAddr === WBNB || poolAddr === WETH || poolAddr === WKLC)) {
+            return true;
+          }
+          if (poolAddr === NATIVE_ADDR && (userAddr === WBNB || userAddr === WETH || userAddr === WKLC)) {
+            return true;
+          }
+
+          return false;
+        };
+
+        const isTokenABase = addressMatches(userTokenAAddr, poolBaseToken);
+        const isTokenAQuote = addressMatches(userTokenAAddr, poolQuoteToken);
+        const isTokenBBase = addressMatches(userTokenBAddr, poolBaseToken);
+        const isTokenBQuote = addressMatches(userTokenBAddr, poolQuoteToken);
+
+        // CRITICAL: GeckoTerminal price = BASE token price in QUOTE token terms
+        // Example: Pool Base=WBNB, Quote=USDT, Price=$600 means 1 WBNB = $600 USDT
+        //
+        // User wants: tokenA/tokenB (price of tokenA in terms of tokenB)
+        //
+        // We need to invert if:
+        // 1. User's tokenA is the pool's QUOTE (we have BASE/QUOTE but need QUOTE/BASE)
+        // 2. User's tokenA is the pool's BASE but tokenB is NOT the pool's QUOTE
+        //
+        // We DON'T invert if:
+        // - User's tokenA is BASE and tokenB is QUOTE (pool already shows this)
+        const shouldInvert = isTokenAQuote || (isTokenABase && !isTokenBQuote);
+
+        console.log('🔄 GeckoTerminal price orientation check:', {
+          userPair: `${normalizedTokenA?.symbol}/${normalizedTokenB?.symbol}`,
+          userTokenA: userTokenAAddr,
+          userTokenB: userTokenBAddr,
+          poolBase: poolBaseToken,
+          poolQuote: poolQuoteToken,
+          poolBaseSymbol: poolInfo?.attributes?.base_token_symbol,
+          poolQuoteSymbol: poolInfo?.attributes?.quote_token_symbol,
+          poolPriceUsd: poolInfo?.attributes?.base_token_price_usd,
+          isTokenABase,
+          isTokenAQuote,
+          isTokenBBase,
+          isTokenBQuote,
+          shouldInvert,
+          reasoning: shouldInvert
+            ? (isTokenAQuote ? 'tokenA is QUOTE (need to flip)' : 'tokenA is BASE but tokenB is not QUOTE')
+            : 'tokenA is BASE and tokenB is QUOTE (already correct)'
         });
-        setPriceData(chartData);
-        setIsLoading(false);
+
+        // Convert GeckoTerminal data to our chart format with optional inversion
+        const chartData = convertGeckoTerminalToChartData(ohlcvList, shouldInvert);
+
+        console.log(`✅ GeckoTerminal: Processed ${chartData.length} price points${shouldInvert ? ' (inverted)' : ''}`, {
+          displayPair: `${tokenA?.symbol}/${tokenB?.symbol}`,
+          poolPair: `${poolBaseToken}/${poolQuoteToken}`,
+          dataPoints: chartData.length,
+          inverted: shouldInvert,
+          samplePrices: chartData.slice(0, 3).map(p => p.close.toFixed(4)),
+          latestPrice: chartData[chartData.length - 1]?.close.toFixed(4)
+        });
+
+        // Only update state if this fetch hasn't been cancelled
+        if (!currentFetch.cancel) {
+          console.log('📈 SETTING PRICE DATA FROM GECKOTERMINAL:', {
+            pair: `${tokenA?.symbol}/${tokenB?.symbol}`,
+            points: chartData.length,
+            latestPrice: chartData[chartData.length - 1]?.close.toFixed(4),
+            timestamp: new Date().toISOString()
+          });
+          setPriceData(chartData);
+          setIsLoading(false);
+        } else {
+          console.log('⚠️ GeckoTerminal fetch was cancelled, not updating state');
+        }
         return;
       }
 
@@ -568,9 +685,11 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
       console.log('📊 Using subgraph for KalyChain');
 
       if (!pairAddress) {
-        setPriceData([]);
-        setError('No liquidity pool exists for this token pair');
-        setIsLoading(false);
+        if (!currentFetch.cancel) {
+          setPriceData([]);
+          setError('No liquidity pool exists for this token pair');
+          setIsLoading(false);
+        }
         return;
       }
 
@@ -715,13 +834,28 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
             .filter((point: any) => point !== null && point.close > 0) // Filter out invalid price points
             .sort((a: any, b: any) => (a.time as number) - (b.time as number)); // Sort by time ascending
 
-          console.log(`✅ Processed ${historicalData.length} REAL historical price points from subgraph`);
-          console.log('📊 Sample data points:', historicalData.slice(0, 3).map(p => ({
+          // Deduplicate by timestamp - keep the last occurrence for each unique timestamp
+          const deduplicatedData = Array.from(
+            historicalData.reduce((map, point) => {
+              map.set(point.time, point); // Overwrites if duplicate timestamp exists
+              return map;
+            }, new Map()).values()
+          );
+
+          console.log(`✅ Processed ${deduplicatedData.length} REAL historical price points from subgraph (${historicalData.length - deduplicatedData.length} duplicates removed)`);
+          console.log('📊 Sample data points:', deduplicatedData.slice(0, 3).map(p => ({
             time: typeof p.time === 'number' ? new Date(p.time * 1000).toISOString().split('T')[0] : 'invalid',
             price: p.close.toFixed(8),
             volume: p.volume.toFixed(2)
           })));
-          setPriceData(historicalData);
+
+          console.log('📈 SETTING PRICE DATA FROM SUBGRAPH:', {
+            pair: `${tokenA?.symbol}/${tokenB?.symbol}`,
+            points: deduplicatedData.length,
+            latestPrice: deduplicatedData[deduplicatedData.length - 1]?.close.toFixed(8),
+            timestamp: new Date().toISOString()
+          });
+          setPriceData(deduplicatedData);
         } else {
           console.log('⚠️ No historical data available - subgraph may not be fully synced');
           setPriceData([]);
@@ -734,15 +868,24 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
       }
     } catch (err) {
       console.error('❌ Error fetching historical price data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch historical data');
-      setPriceData([]);
+      if (!currentFetch.cancel) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch historical data');
+        setPriceData([]);
+      }
     } finally {
-      setIsLoading(false);
+      if (!currentFetch.cancel) {
+        setIsLoading(false);
+      }
     }
-  }, [normalizedTokenA, normalizedTokenB, pairAddress, hasValidTokens]); // Only normalized tokens to prevent re-fetch on flip
+  }, [normalizedTokenA, normalizedTokenB, pairAddress, hasValidTokens]); // ONLY use normalized tokens - DO NOT add tokenA/tokenB
 
   useEffect(() => {
     fetchHistoricalData();
+
+    // Cleanup function to cancel fetch when dependencies change
+    return () => {
+      cancelFetchRef.current.cancel = true;
+    };
   }, [fetchHistoricalData]);
 
   return {

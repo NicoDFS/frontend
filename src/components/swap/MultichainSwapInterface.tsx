@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowUpDown, Settings, Info, Wallet, AlertTriangle, CheckCircle, ChevronDown } from 'lucide-react';
+import { ArrowUpDown, Settings, Info, Wallet, AlertTriangle, CheckCircle, ChevronDown, X, ExternalLink } from 'lucide-react';
 import TokenSelectorModal from './TokenSelectorModal';
 import SwapConfirmationModal from './SwapConfirmationModal';
 import ErrorDisplay from './ErrorDisplay';
@@ -107,13 +107,25 @@ export default function MultichainSwapInterface({
 
     console.log('🔍 MultichainSwapInterface supportedTokens:', supportedTokens.map(t => ({ symbol: t.symbol, isNative: t.isNative })));
 
-    // Find native token and stablecoin from dynamic token list
+    // Find native token
     const nativeToken = supportedTokens.find(token => token.isNative);
-    const stablecoin = supportedTokens.find(token =>
-      token.symbol === 'USDT' || token.symbol === 'USDt'
-    );
 
-    console.log('🔍 MultichainSwapInterface defaultTokenPair:', { nativeToken: nativeToken?.symbol, stablecoin: stablecoin?.symbol });
+    // Find stablecoin based on chain preference
+    let stablecoin;
+    if (chainId === 56) {
+      // BSC: Prefer BUSD, fallback to USDT
+      stablecoin = supportedTokens.find(token => token.symbol === 'BUSD') ||
+                   supportedTokens.find(token => token.symbol === 'USDT');
+    } else {
+      // Other chains: Prefer USDT
+      stablecoin = supportedTokens.find(token => token.symbol === 'USDT' || token.symbol === 'USDt');
+    }
+
+    console.log('🔍 MultichainSwapInterface defaultTokenPair:', {
+      chainId,
+      nativeToken: nativeToken?.symbol,
+      stablecoin: stablecoin?.symbol
+    });
 
     if (nativeToken && stablecoin) {
       return { tokenA: nativeToken, tokenB: stablecoin };
@@ -244,6 +256,28 @@ export default function MultichainSwapInterface({
     }
   }, [chainId]);
 
+  // Get block explorer URL for current chain
+  const getExplorerUrl = (txHash: string) => {
+    if (!chainId) return '';
+    switch (chainId) {
+      case 3888: return `https://kalyscan.io/tx/${txHash}`;
+      case 56: return `https://bscscan.com/tx/${txHash}`;
+      case 42161: return `https://arbiscan.io/tx/${txHash}`;
+      default: return '';
+    }
+  };
+
+  // Auto-dismiss transaction success message after 8 seconds
+  useEffect(() => {
+    if (currentTransactionHash) {
+      const timer = setTimeout(() => {
+        setCurrentTransactionHash(null);
+      }, 8000); // 8 seconds
+
+      return () => clearTimeout(timer);
+    }
+  }, [currentTransactionHash]);
+
   // Get quote when swap parameters change
   useEffect(() => {
     const getQuote = async () => {
@@ -359,6 +393,9 @@ export default function MultichainSwapInterface({
       handleError(new Error('Tokens not valid for current chain'));
       return;
     }
+
+    // Clear previous transaction hash when starting new swap
+    setCurrentTransactionHash(null);
 
     setIsSwapping(true);
     setCurrentStep('swapping');
@@ -781,13 +818,36 @@ export default function MultichainSwapInterface({
 
         {/* Transaction Status */}
         {currentTransactionHash && (
-          <div className="p-3 bg-green-900/30 border border-green-500/30 rounded-lg">
-            <div className="flex items-center gap-2 text-green-400 text-sm">
-              <CheckCircle className="h-4 w-4" />
-              <span>Transaction Submitted</span>
+          <div className="relative p-3 bg-green-900/30 border border-green-500/30 rounded-lg animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-green-400 text-sm">
+                <CheckCircle className="h-4 w-4" />
+                <span>Transaction Submitted</span>
+              </div>
+              <button
+                onClick={() => setCurrentTransactionHash(null)}
+                className="text-green-400 hover:text-green-300 transition-colors"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
-            <div className="text-xs text-green-300 mt-1 break-all">
-              Hash: {currentTransactionHash}
+            <div className="flex items-center gap-2 mt-2">
+              <div className="text-xs text-green-300 break-all flex-1">
+                {currentTransactionHash.slice(0, 10)}...{currentTransactionHash.slice(-8)}
+              </div>
+              <a
+                href={getExplorerUrl(currentTransactionHash)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs text-green-400 hover:text-green-300 transition-colors whitespace-nowrap"
+              >
+                <span>View</span>
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
+            <div className="text-xs text-green-400/60 mt-1">
+              Auto-dismissing in 8s
             </div>
           </div>
         )}

@@ -852,12 +852,34 @@ function SwapsPageContent({
       tokenA = dynamicTokens.find(token => token.symbol === 'KLC');
       tokenB = dynamicTokens.find(token => token.symbol === 'USDT' || token.symbol === 'USDt');
     } else if (chainId === 56) {
-      // BSC: WBNB/USDT
-      tokenA = dynamicTokens.find(token => token.symbol === 'WBNB' || token.symbol === 'BNB');
-      tokenB = dynamicTokens.find(token => token.symbol === 'USDT');
+      // BSC: BNB/BUSD (BUSD is the preferred stablecoin on BSC with better liquidity)
+      // Using BUSD ensures the pair is structured correctly (BNB as base, BUSD as quote)
+
+      // Debug: Log all available stablecoins
+      const stablecoins = dynamicTokens.filter(t =>
+        ['BUSD', 'USDT', 'USDC', 'DAI'].includes(t.symbol)
+      );
+      console.log('🔍 BSC available stablecoins:', stablecoins.map(t => ({
+        symbol: t.symbol,
+        address: t.address
+      })));
+
+      tokenA = dynamicTokens.find(token => token.symbol === 'BNB' || token.symbol === 'WBNB');
+      tokenB = dynamicTokens.find(token => token.symbol === 'BUSD');
+
+      // Fallback to USDT if BUSD not found
+      if (!tokenB) {
+        console.warn('⚠️ BUSD not found in token list, falling back to USDT');
+        tokenB = dynamicTokens.find(token => token.symbol === 'USDT');
+      }
+
+      console.log('🔍 BSC default pair:', {
+        tokenA: tokenA ? { symbol: tokenA.symbol, address: tokenA.address } : null,
+        tokenB: tokenB ? { symbol: tokenB.symbol, address: tokenB.address } : null
+      });
     } else if (chainId === 42161) {
-      // Arbitrum: WETH/USDC
-      tokenA = dynamicTokens.find(token => token.symbol === 'WETH' || token.symbol === 'ETH');
+      // Arbitrum: ETH/USDC
+      tokenA = dynamicTokens.find(token => token.symbol === 'ETH' || token.symbol === 'WETH');
       tokenB = dynamicTokens.find(token => token.symbol === 'USDC');
     }
 
@@ -880,16 +902,27 @@ function SwapsPageContent({
     );
   }, [defaultTokenPair, chainId]);
 
-  // Update swapState when dynamic tokens load and we don't have tokens set
+  // Update swapState when chain changes or when tokens first load
   useEffect(() => {
-    if (defaultTokenPair && (!swapState.fromToken || !swapState.toToken)) {
-      setSwapState(prev => ({
-        ...prev,
-        fromToken: defaultTokenPair.tokenA,
-        toToken: defaultTokenPair.tokenB
-      }));
+    if (defaultTokenPair) {
+      // Check if current tokens are from a different chain
+      const currentTokensFromDifferentChain =
+        swapState.fromToken && swapState.fromToken.chainId !== chainId;
+
+      // Update tokens if:
+      // 1. No tokens are set yet, OR
+      // 2. Chain has changed (current tokens are from different chain)
+      if (!swapState.fromToken || !swapState.toToken || currentTokensFromDifferentChain) {
+        console.log('🔄 Setting default tokens for chain', chainId, ':',
+          `${defaultTokenPair.tokenA.symbol}/${defaultTokenPair.tokenB.symbol}`);
+        setSwapState(prev => ({
+          ...prev,
+          fromToken: defaultTokenPair.tokenA,
+          toToken: defaultTokenPair.tokenB
+        }));
+      }
     }
-  }, [defaultTokenPair, swapState.fromToken, swapState.toToken, setSwapState]);
+  }, [defaultTokenPair, chainId, swapState.fromToken, swapState.toToken, setSwapState]);
 
   // Memoize token change handler to prevent infinite re-renders
   const handleTokenChange = useMemo(() => (fromToken: Token | null, toToken: Token | null) => {
