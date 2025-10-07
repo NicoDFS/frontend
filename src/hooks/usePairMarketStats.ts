@@ -296,7 +296,7 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
 
           // Backend GraphQL call with proper error handling
           const volumeData = await fetchGraphQL<any>(
-            'http://localhost:3000/api/graphql',
+            'https://app.kalyswap.io/api/graphql',
             `
               query GetPairVolume($pairs: [PairInput!]!, $klcPriceUSD: Float!) {
                 multiplePairs24hrVolume(pairs: $pairs, klcPriceUSD: $klcPriceUSD) {
