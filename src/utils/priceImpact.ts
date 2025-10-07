@@ -26,6 +26,7 @@ interface PriceImpactResult {
 
 /**
  * Get the pair address for two tokens from the factory contract
+ * Uses the multichain DEX configuration system
  */
 export async function getPairAddress(
   publicClient: PublicClient,
@@ -33,19 +34,30 @@ export async function getPairAddress(
   tokenB: Token
 ): Promise<string | null> {
   try {
-    const factoryAddress = getContractAddress('FACTORY', DEFAULT_CHAIN_ID);
+    // Get current chain ID
+    const chainId = await publicClient.getChainId();
+
+    // Import DEX config dynamically to avoid circular dependencies
+    const { getDexConfig } = await import('@/config/dex');
+    const dexConfig = getDexConfig(chainId);
+
+    if (!dexConfig) {
+      console.log(`⚠️ getPairAddress: Chain ${chainId} not supported for DEX operations`);
+      return null;
+    }
+
     const factoryContract = getContract({
-      address: factoryAddress as `0x${string}`,
-      abi: FACTORY_ABI,
+      address: dexConfig.factory as `0x${string}`,
+      abi: dexConfig.factoryABI,
       client: publicClient,
     });
 
     // Get actual token addresses (handle native tokens)
-    const addressA = tokenA.isNative ? getContractAddress('WKLC', DEFAULT_CHAIN_ID) : tokenA.address;
-    const addressB = tokenB.isNative ? getContractAddress('WKLC', DEFAULT_CHAIN_ID) : tokenB.address;
+    const addressA = tokenA.isNative ? dexConfig.wethAddress : tokenA.address;
+    const addressB = tokenB.isNative ? dexConfig.wethAddress : tokenB.address;
 
     const pairAddress = await factoryContract.read.getPair([addressA, addressB]);
-    
+
     // Check if pair exists (address is not zero)
     if (pairAddress === '0x0000000000000000000000000000000000000000') {
       return null;
@@ -202,9 +214,22 @@ export async function calculatePriceImpact(
       };
     }
 
+    // Get DEX config for current chain
+    const chainId = await publicClient.getChainId();
+    const { getDexConfig } = await import('@/config/dex');
+    const dexConfig = getDexConfig(chainId);
+
+    if (!dexConfig) {
+      return {
+        priceImpact: '0',
+        severity: 'low',
+        warning: `Chain ${chainId} not supported for price impact calculation.`
+      };
+    }
+
     // Determine which token is token0 and token1
-    const fromTokenAddress = fromToken.isNative ? getContractAddress('WKLC', DEFAULT_CHAIN_ID) : fromToken.address;
-    const toTokenAddress = toToken.isNative ? getContractAddress('WKLC', DEFAULT_CHAIN_ID) : toToken.address;
+    const fromTokenAddress = fromToken.isNative ? dexConfig.wethAddress : fromToken.address;
+    const toTokenAddress = toToken.isNative ? dexConfig.wethAddress : toToken.address;
 
     let reserveIn: bigint;
     let reserveOut: bigint;

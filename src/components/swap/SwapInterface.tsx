@@ -174,6 +174,12 @@ export default function SwapInterface({ fromToken: propFromToken, toToken: propT
   // Token balances
   const { balances, getFormattedBalance, isLoading: balancesLoading, refreshBalances } = useTokenBalances(KALYCHAIN_TOKENS);
 
+  // Create wrapper function to convert address to symbol for TokenSelectorModal
+  const getFormattedBalanceByAddress = (tokenAddress: string): string => {
+    const token = KALYCHAIN_TOKENS.find(t => t.address.toLowerCase() === tokenAddress.toLowerCase());
+    return token ? getFormattedBalance(token.symbol) : '0';
+  };
+
   // Component state - use props if provided, otherwise use defaults
   const [swapState, setSwapState] = useState<SwapState>({
     fromToken: propFromToken || KALYCHAIN_TOKENS[0], // KLC

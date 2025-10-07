@@ -224,7 +224,7 @@ export default function TokenSelectorModal({
           <div className="space-y-1">
             {filteredTokens.map((token) => {
               const isSelected = selectedToken?.address.toLowerCase() === token.address.toLowerCase();
-              const balance = getFormattedBalance ? getFormattedBalance(token.symbol) : '0';
+              const balance = getFormattedBalance ? getFormattedBalance(token.address) : '0';
               
               return (
                 <button

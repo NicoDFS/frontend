@@ -5,26 +5,49 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowUpDown, Settings, Info, Wallet, AlertTriangle, CheckCircle, ChevronDown } from 'lucide-react';
+import { ArrowUpDown, Settings, Info, Wallet, AlertTriangle, CheckCircle, ChevronDown, X, ExternalLink } from 'lucide-react';
 import TokenSelectorModal from './TokenSelectorModal';
 import SwapConfirmationModal from './SwapConfirmationModal';
 import ErrorDisplay from './ErrorDisplay';
 import { useSwapErrorHandler } from '@/hooks/useSwapErrorHandler';
-import { SwapErrorType } from '@/utils/swapErrors';
 import { useSwapTransactions } from '@/hooks/useSwapTransactions';
 
 // Wagmi imports for wallet interaction
 import { useAccount, useChainId, useSwitchChain } from 'wagmi';
 
 // New multichain DEX service imports
-import { DexService, Token, QuoteResult, SwapParams } from '@/services/dex';
-import { getTokenList, getDefaultTokenPair, isChainSupported } from '@/config/dex';
+import { Token, QuoteResult, SwapParams } from '@/services/dex';
+import { getDefaultTokenPair, isChainSupported } from '@/config/dex';
 
 // Custom hooks
 import { useMultichainTokenBalance } from '@/hooks/useMultichainTokenBalance';
+import { useTokenLists } from '@/hooks/useTokenLists';
+import { useDexSwap } from '@/hooks/useDexSwap';
 
 // Price impact utilities
 import { formatPriceImpact, getPriceImpactColor } from '@/utils/multichainPriceImpact';
+
+// TokenIcon component with gradient fallback
+function TokenIcon({ token }: { token: Token }) {
+  const [imageError, setImageError] = React.useState(false);
+
+  if (imageError) {
+    return (
+      <div className="w-6 h-6 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-xs">
+        {token.symbol.charAt(0)}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={token.logoURI}
+      alt={token.symbol}
+      className="w-6 h-6 rounded-full"
+      onError={() => setImageError(true)}
+    />
+  );
+}
 
 // Props interface for MultichainSwapInterface
 interface MultichainSwapInterfaceProps {
@@ -53,21 +76,64 @@ export default function MultichainSwapInterface({
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
 
-  // Get supported tokens for current chain
-  const supportedTokens = useMemo(() => {
-    if (!chainId || !isChainSupported(chainId)) {
-      return [];
-    }
-    return getTokenList(chainId);
-  }, [chainId]);
+  // Debug: Log chain ID changes
+  useEffect(() => {
+    console.log('🔗 MultichainSwapInterface chainId changed:', {
+      chainId,
+      isConnected,
+      address: address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'none'
+    });
+  }, [chainId, isConnected, address]);
 
-  // Get default token pair for current chain
+  // Use dynamic token lists instead of hardcoded tokens
+  const { tokens: supportedTokens, loading: tokensLoading, error: tokensError } = useTokenLists({ chainId });
+
+  // Debug logging for token loading
+  useEffect(() => {
+    console.log('🔍 MultichainSwapInterface token loading status:', {
+      chainId,
+      tokensLoading,
+      tokensError,
+      supportedTokensCount: supportedTokens?.length || 0,
+      supportedTokens: supportedTokens?.map(t => ({ symbol: t.symbol, address: t.address, chainId: t.chainId })) || []
+    });
+  }, [chainId, tokensLoading, tokensError, supportedTokens]);
+
+  // Get default token pair for current chain using dynamic tokens
   const defaultTokenPair = useMemo(() => {
-    if (!chainId || !isChainSupported(chainId)) {
+    if (!chainId || !isChainSupported(chainId) || supportedTokens.length < 2) {
       return null;
     }
-    return getDefaultTokenPair(chainId);
-  }, [chainId]);
+
+    console.log('🔍 MultichainSwapInterface supportedTokens:', supportedTokens.map(t => ({ symbol: t.symbol, isNative: t.isNative })));
+
+    // Find native token
+    const nativeToken = supportedTokens.find(token => token.isNative);
+
+    // Find stablecoin based on chain preference
+    let stablecoin;
+    if (chainId === 56) {
+      // BSC: Prefer BUSD, fallback to USDT
+      stablecoin = supportedTokens.find(token => token.symbol === 'BUSD') ||
+                   supportedTokens.find(token => token.symbol === 'USDT');
+    } else {
+      // Other chains: Prefer USDT
+      stablecoin = supportedTokens.find(token => token.symbol === 'USDT' || token.symbol === 'USDt');
+    }
+
+    console.log('🔍 MultichainSwapInterface defaultTokenPair:', {
+      chainId,
+      nativeToken: nativeToken?.symbol,
+      stablecoin: stablecoin?.symbol
+    });
+
+    if (nativeToken && stablecoin) {
+      return { tokenA: nativeToken, tokenB: stablecoin };
+    }
+
+    // Fallback to first two tokens if no native/stablecoin pair found
+    return { tokenA: supportedTokens[0], tokenB: supportedTokens[1] };
+  }, [chainId, supportedTokens]);
 
   // Component state - use props if provided, otherwise use defaults
   const [swapState, setSwapState] = useState<SwapState>(() => {
@@ -105,31 +171,34 @@ export default function MultichainSwapInterface({
     }
   }, [propFromToken, propToToken]);
 
-  // Update tokens when chain changes
+  // Update tokens when chain changes or when dynamic tokens load
   useEffect(() => {
-    if (!chainId || !isChainSupported(chainId)) {
+    if (!chainId || !isChainSupported(chainId) || tokensLoading) {
       return;
     }
 
-    const newDefaultPair = getDefaultTokenPair(chainId);
-    if (newDefaultPair) {
+    // Use dynamic default token pair
+    if (defaultTokenPair) {
       setSwapState(prev => ({
         ...prev,
-        fromToken: newDefaultPair.tokenA,
-        toToken: newDefaultPair.tokenB,
+        fromToken: defaultTokenPair.tokenA,
+        toToken: defaultTokenPair.tokenB,
         fromAmount: '',
         toAmount: ''
       }));
 
       // Notify parent component of token change
       if (onTokenChange) {
-        onTokenChange(newDefaultPair.tokenA, newDefaultPair.tokenB);
+        onTokenChange(defaultTokenPair.tokenA, defaultTokenPair.tokenB);
       }
     }
-  }, [chainId, onTokenChange]);
+  }, [chainId, defaultTokenPair, tokensLoading, onTokenChange]);
 
   // Token balances
   const { balances, getFormattedBalance, isLoading: balancesLoading, refreshBalances } = useMultichainTokenBalance(supportedTokens);
+
+  // DEX swap hook with proper client injection
+  const { getQuote: dexGetQuote, executeSwap: dexExecuteSwap, isInternalWallet } = useDexSwap(chainId || 3888);
 
   const [isSwapping, setIsSwapping] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -138,13 +207,16 @@ export default function MultichainSwapInterface({
   const [quote, setQuote] = useState<QuoteResult | null>(null);
   const [isLoadingQuote, setIsLoadingQuote] = useState(false);
 
+  // Token selector modal state
+  const [showFromTokenSelector, setShowFromTokenSelector] = useState(false);
+  const [showToTokenSelector, setShowToTokenSelector] = useState(false);
+
   // Enhanced error handling
   const {
     error,
     isRetrying,
     hasError,
     handleError,
-    handleValidationError,
     clearError,
     reset,
     retry,
@@ -174,12 +246,37 @@ export default function MultichainSwapInterface({
   const isChainSupportedForSwap = chainId && isChainSupported(chainId);
 
   // Get DEX name for current chain
-  const [dexName, setDexName] = useState<string>('');
-  useEffect(() => {
-    if (chainId && isChainSupported(chainId)) {
-      DexService.getDexName(chainId).then(setDexName);
+  const dexName = useMemo(() => {
+    if (!chainId || !isChainSupported(chainId)) return '';
+    switch (chainId) {
+      case 3888: return 'KalySwap';
+      case 56: return 'PancakeSwap';
+      case 42161: return 'Camelot';
+      default: return '';
     }
   }, [chainId]);
+
+  // Get block explorer URL for current chain
+  const getExplorerUrl = (txHash: string) => {
+    if (!chainId) return '';
+    switch (chainId) {
+      case 3888: return `https://kalyscan.io/tx/${txHash}`;
+      case 56: return `https://bscscan.com/tx/${txHash}`;
+      case 42161: return `https://arbiscan.io/tx/${txHash}`;
+      default: return '';
+    }
+  };
+
+  // Auto-dismiss transaction success message after 8 seconds
+  useEffect(() => {
+    if (currentTransactionHash) {
+      const timer = setTimeout(() => {
+        setCurrentTransactionHash(null);
+      }, 8000); // 8 seconds
+
+      return () => clearTimeout(timer);
+    }
+  }, [currentTransactionHash]);
 
   // Get quote when swap parameters change
   useEffect(() => {
@@ -196,8 +293,7 @@ export default function MultichainSwapInterface({
 
       setIsLoadingQuote(true);
       try {
-        const quoteResult = await DexService.getQuote(
-          chainId,
+        const quoteResult = await dexGetQuote(
           swapState.fromToken,
           swapState.toToken,
           swapState.fromAmount
@@ -245,42 +341,61 @@ export default function MultichainSwapInterface({
     setSwapState(prev => ({ ...prev, fromAmount: value }));
   };
 
-  // Handle token selection
-  const handleTokenSelect = (token: Token, isFromToken: boolean) => {
-    if (isFromToken) {
-      setSwapState(prev => ({ ...prev, fromToken: token }));
-      if (onTokenChange) {
-        onTokenChange(token, swapState.toToken);
-      }
-    } else {
-      setSwapState(prev => ({ ...prev, toToken: token }));
-      if (onTokenChange) {
-        onTokenChange(swapState.fromToken, token);
-      }
+  // Handle token selection from modal
+  const handleFromTokenSelect = (token: Token) => {
+    setSwapState(prev => ({
+      ...prev,
+      fromToken: token,
+      fromAmount: '',
+      toAmount: ''
+    }));
+    setQuote(null);
+    setShowFromTokenSelector(false);
+
+    if (onTokenChange) {
+      onTokenChange(token, swapState.toToken);
+    }
+  };
+
+  const handleToTokenSelect = (token: Token) => {
+    setSwapState(prev => ({
+      ...prev,
+      toToken: token,
+      fromAmount: '',
+      toAmount: ''
+    }));
+    setQuote(null);
+    setShowToTokenSelector(false);
+
+    if (onTokenChange) {
+      onTokenChange(swapState.fromToken, token);
     }
   };
 
   // Execute swap
   const handleSwap = async () => {
     if (!chainId || !isChainSupported(chainId)) {
-      handleError(new Error('Chain not supported for swapping'), SwapErrorType.UNSUPPORTED_CHAIN);
+      handleError(new Error('Chain not supported for swapping'));
       return;
     }
 
     if (!isConnected || !address) {
-      handleError(new Error('Wallet not connected'), SwapErrorType.WALLET_NOT_CONNECTED);
+      handleError(new Error('Wallet not connected'));
       return;
     }
 
     if (!swapState.fromToken || !swapState.toToken || !swapState.fromAmount || !quote) {
-      handleValidationError('Please fill in all required fields');
+      handleError(new Error('Please fill in all required fields'));
       return;
     }
 
     if (!areTokensValidForChain(swapState.fromToken, swapState.toToken)) {
-      handleError(new Error('Tokens not valid for current chain'), SwapErrorType.INVALID_TOKEN);
+      handleError(new Error('Tokens not valid for current chain'));
       return;
     }
+
+    // Clear previous transaction hash when starting new swap
+    setCurrentTransactionHash(null);
 
     setIsSwapping(true);
     setCurrentStep('swapping');
@@ -297,22 +412,27 @@ export default function MultichainSwapInterface({
         amountOutMin,
         to: address,
         deadline: parseInt(swapState.deadline),
-        slippageTolerance: parseFloat(swapState.slippage)
+        slippageTolerance: parseFloat(swapState.slippage),
+        route: quote.route // Include pre-calculated route from quote
       };
 
-      // Execute swap using DEX service
-      const txHash = await DexService.executeSwap(chainId, swapParams);
+      // Execute swap using DEX service with proper client injection
+      const txHash = await dexExecuteSwap(swapParams);
       setCurrentTransactionHash(txHash);
 
       // Add transaction to tracking
       addTransaction({
         hash: txHash,
-        type: 'swap',
-        tokenIn: swapState.fromToken,
-        tokenOut: swapState.toToken,
-        amountIn: swapState.fromAmount,
-        amountOut: quote.amountOut,
-        timestamp: Date.now(),
+        type: 'SWAP',
+        fromToken: swapState.fromToken,
+        toToken: swapState.toToken,
+        fromAmount: swapState.fromAmount,
+        toAmount: quote.amountOut,
+        fromAmountFormatted: swapState.fromAmount,
+        toAmountFormatted: quote.amountOut,
+        slippage: swapState.slippage,
+        priceImpact: quote.priceImpact.toString(),
+        userAddress: address,
         status: 'pending'
       });
 
@@ -330,7 +450,7 @@ export default function MultichainSwapInterface({
 
     } catch (error) {
       console.error('Swap error:', error);
-      handleError(error as Error, SwapErrorType.SWAP_FAILED);
+      handleError(error as Error);
       setCurrentStep('idle');
     } finally {
       setIsSwapping(false);
@@ -345,7 +465,7 @@ export default function MultichainSwapInterface({
       await switchChain({ chainId: targetChainId });
     } catch (error) {
       console.error('Chain switch error:', error);
-      handleError(error as Error, SwapErrorType.NETWORK_ERROR);
+      handleError(error as Error);
     }
   };
 
@@ -393,7 +513,8 @@ export default function MultichainSwapInterface({
   };
 
   return (
-    <Card className="w-full max-w-md mx-auto bg-stone-900/95 border-amber-500/30">
+    <>
+      <Card className="w-full max-w-md mx-auto bg-stone-900/95 border-amber-500/30">
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
           <CardTitle className="text-white">
@@ -418,12 +539,32 @@ export default function MultichainSwapInterface({
       </CardHeader>
 
       <CardContent className="space-y-4">
+        {/* Token Loading State */}
+        {tokensLoading && (
+          <div className="p-3 bg-blue-900/30 border border-blue-500/30 rounded-lg">
+            <div className="flex items-center gap-2 text-blue-400 text-sm">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-400"></div>
+              <span>Loading tokens...</span>
+            </div>
+          </div>
+        )}
+
+        {/* Token Loading Error */}
+        {tokensError && (
+          <div className="p-3 bg-red-900/30 border border-red-500/30 rounded-lg">
+            <div className="flex items-center gap-2 text-red-400 text-sm">
+              <AlertTriangle className="h-4 w-4" />
+              <span>Failed to load tokens: {tokensError}</span>
+            </div>
+          </div>
+        )}
+
         {/* Error Display */}
-        {hasError && (
+        {hasError && error && (
           <ErrorDisplay
             error={error}
             onRetry={retry}
-            onDismiss={clearError}
+            onReset={clearError}
             isRetrying={isRetrying}
           />
         )}
@@ -450,20 +591,12 @@ export default function MultichainSwapInterface({
                 <Button
                   variant="ghost"
                   className="flex items-center gap-2 p-2 h-auto text-white hover:bg-stone-700"
-                  onClick={() => {/* Open token selector */}}
+                  onClick={() => setShowFromTokenSelector(true)}
                   disabled={!isChainSupportedForSwap}
                 >
                   {swapState.fromToken ? (
                     <>
-                      <img
-                        src={swapState.fromToken.logoURI}
-                        alt={swapState.fromToken.symbol}
-                        className="w-6 h-6 rounded-full"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.src = '/tokens/default.png';
-                        }}
-                      />
+                      <TokenIcon token={swapState.fromToken} />
                       <span className="font-medium">{swapState.fromToken.symbol}</span>
                     </>
                   ) : (
@@ -472,22 +605,63 @@ export default function MultichainSwapInterface({
                   <ChevronDown className="h-4 w-4" />
                 </Button>
               </div>
-              <div className="flex flex-col items-end">
+              <div className="flex flex-col items-end flex-1">
                 <Input
-                  type="number"
+                  type="text"
+                  inputMode="decimal"
                   placeholder="0.0"
                   value={swapState.fromAmount}
-                  onChange={(e) => handleFromAmountChange(e.target.value)}
-                  className="text-right bg-transparent border-none text-lg font-medium text-white placeholder-gray-500 p-0 h-auto"
+                  onChange={(e) => {
+                    // Only allow numbers and decimal point
+                    const value = e.target.value.replace(/[^0-9.]/g, '');
+                    handleFromAmountChange(value);
+                  }}
+                  className="text-right bg-transparent border-none text-lg font-medium text-white placeholder-gray-500 p-0 h-auto w-full"
                   disabled={!isChainSupportedForSwap}
                 />
                 {swapState.fromToken && (
-                  <div className="text-xs text-gray-400 mt-1">
-                    Balance: {getTokenBalance(swapState.fromToken)}
+                  <div className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+                    <span>Balance: {getTokenBalance(swapState.fromToken)}</span>
                   </div>
                 )}
               </div>
             </div>
+            {/* Percentage buttons */}
+            {swapState.fromToken && (
+              <div className="flex gap-1 mt-2">
+                {[25, 50, 75].map((percentage) => (
+                  <Button
+                    key={percentage}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const balance = getTokenBalance(swapState.fromToken!);
+                      const numBalance = parseFloat(balance);
+                      if (!isNaN(numBalance)) {
+                        const amount = (numBalance * percentage / 100).toString();
+                        handleFromAmountChange(amount);
+                      }
+                    }}
+                    className="flex-1 text-xs h-7 bg-stone-800 border-stone-600 hover:bg-stone-700 text-gray-300"
+                    disabled={!isChainSupportedForSwap}
+                  >
+                    {percentage}%
+                  </Button>
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const balance = getTokenBalance(swapState.fromToken!);
+                    handleFromAmountChange(balance);
+                  }}
+                  className="flex-1 text-xs h-7 bg-stone-800 border-stone-600 hover:bg-stone-700 text-gray-300 font-semibold"
+                  disabled={!isChainSupportedForSwap}
+                >
+                  MAX
+                </Button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -513,20 +687,12 @@ export default function MultichainSwapInterface({
                 <Button
                   variant="ghost"
                   className="flex items-center gap-2 p-2 h-auto text-white hover:bg-stone-700"
-                  onClick={() => {/* Open token selector */}}
+                  onClick={() => setShowToTokenSelector(true)}
                   disabled={!isChainSupportedForSwap}
                 >
                   {swapState.toToken ? (
                     <>
-                      <img
-                        src={swapState.toToken.logoURI}
-                        alt={swapState.toToken.symbol}
-                        className="w-6 h-6 rounded-full"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.src = '/tokens/default.png';
-                        }}
-                      />
+                      <TokenIcon token={swapState.toToken} />
                       <span className="font-medium">{swapState.toToken.symbol}</span>
                     </>
                   ) : (
@@ -535,12 +701,29 @@ export default function MultichainSwapInterface({
                   <ChevronDown className="h-4 w-4" />
                 </Button>
               </div>
-              <div className="flex flex-col items-end">
-                <div className="text-lg font-medium text-white">
+              <div className="flex flex-col items-end flex-1 min-w-0">
+                <div className="text-lg font-medium text-white truncate w-full text-right">
                   {isLoadingQuote ? (
                     <div className="animate-pulse">...</div>
                   ) : (
-                    swapState.toAmount || '0.0'
+                    (() => {
+                      // Format toAmount to prevent overflow
+                      if (!swapState.toAmount || swapState.toAmount === '0.0') return '0.0';
+                      const num = parseFloat(swapState.toAmount);
+                      if (isNaN(num)) return '0.0';
+
+                      // Format based on magnitude
+                      if (num >= 1000000) {
+                        return num.toExponential(4); // Scientific notation for very large numbers
+                      } else if (num >= 1) {
+                        return num.toLocaleString('en-US', { maximumFractionDigits: 6, minimumFractionDigits: 2 });
+                      } else if (num >= 0.0001) {
+                        return num.toFixed(6);
+                      } else if (num > 0) {
+                        return num.toExponential(4); // Scientific notation for very small numbers
+                      }
+                      return '0.0';
+                    })()
                   )}
                 </div>
                 {swapState.toToken && (
@@ -635,17 +818,62 @@ export default function MultichainSwapInterface({
 
         {/* Transaction Status */}
         {currentTransactionHash && (
-          <div className="p-3 bg-green-900/30 border border-green-500/30 rounded-lg">
-            <div className="flex items-center gap-2 text-green-400 text-sm">
-              <CheckCircle className="h-4 w-4" />
-              <span>Transaction Submitted</span>
+          <div className="relative p-3 bg-green-900/30 border border-green-500/30 rounded-lg animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-green-400 text-sm">
+                <CheckCircle className="h-4 w-4" />
+                <span>Transaction Submitted</span>
+              </div>
+              <button
+                onClick={() => setCurrentTransactionHash(null)}
+                className="text-green-400 hover:text-green-300 transition-colors"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
-            <div className="text-xs text-green-300 mt-1 break-all">
-              Hash: {currentTransactionHash}
+            <div className="flex items-center gap-2 mt-2">
+              <div className="text-xs text-green-300 break-all flex-1">
+                {currentTransactionHash.slice(0, 10)}...{currentTransactionHash.slice(-8)}
+              </div>
+              <a
+                href={getExplorerUrl(currentTransactionHash)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs text-green-400 hover:text-green-300 transition-colors whitespace-nowrap"
+              >
+                <span>View</span>
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
+            <div className="text-xs text-green-400/60 mt-1">
+              Auto-dismissing in 8s
             </div>
           </div>
         )}
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+
+      {/* Token Selector Modals */}
+      <TokenSelectorModal
+        isOpen={showFromTokenSelector}
+        onClose={() => setShowFromTokenSelector(false)}
+        onTokenSelect={handleFromTokenSelect}
+        selectedToken={swapState.fromToken}
+        tokens={supportedTokens}
+        title="Select From Token"
+        getFormattedBalance={getFormattedBalance}
+      />
+
+      <TokenSelectorModal
+        isOpen={showToTokenSelector}
+        onClose={() => setShowToTokenSelector(false)}
+        onTokenSelect={handleToTokenSelect}
+        selectedToken={swapState.toToken}
+        tokens={supportedTokens}
+        title="Select To Token"
+        getFormattedBalance={getFormattedBalance}
+      />
+    </>
   );
 }

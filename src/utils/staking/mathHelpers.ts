@@ -6,8 +6,6 @@
 
 const oneDay = 86400;
 
-export const currentStamp = Date.now() / 1000;
-
 /**
  * Convert Wei to Ether (divide by 10^18)
  * @param numb - Number in Wei
@@ -37,6 +35,7 @@ export const calcPercent = (
  * @returns Number of days remaining (0 if already passed)
  */
 export const calcEndingTime = (timeStamp: bigint): number => {
+  const currentStamp = Date.now() / 1000; // Calculate current time dynamically
   const days = Math.round((Number(timeStamp) - currentStamp) / oneDay);
   if (days > 0) {
     return days;

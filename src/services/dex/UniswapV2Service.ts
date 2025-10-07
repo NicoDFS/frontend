@@ -1,12 +1,14 @@
-// Uniswap V2 DEX service implementation
-// Handles all Uniswap V2-specific operations on Arbitrum
+// Camelot DEX service implementation
+// Handles all Camelot V2-specific operations on Arbitrum
 
 import { BaseDexService } from './BaseDexService';
 import { SwapParams, Token } from '@/config/dex/types';
 import { UNISWAP_V2_CONFIG } from '@/config/dex/uniswap-v2';
 import { DexError, SwapFailedError } from './IDexService';
-import { useWalletClient } from 'wagmi';
-import { getContract, parseUnits } from 'viem';
+import { getContract, parseUnits, createPublicClient, http } from 'viem';
+import type { WalletClient, PublicClient } from 'viem';
+import { arbitrum } from 'viem/chains';
+import { chainRpcUrls } from '@/config/wagmi.config';
 
 export class UniswapV2Service extends BaseDexService {
   constructor() {
@@ -14,22 +16,21 @@ export class UniswapV2Service extends BaseDexService {
   }
 
   getName(): string {
-    return 'Uniswap V2';
+    return 'Camelot';
   }
 
   getChainId(): number {
     return 42161; // Arbitrum
   }
 
-  async executeSwap(params: SwapParams): Promise<string> {
+  async executeSwap(params: SwapParams, walletClient: WalletClient): Promise<string> {
     try {
-      const walletClient = useWalletClient();
-      if (!walletClient.data) {
+      if (!walletClient) {
         throw new DexError('Wallet client not available', 'NO_WALLET', this.getName());
       }
 
       // Get swap route
-      const route = await this.getSwapRoute(params.tokenIn, params.tokenOut);
+      const route = params.route || await this.getSwapRoute(params.tokenIn, params.tokenOut, walletClient as any);
       if (route.length === 0) {
         throw new SwapFailedError(this.getName(), 'No swap route available');
       }
@@ -38,47 +39,66 @@ export class UniswapV2Service extends BaseDexService {
       const amountIn = parseUnits(params.amountIn, params.tokenIn.decimals);
       const amountOutMin = parseUnits(params.amountOutMin, params.tokenOut.decimals);
 
-      // Get router contract
-      const routerContract = getContract({
-        address: this.config.router as `0x${string}`,
-        abi: this.config.routerABI,
-        client: walletClient.data,
-      });
-
       // Calculate deadline (current time + deadline minutes)
       const deadline = Math.floor(Date.now() / 1000) + (params.deadline * 60);
+
+      // Get account from wallet client
+      const account = walletClient.account;
+      if (!account) {
+        throw new DexError('No account found in wallet client', 'NO_ACCOUNT', this.getName());
+      }
 
       let txHash: string;
 
       // Handle different swap scenarios
       if (params.tokenIn.isNative) {
         // ETH to Token
-        txHash = await routerContract.write.swapExactETHForTokens([
-          amountOutMin,
-          route,
-          params.to as `0x${string}`,
-          BigInt(deadline)
-        ], {
-          value: amountIn
-        }) as string;
+        txHash = await walletClient.writeContract({
+          address: this.config.router as `0x${string}`,
+          abi: this.config.routerABI,
+          functionName: 'swapExactETHForTokens',
+          args: [
+            amountOutMin,
+            route,
+            params.to as `0x${string}`,
+            BigInt(deadline)
+          ],
+          value: amountIn,
+          account,
+          chain: undefined
+        });
       } else if (params.tokenOut.isNative) {
         // Token to ETH
-        txHash = await routerContract.write.swapExactTokensForETH([
-          amountIn,
-          amountOutMin,
-          route,
-          params.to as `0x${string}`,
-          BigInt(deadline)
-        ]) as string;
+        txHash = await walletClient.writeContract({
+          address: this.config.router as `0x${string}`,
+          abi: this.config.routerABI,
+          functionName: 'swapExactTokensForETH',
+          args: [
+            amountIn,
+            amountOutMin,
+            route,
+            params.to as `0x${string}`,
+            BigInt(deadline)
+          ],
+          account,
+          chain: undefined
+        });
       } else {
         // Token to Token
-        txHash = await routerContract.write.swapExactTokensForTokens([
-          amountIn,
-          amountOutMin,
-          route,
-          params.to as `0x${string}`,
-          BigInt(deadline)
-        ]) as string;
+        txHash = await walletClient.writeContract({
+          address: this.config.router as `0x${string}`,
+          abi: this.config.routerABI,
+          functionName: 'swapExactTokensForTokens',
+          args: [
+            amountIn,
+            amountOutMin,
+            route,
+            params.to as `0x${string}`,
+            BigInt(deadline)
+          ],
+          account,
+          chain: undefined
+        });
       }
 
       return txHash;
@@ -102,7 +122,13 @@ export class UniswapV2Service extends BaseDexService {
         return 0;
       }
 
-      const pairInfo = await this.getPairInfo(ethToken, usdcToken);
+      // Create a public client for reading data
+      const publicClient = createPublicClient({
+        chain: arbitrum,
+        transport: http(chainRpcUrls[this.getChainId() as keyof typeof chainRpcUrls])
+      });
+
+      const pairInfo = await this.getPairInfo(ethToken, usdcToken, publicClient);
       if (!pairInfo) {
         return 0;
       }
@@ -128,7 +154,13 @@ export class UniswapV2Service extends BaseDexService {
         return 0;
       }
 
-      const pairInfo = await this.getPairInfo(arbToken, ethToken);
+      // Create a public client for reading data
+      const publicClient = createPublicClient({
+        chain: arbitrum,
+        transport: http(chainRpcUrls[this.getChainId() as keyof typeof chainRpcUrls])
+      });
+
+      const pairInfo = await this.getPairInfo(arbToken, ethToken, publicClient);
       if (!pairInfo) {
         return 0;
       }
@@ -149,12 +181,18 @@ export class UniswapV2Service extends BaseDexService {
   }
 
   // Override route calculation for Uniswap V2-specific routing
-  async getSwapRoute(tokenIn: Token, tokenOut: Token): Promise<string[]> {
+  async getSwapRoute(tokenIn: Token, tokenOut: Token, publicClient: PublicClient): Promise<string[]> {
     const addressIn = tokenIn.isNative ? this.getWethAddress() : tokenIn.address;
     const addressOut = tokenOut.isNative ? this.getWethAddress() : tokenOut.address;
 
+    console.log(`[${this.getName()}] Finding route:`, {
+      tokenIn: `${tokenIn.symbol} (${addressIn})`,
+      tokenOut: `${tokenOut.symbol} (${addressOut})`
+    });
+
     // Check direct pair first
-    const directPairExists = await this.canSwapDirectly(tokenIn, tokenOut);
+    const directPairExists = await this.canSwapDirectly(tokenIn, tokenOut, publicClient);
+    console.log(`[${this.getName()}] Direct pair exists:`, directPairExists);
     if (directPairExists) {
       return [addressIn, addressOut];
     }
@@ -165,10 +203,11 @@ export class UniswapV2Service extends BaseDexService {
       const wethToken = this.config.tokens.find(t => t.address.toLowerCase() === wethAddress.toLowerCase());
       if (wethToken) {
         const canRouteViaWETH = await Promise.all([
-          this.canSwapDirectly(tokenIn, wethToken),
-          this.canSwapDirectly(wethToken, tokenOut)
+          this.canSwapDirectly(tokenIn, wethToken, publicClient),
+          this.canSwapDirectly(wethToken, tokenOut, publicClient)
         ]);
 
+        console.log(`[${this.getName()}] Can route via WETH:`, canRouteViaWETH);
         if (canRouteViaWETH[0] && canRouteViaWETH[1]) {
           return [addressIn, wethAddress, addressOut];
         }
@@ -179,10 +218,11 @@ export class UniswapV2Service extends BaseDexService {
     const usdcToken = this.config.tokens.find(t => t.symbol === 'USDC');
     if (usdcToken && addressIn !== usdcToken.address && addressOut !== usdcToken.address) {
       const canRouteViaUSDC = await Promise.all([
-        this.canSwapDirectly(tokenIn, usdcToken),
-        this.canSwapDirectly(usdcToken, tokenOut)
+        this.canSwapDirectly(tokenIn, usdcToken, publicClient),
+        this.canSwapDirectly(usdcToken, tokenOut, publicClient)
       ]);
 
+      console.log(`[${this.getName()}] Can route via USDC:`, canRouteViaUSDC);
       if (canRouteViaUSDC[0] && canRouteViaUSDC[1]) {
         return [addressIn, usdcToken.address, addressOut];
       }
@@ -192,10 +232,11 @@ export class UniswapV2Service extends BaseDexService {
     const usdtToken = this.config.tokens.find(t => t.symbol === 'USDT');
     if (usdtToken && addressIn !== usdtToken.address && addressOut !== usdtToken.address) {
       const canRouteViaUSDT = await Promise.all([
-        this.canSwapDirectly(tokenIn, usdtToken),
-        this.canSwapDirectly(usdtToken, tokenOut)
+        this.canSwapDirectly(tokenIn, usdtToken, publicClient),
+        this.canSwapDirectly(usdtToken, tokenOut, publicClient)
       ]);
 
+      console.log(`[${this.getName()}] Can route via USDT:`, canRouteViaUSDT);
       if (canRouteViaUSDT[0] && canRouteViaUSDT[1]) {
         return [addressIn, usdtToken.address, addressOut];
       }

@@ -1,24 +1,52 @@
 import { GraphQLClient } from 'graphql-request';
+import { KALYSWAP_CONFIG } from '@/config/dex/kalyswap';
+import { PANCAKESWAP_CONFIG } from '@/config/dex/pancakeswap';
+import { UNISWAP_V2_CONFIG } from '@/config/dex/uniswap-v2';
 
-// Subgraph endpoint - points directly to the v2-subgraph
-const SUBGRAPH_URL = process.env.NEXT_PUBLIC_SUBGRAPH_URL || 'http://localhost:8000/subgraphs/name/kalyswap/dex-subgraph';
+// Chain-specific subgraph configurations
+const CHAIN_SUBGRAPH_CONFIGS = {
+  3888: KALYSWAP_CONFIG.subgraphUrl,     // KalyChain
+  56: PANCAKESWAP_CONFIG.subgraphUrl,    // BSC
+  42161: UNISWAP_V2_CONFIG.subgraphUrl,  // Arbitrum
+} as const;
 
-// Configure GraphQL client with error handling
-export const subgraphClient = new GraphQLClient(SUBGRAPH_URL, {
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+// Default subgraph URL for backward compatibility
+const DEFAULT_SUBGRAPH_URL = process.env.NEXT_PUBLIC_SUBGRAPH_URL || 'http://localhost:8000/subgraphs/name/kalyswap/dex-subgraph';
 
-// Enhanced request wrapper with retry logic
+// Create chain-specific subgraph client
+export function getSubgraphClient(chainId?: number): GraphQLClient {
+  const subgraphUrl = chainId && CHAIN_SUBGRAPH_CONFIGS[chainId as keyof typeof CHAIN_SUBGRAPH_CONFIGS]
+    ? CHAIN_SUBGRAPH_CONFIGS[chainId as keyof typeof CHAIN_SUBGRAPH_CONFIGS]
+    : DEFAULT_SUBGRAPH_URL;
+
+  console.log('🔗 Creating subgraph client:', {
+    chainId,
+    subgraphUrl,
+    isMultichain: !!chainId && chainId !== 3888
+  });
+
+  return new GraphQLClient(subgraphUrl, {
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  });
+}
+
+// Default client for backward compatibility (KalyChain)
+export const subgraphClient = getSubgraphClient(3888);
+
+// Enhanced request wrapper with retry logic - now supports custom client
 async function requestWithRetry<T>(
   query: string,
   variables?: any,
-  retries = 2
+  retries = 2,
+  client?: GraphQLClient
 ): Promise<T> {
+  const graphqlClient = client || subgraphClient;
+
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      const result = await subgraphClient.request<T>(query, variables);
+      const result = await graphqlClient.request<T>(query, variables);
       return result;
     } catch (error) {
       console.warn(`Subgraph request attempt ${attempt + 1} failed:`, error);
@@ -304,9 +332,10 @@ export async function getPairsData(first = 10000, orderBy = 'reserveUSD', orderD
   }
 }
 
-export async function getPairData(pairId: string) {
+export async function getPairData(pairId: string, chainId?: number) {
   try {
-    const result = await subgraphClient.request(PAIR_QUERY, { id: pairId }) as any;
+    const client = chainId ? getSubgraphClient(chainId) : subgraphClient;
+    const result = await client.request(PAIR_QUERY, { id: pairId }) as any;
     return result.pair;
   } catch (error) {
     console.error('Error fetching pair data:', error);
@@ -314,9 +343,10 @@ export async function getPairData(pairId: string) {
   }
 }
 
-export async function getPairDayData(pairAddress: string, first = 30, skip = 0) {
+export async function getPairDayData(pairAddress: string, first = 30, skip = 0, chainId?: number) {
   try {
-    const result = await subgraphClient.request(PAIR_DAY_DATA_QUERY, {
+    const client = chainId ? getSubgraphClient(chainId) : subgraphClient;
+    const result = await client.request(PAIR_DAY_DATA_QUERY, {
       pairAddress,
       first,
       skip
@@ -328,16 +358,45 @@ export async function getPairDayData(pairAddress: string, first = 30, skip = 0) 
   }
 }
 
-export async function getPairHourData(pairAddress: string, first = 168, skip = 0) { // 168 hours = 7 days
+export async function getPairHourData(pairAddress: string, first = 168, skip = 0, chainId?: number) { // 168 hours = 7 days
   try {
-    const result = await subgraphClient.request(PAIR_HOUR_DATA_QUERY, {
+    const client = chainId ? getSubgraphClient(chainId) : subgraphClient;
+
+    console.log('🔍 getPairHourData request:', {
+      pairAddress,
+      chainId,
+      subgraphUrl: chainId && CHAIN_SUBGRAPH_CONFIGS[chainId as keyof typeof CHAIN_SUBGRAPH_CONFIGS]
+        ? CHAIN_SUBGRAPH_CONFIGS[chainId as keyof typeof CHAIN_SUBGRAPH_CONFIGS]
+        : DEFAULT_SUBGRAPH_URL,
+      first,
+      skip
+    });
+
+    const result = await client.request(PAIR_HOUR_DATA_QUERY, {
       pairAddress,
       first,
       skip
     }) as any;
+
+    console.log('✅ getPairHourData response:', {
+      pairAddress,
+      chainId,
+      dataLength: result.pairHourDatas?.length || 0
+    });
+
     return result.pairHourDatas;
   } catch (error) {
-    console.error('Error fetching pair hour data:', error);
+    console.error('❌ Error fetching pair hour data:', {
+      pairAddress,
+      chainId,
+      error: error instanceof Error ? error.message : error
+    });
+
+    // For external chains, suggest using CoinGecko instead
+    if (chainId && (chainId === 56 || chainId === 42161)) {
+      console.log('💡 Suggestion: Use CoinGecko API for external chains instead of subgraph');
+    }
+
     return [];
   }
 }
@@ -393,11 +452,11 @@ export async function getRecentSwaps(first = 20, skip = 0) {
 }
 
 // Get pair-specific market stats
-export async function getPairMarketStats(pairAddress: string) {
+export async function getPairMarketStats(pairAddress: string, chainId?: number) {
   try {
     const [pairData, pairDayData] = await Promise.all([
-      getPairData(pairAddress),
-      getPairDayData(pairAddress, 2, 0) // Get last 2 days for 24h comparison
+      getPairData(pairAddress, chainId),
+      getPairDayData(pairAddress, 2, 0, chainId) // Get last 2 days for 24h comparison
     ]);
 
     if (!pairData) {

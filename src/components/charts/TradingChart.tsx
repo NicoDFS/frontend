@@ -9,12 +9,11 @@ import {
   PriceScaleMode,
   IChartApi,
   ISeriesApi,
-  CandlestickData,
-  LineData,
   Time,
   CandlestickSeries,
   LineSeries,
   HistogramSeries,
+  LineData,
 } from 'lightweight-charts';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,6 +27,7 @@ import { TrendingUp, BarChart3, Maximize2, RefreshCw } from 'lucide-react';
 import { useHistoricalPriceData, formatTokenPrice, formatPriceChange } from '@/hooks/usePriceData';
 import { usePriceDataContext } from '@/contexts/PriceDataContext';
 import { usePairMarketStats } from '@/hooks/usePairMarketStats';
+import { useChainId } from 'wagmi';
 
 // Token interface
 interface Token {
@@ -40,15 +40,7 @@ interface Token {
   isNative?: boolean;
 }
 
-// Chart data interfaces
-interface PriceData {
-  time: Time;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume?: number;
-}
+
 
 interface ChartProps {
   tokenA?: Token | null;
@@ -69,36 +61,7 @@ const CHART_TYPES = [
   { label: 'Candlestick', value: 'candlestick', icon: BarChart3 },
 ];
 
-// Generate mock price data for demonstration
-const generateMockData = (symbol: string = 'KLC', baseSymbol: string = 'USDT'): PriceData[] => {
-  const data: PriceData[] = [];
-  const now = Math.floor(Date.now() / 1000);
-  const basePrice = symbol === 'KLC' ? 0.0003 : 1.0;
 
-  // Generate 100 data points (last 100 periods)
-  for (let i = 99; i >= 0; i--) {
-    const time = (now - (i * 3600)) as Time; // 1 hour intervals
-    const randomFactor = 0.95 + Math.random() * 0.1; // ±5% variation
-    const price = basePrice * randomFactor;
-    const volatility = 0.02; // 2% volatility
-
-    const open = price;
-    const close = price * (0.98 + Math.random() * 0.04); // ±2% from open
-    const high = Math.max(open, close) * (1 + Math.random() * volatility);
-    const low = Math.min(open, close) * (1 - Math.random() * volatility);
-
-    data.push({
-      time,
-      open: parseFloat(open.toFixed(8)),
-      high: parseFloat(high.toFixed(8)),
-      low: parseFloat(low.toFixed(8)),
-      close: parseFloat(close.toFixed(8)),
-      volume: Math.floor(Math.random() * 1000000),
-    });
-  }
-
-  return data;
-};
 
 export default function TradingChart({
   tokenA,
@@ -116,17 +79,44 @@ export default function TradingChart({
 
   const [selectedChartType, setSelectedChartType] = useState('line');
 
-  // Use Token objects if provided, otherwise fall back to legacy string props
-  const currentTokenA = tokenA || (symbol ? { symbol, chainId: 3888, address: '', decimals: 18, name: symbol, logoURI: '' } as Token : null);
-  const currentTokenB = tokenB || (baseSymbol ? { symbol: baseSymbol, chainId: 3888, address: '', decimals: 18, name: baseSymbol, logoURI: '' } as Token : null);
+  // Get current chainId from wagmi for multichain support
+  const currentChainId = useChainId();
 
-  // Fetch real historical price data from DEX subgraph
+  // Use Token objects if provided, otherwise fall back to legacy string props
+  // This ensures backward compatibility while supporting multichain tokens
+  const currentTokenA = tokenA || (symbol ? { symbol, chainId: currentChainId || 3888, address: '', decimals: 18, name: symbol, logoURI: '' } as Token : null);
+  const currentTokenB = tokenB || (baseSymbol ? { symbol: baseSymbol, chainId: currentChainId || 3888, address: '', decimals: 18, name: baseSymbol, logoURI: '' } as Token : null);
+
+  // Check if we have valid tokens to display chart
+  const hasValidTokens = currentTokenA && currentTokenB;
+
+  // Normalize token order for consistent display formatting
+  // Always use the base token (non-stablecoin) for price formatting
+  const normalizedBaseToken = React.useMemo(() => {
+    if (!currentTokenA || !currentTokenB) return currentTokenA;
+
+    // Stablecoins should never be the base token for formatting
+    const stablecoins = ['USDT', 'USDC', 'DAI', 'BUSD'];
+
+    if (stablecoins.includes(currentTokenA.symbol)) {
+      return currentTokenB; // Use tokenB as base
+    } else if (stablecoins.includes(currentTokenB.symbol)) {
+      return currentTokenA; // Use tokenA as base
+    }
+
+    // If neither is a stablecoin, use alphabetically first by address
+    const addrA = currentTokenA.address.toLowerCase();
+    const addrB = currentTokenB.address.toLowerCase();
+    return addrA < addrB ? currentTokenA : currentTokenB;
+  }, [currentTokenA?.address, currentTokenA?.symbol, currentTokenB?.address, currentTokenB?.symbol]);
+
+  // Fetch real historical price data from DEX subgraph only if we have valid tokens
   const {
     priceData: historicalData,
     isLoading: dataLoading,
     error: dataError,
     refetch: refetchData
-  } = useHistoricalPriceData(currentTokenA, currentTokenB);
+  } = useHistoricalPriceData(hasValidTokens ? currentTokenA : null, hasValidTokens ? currentTokenB : null);
 
   // Get real-time pair-specific market stats for accurate 24hr volume
   const {
@@ -148,6 +138,8 @@ export default function TradingChart({
     timestamp: new Date().toISOString()
   });
 
+
+
   // Use real historical data from subgraph
   const chartData = React.useMemo(() => {
     return historicalData;
@@ -164,10 +156,19 @@ export default function TradingChart({
   const { setPriceChange24h: setSharedPriceChange } = usePriceDataContext();
 
   const priceChange24h = React.useMemo(() => {
-    if (historicalData.length >= 2) {
+    if (historicalData.length >= 25) { // Need at least 25 hours of data
       const latest = historicalData[historicalData.length - 1];
-      const previous = historicalData[historicalData.length - 2];
-      const change = ((latest.close - previous.close) / previous.close) * 100;
+      // Get price from 24 hours ago (24 data points back since we have hourly data)
+      const price24hAgo = historicalData[historicalData.length - 25];
+      const change = ((latest.close - price24hAgo.close) / price24hAgo.close) * 100;
+
+      console.log('📊 24h Price Change Calculation:', {
+        currentPrice: latest.close,
+        price24hAgo: price24hAgo.close,
+        change: change.toFixed(2) + '%',
+        dataPoints: historicalData.length
+      });
+
       return change;
     }
     return 0;
@@ -207,6 +208,7 @@ export default function TradingChart({
     }
 
     try {
+
       const chart = createChart(chartContainerRef.current, {
         layout: {
           background: { type: ColorType.Solid, color: 'transparent' },
@@ -265,18 +267,41 @@ export default function TradingChart({
       });
 
       chartRef.current = chart;
-      console.log('✅ Chart initialized successfully');
+
+      // Create series based on chart type
+      let series: ISeriesApi<'Candlestick'> | ISeriesApi<'Line'>;
+
+      if (selectedChartType === 'candlestick') {
+        series = chart.addSeries(CandlestickSeries, {
+          upColor: '#10b981',
+          downColor: '#ef4444',
+          borderDownColor: '#ef4444',
+          borderUpColor: '#10b981',
+          wickDownColor: '#ef4444',
+          wickUpColor: '#10b981',
+        });
+      } else {
+        series = chart.addSeries(LineSeries, {
+          color: '#3b82f6',
+          lineWidth: 2,
+        });
+      }
+
+      seriesRef.current = series;
 
       return () => {
         if (chartRef.current) {
           chartRef.current.remove();
           chartRef.current = null;
         }
+        if (seriesRef.current) {
+          seriesRef.current = null;
+        }
       };
     } catch (error) {
       console.error('Failed to initialize chart:', error);
     }
-  }, [dataLoading, dataError, historicalData.length]);
+  }, [dataLoading, dataError, historicalData.length, selectedChartType]);
 
   // Update chart data when data changes
   useEffect(() => {
@@ -316,6 +341,11 @@ export default function TradingChart({
     }));
 
     // Create new series based on chart type
+    // Use normalizedBaseToken for consistent precision/minMove regardless of pair order
+    const isKLC = normalizedBaseToken?.symbol === 'KLC' || normalizedBaseToken?.symbol === 'wKLC';
+    const precision = isKLC ? 8 : 4;
+    const minMove = isKLC ? 0.00000001 : 0.0001;
+
     if (selectedChartType === 'candlestick') {
       const candlestickSeries = chartRef.current.addSeries(CandlestickSeries, {
         upColor: '#10b981',
@@ -326,8 +356,8 @@ export default function TradingChart({
         wickUpColor: '#10b981',
         priceFormat: {
           type: 'price',
-          precision: (currentTokenA?.symbol === 'KLC' || currentTokenA?.symbol === 'wKLC') ? 8 : 4,
-          minMove: (currentTokenA?.symbol === 'KLC' || currentTokenA?.symbol === 'wKLC') ? 0.00000001 : 0.0001,
+          precision: precision,
+          minMove: minMove,
         },
       });
 
@@ -370,8 +400,8 @@ export default function TradingChart({
         lineWidth: 2,
         priceFormat: {
           type: 'price',
-          precision: (currentTokenA?.symbol === 'KLC' || currentTokenA?.symbol === 'wKLC') ? 8 : 4,
-          minMove: (currentTokenA?.symbol === 'KLC' || currentTokenA?.symbol === 'wKLC') ? 0.00000001 : 0.0001,
+          precision: precision,
+          minMove: minMove,
         },
       });
 
@@ -380,7 +410,38 @@ export default function TradingChart({
         value: item.close,
       }));
 
-      lineSeries.setData(lineData);
+      // Remove duplicate timestamps - keep only the last value for each timestamp
+      const deduplicatedData = lineData.reduce((acc: LineData[], current) => {
+        const existingIndex = acc.findIndex(item => item.time === current.time);
+        if (existingIndex >= 0) {
+          // Replace existing entry with current (keep last value)
+          acc[existingIndex] = current;
+        } else {
+          acc.push(current);
+        }
+        return acc;
+      }, []);
+
+      // Ensure data is sorted by time in ascending order
+      const sortedData = deduplicatedData.sort((a, b) => {
+        const getTimestamp = (time: Time): number => {
+          if (typeof time === 'number') {
+            return time;
+          } else if (typeof time === 'object' && 'year' in time) {
+            // BusinessDay object: { year, month, day }
+            return new Date(time.year, time.month - 1, time.day).getTime() / 1000;
+          } else {
+            // String timestamp
+            return new Date(time as string).getTime() / 1000;
+          }
+        };
+
+        const timeA = getTimestamp(a.time);
+        const timeB = getTimestamp(b.time);
+        return timeA - timeB;
+      });
+
+      lineSeries.setData(sortedData);
       seriesRef.current = lineSeries;
     }
 
@@ -452,9 +513,48 @@ export default function TradingChart({
     );
   }
 
+  // Show fallback when no valid tokens are provided
+  if (!hasValidTokens) {
+    return (
+      <div className={`bg-white rounded-lg border ${className}`}>
+        <div className="p-4 border-b">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-900">
+              Select Tokens for Chart
+            </h3>
+          </div>
+        </div>
+        <div className="flex items-center justify-center" style={{ height: `${height}px` }}>
+          <div className="text-center">
+            <BarChart3 className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              No Tokens Selected
+            </h3>
+            <p className="text-gray-500 max-w-sm">
+              Please select tokens in the swap interface to view price charts and trading data.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Show "No data" message if no chart data and no loading
   if (!dataLoading && historicalData.length === 0) {
     const isLiquidityError = dataError?.includes('No liquidity pool exists');
+    const isAuthError = dataError?.includes('auth error') || dataError?.includes('authorization');
+    const isSubgraphError = dataError?.includes('subgraph') || dataError?.includes('indexed');
+    const isCoinGeckoError = dataError?.includes('CoinGecko') || dataError?.includes('not supported by CoinGecko');
+
+    // Helper to get chain name
+    const getChainName = (chainId?: number) => {
+      switch (chainId) {
+        case 3888: return 'KalyChain';
+        case 56: return 'BSC';
+        case 42161: return 'Arbitrum';
+        default: return 'Unknown';
+      }
+    };
 
     return (
       <div className={`bg-white rounded-lg border ${className}`}>
@@ -462,6 +562,9 @@ export default function TradingChart({
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-semibold text-gray-900">
               {currentTokenA?.symbol || 'TOKEN1'}/{currentTokenB?.symbol || 'TOKEN2'}
+              <span className="text-sm text-gray-500 ml-2">
+                (Chain: {currentTokenA?.chainId || currentTokenB?.chainId || 'Unknown'})
+              </span>
             </h3>
           </div>
         </div>
@@ -474,7 +577,13 @@ export default function TradingChart({
             <p className="text-gray-500 max-w-sm">
               {isLiquidityError
                 ? `No liquidity pool exists for ${currentTokenA?.symbol}/${currentTokenB?.symbol}. This pair is not available for trading.`
-                : `Chart data for ${currentTokenA?.symbol || 'TOKEN1'}/${currentTokenB?.symbol || 'TOKEN2'} is not available`
+                : isCoinGeckoError
+                ? `Chart data not available from CoinGecko. The ${currentTokenA?.symbol}/${currentTokenB?.symbol} pair may not be supported or have sufficient trading data.`
+                : isAuthError
+                ? `Subgraph authorization error. The ${getChainName(currentTokenA?.chainId || currentTokenB?.chainId)} subgraph requires API authentication.`
+                : isSubgraphError
+                ? `Pair not indexed in subgraph yet. The ${currentTokenA?.symbol}/${currentTokenB?.symbol} pair may be new or not available on this DEX.`
+                : `Chart data for ${currentTokenA?.symbol || 'TOKEN1'}/${currentTokenB?.symbol || 'TOKEN2'} is not available. Error: ${dataError || 'Unknown error'}`
               }
             </p>
           </div>
@@ -495,7 +604,7 @@ export default function TradingChart({
             {currentPrice && (
               <div className="flex items-center gap-2">
                 <span className="text-xl font-bold text-gray-900">
-                  ${formatTokenPrice(currentPrice, currentTokenA?.symbol || 'TOKEN1')}
+                  ${formatTokenPrice(currentPrice, normalizedBaseToken?.symbol || 'TOKEN1')}
                 </span>
                 {priceChange24h !== null && (
                   <span

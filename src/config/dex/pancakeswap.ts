@@ -29,9 +29,24 @@ export const PANCAKESWAP_CONSTANTS = {
 
 // Helper functions for PancakeSwap
 export function getPancakeSwapPairAddress(tokenA: string, tokenB: string): string {
-  // This would calculate the pair address using CREATE2
-  // For now, return empty string - will be implemented in service layer
-  return '';
+  // Calculate pair address using CREATE2 - same as Uniswap V2
+  const { getCreate2Address } = require('viem');
+
+  // Sort tokens (same as Uniswap V2)
+  const [token0, token1] = tokenA.toLowerCase() < tokenB.toLowerCase()
+    ? [tokenA, tokenB]
+    : [tokenB, tokenA];
+
+  // Encode packed for salt
+  const salt = require('viem').keccak256(
+    require('viem').encodePacked(['address', 'address'], [token0 as `0x${string}`, token1 as `0x${string}`])
+  );
+
+  return getCreate2Address({
+    from: PANCAKESWAP_CONFIG.factory as `0x${string}`,
+    salt,
+    bytecodeHash: PANCAKESWAP_CONSTANTS.INIT_CODE_HASH as `0x${string}`,
+  });
 }
 
 export function isPancakeSwapToken(address: string): boolean {

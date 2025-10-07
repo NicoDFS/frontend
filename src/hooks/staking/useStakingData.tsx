@@ -187,8 +187,11 @@ export function useRewardPeriod() {
     watch: true,
   })
 
+  // Hardcoded periodFinish: January 1, 2027 00:00:00 UTC
+  const hardcodedPeriodFinish = BigInt(1798761600); // January 1, 2027 timestamp
+
   return {
-    periodFinish: (data as bigint) || BigInt(0),
+    periodFinish: hardcodedPeriodFinish,
     isLoading,
     error,
     refetch,

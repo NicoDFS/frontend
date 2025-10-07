@@ -152,9 +152,20 @@ export function getDefaultTokenPair(chainId: number): { tokenA: Token; tokenB: T
   if (tokens.length < 2) return null;
 
   const nativeToken = tokens.find(token => token.isNative);
-  const stablecoin = tokens.find(token => 
-    token.symbol === 'USDT' || token.symbol === 'USDC' || token.symbol === 'BUSD'
-  );
+
+  // Find stablecoin based on chain preference
+  let stablecoin;
+  if (chainId === 56) {
+    // BSC: Prefer BUSD (better liquidity for BNB pairs), fallback to USDT, then USDC
+    stablecoin = tokens.find(token => token.symbol === 'BUSD') ||
+                 tokens.find(token => token.symbol === 'USDT') ||
+                 tokens.find(token => token.symbol === 'USDC');
+  } else {
+    // Other chains: Prefer USDT, then USDC, then BUSD
+    stablecoin = tokens.find(token =>
+      token.symbol === 'USDT' || token.symbol === 'USDC' || token.symbol === 'BUSD'
+    );
+  }
 
   if (nativeToken && stablecoin) {
     return { tokenA: nativeToken, tokenB: stablecoin };

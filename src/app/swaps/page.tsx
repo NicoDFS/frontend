@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTokenLists } from '@/hooks/useTokenLists';
 import MainLayout from '@/components/layout/MainLayout';
 import {
   Card,
@@ -38,6 +39,8 @@ import { formatTokenPrice, formatPriceChange } from '@/hooks/usePriceData';
 import { usePairMarketStats } from '@/hooks/usePairMarketStats';
 import { useWallet } from '@/hooks/useWallet';
 import { PriceDataProvider } from '@/contexts/PriceDataContext';
+import { useChainId } from 'wagmi';
+import { useHydration } from '@/hooks/useHydration';
 import './swaps.css';
 
 // Token interface based on KalyChain official tokenlist
@@ -164,10 +167,10 @@ export default function SwapsPage() {
   // Use wallet hook to get connection status and address
   const { isConnected, address: userAddress } = useWallet();
 
-  // Swap state
+  // Swap state - tokens will be set dynamically by useTokenLists
   const [swapState, setSwapState] = useState<SwapState>({
-    fromToken: KALYCHAIN_TOKENS[0], // KLC
-    toToken: KALYCHAIN_TOKENS[3], // USDT
+    fromToken: null, // Will be set by dynamic token loading
+    toToken: null,   // Will be set by dynamic token loading
     fromAmount: '',
     toAmount: '',
     slippage: '0.5',
@@ -777,6 +780,33 @@ function SwapsPageContent({
   SendTokenSelector: any;
   SendTokenIcon: any;
 }) {
+  // Check if client is hydrated
+  const isHydrated = useHydration();
+
+  // Get current chain ID from wallet with error handling
+  let wagmiChainId: number | undefined;
+  try {
+    wagmiChainId = useChainId();
+  } catch (error) {
+    console.warn('Wagmi not available, using fallback chain ID:', error);
+    wagmiChainId = undefined;
+  }
+
+  // Use wagmi chain ID if available and hydrated, otherwise fallback to KalyChain
+  const chainId = isHydrated && wagmiChainId ? wagmiChainId : 3888;
+
+  // Load dynamic tokens for current chain
+  const { tokens: dynamicTokens, loading: tokensLoading, error: tokensError } = useTokenLists({ chainId });
+
+  // Debug: Log token loading status
+  console.log('🪙 Swaps page token status:', {
+    chainId,
+    tokensLoading,
+    tokensError,
+    tokenCount: dynamicTokens?.length || 0,
+    tokens: dynamicTokens?.map(t => t.symbol).join(', ') || 'none'
+  });
+
   // Get real-time pair-specific market stats (now inside the provider)
   const {
     price: pairPrice,
@@ -787,6 +817,158 @@ function SwapsPageContent({
     error: pairStatsError,
     pairAddress
   } = usePairMarketStats(swapState.fromToken || undefined, swapState.toToken || undefined);
+
+  // Determine the base token for consistent price formatting
+  // Always use the non-stablecoin token for formatting
+  const baseTokenForFormatting = useMemo(() => {
+    if (!swapState.fromToken || !swapState.toToken) return null;
+
+    const stablecoins = ['USDT', 'USDC', 'DAI', 'BUSD'];
+
+    // If fromToken is a stablecoin, use toToken as base
+    if (stablecoins.includes(swapState.fromToken.symbol)) {
+      return swapState.toToken;
+    }
+    // If toToken is a stablecoin, use fromToken as base
+    else if (stablecoins.includes(swapState.toToken.symbol)) {
+      return swapState.fromToken;
+    }
+    // If neither is a stablecoin, use alphabetically first by address
+    else {
+      const addrFrom = swapState.fromToken.address.toLowerCase();
+      const addrTo = swapState.toToken.address.toLowerCase();
+      return addrFrom < addrTo ? swapState.fromToken : swapState.toToken;
+    }
+  }, [swapState.fromToken?.address, swapState.fromToken?.symbol, swapState.toToken?.address, swapState.toToken?.symbol]);
+
+  // Create default token pair from dynamic tokens based on chain
+  const defaultTokenPair = useMemo(() => {
+    if (!dynamicTokens || dynamicTokens.length === 0 || !chainId) return null;
+
+    let tokenA, tokenB;
+
+    if (chainId === 3888) {
+      // KalyChain: KLC/USDT
+      tokenA = dynamicTokens.find(token => token.symbol === 'KLC');
+      tokenB = dynamicTokens.find(token => token.symbol === 'USDT' || token.symbol === 'USDt');
+    } else if (chainId === 56) {
+      // BSC: BNB/BUSD (BUSD is the preferred stablecoin on BSC with better liquidity)
+      // Using BUSD ensures the pair is structured correctly (BNB as base, BUSD as quote)
+
+      // Debug: Log all available stablecoins
+      const stablecoins = dynamicTokens.filter(t =>
+        ['BUSD', 'USDT', 'USDC', 'DAI'].includes(t.symbol)
+      );
+      console.log('🔍 BSC available stablecoins:', stablecoins.map(t => ({
+        symbol: t.symbol,
+        address: t.address
+      })));
+
+      tokenA = dynamicTokens.find(token => token.symbol === 'BNB' || token.symbol === 'WBNB');
+      tokenB = dynamicTokens.find(token => token.symbol === 'BUSD');
+
+      // Fallback to USDT if BUSD not found
+      if (!tokenB) {
+        console.warn('⚠️ BUSD not found in token list, falling back to USDT');
+        tokenB = dynamicTokens.find(token => token.symbol === 'USDT');
+      }
+
+      console.log('🔍 BSC default pair:', {
+        tokenA: tokenA ? { symbol: tokenA.symbol, address: tokenA.address } : null,
+        tokenB: tokenB ? { symbol: tokenB.symbol, address: tokenB.address } : null
+      });
+    } else if (chainId === 42161) {
+      // Arbitrum: ETH/USDC
+      tokenA = dynamicTokens.find(token => token.symbol === 'ETH' || token.symbol === 'WETH');
+      tokenB = dynamicTokens.find(token => token.symbol === 'USDC');
+    }
+
+    if (tokenA && tokenB) {
+      return { tokenA, tokenB };
+    }
+
+    // Fallback to first two tokens
+    if (dynamicTokens.length >= 2) {
+      return { tokenA: dynamicTokens[0], tokenB: dynamicTokens[1] };
+    }
+
+    return null;
+  }, [dynamicTokens, chainId]);
+
+  // Debug: Log default token pair
+  useEffect(() => {
+    console.log('🎯 Default token pair for chain', chainId, ':',
+      defaultTokenPair ? `${defaultTokenPair.tokenA.symbol}/${defaultTokenPair.tokenB.symbol}` : 'none'
+    );
+  }, [defaultTokenPair, chainId]);
+
+  // Update swapState when chain changes or when tokens first load
+  useEffect(() => {
+    if (defaultTokenPair) {
+      // Check if current tokens are from a different chain
+      const currentTokensFromDifferentChain =
+        swapState.fromToken && swapState.fromToken.chainId !== chainId;
+
+      // Update tokens if:
+      // 1. No tokens are set yet, OR
+      // 2. Chain has changed (current tokens are from different chain)
+      if (!swapState.fromToken || !swapState.toToken || currentTokensFromDifferentChain) {
+        console.log('🔄 Setting default tokens for chain', chainId, ':',
+          `${defaultTokenPair.tokenA.symbol}/${defaultTokenPair.tokenB.symbol}`);
+        setSwapState(prev => ({
+          ...prev,
+          fromToken: defaultTokenPair.tokenA,
+          toToken: defaultTokenPair.tokenB
+        }));
+      }
+    }
+  }, [defaultTokenPair, chainId, swapState.fromToken, swapState.toToken, setSwapState]);
+
+  // Memoize token change handler to prevent infinite re-renders
+  const handleTokenChange = useMemo(() => (fromToken: Token | null, toToken: Token | null) => {
+    console.log(`🔄 Token change: ${fromToken?.symbol}/${toToken?.symbol}`);
+    setSwapState(prev => ({
+      ...prev,
+      fromToken,
+      toToken
+    }));
+  }, [setSwapState]);
+
+  // Show loading state while tokens are loading
+  if (tokensLoading) {
+    return (
+      <MainLayout>
+        <div className="swaps-layout min-h-screen bg-gradient-to-b from-slate-50 to-white">
+          <div className="container mx-auto px-4 py-8">
+            <div className="flex items-center justify-center min-h-[400px]">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading tokens...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </MainLayout>
+    );
+  }
+
+  // Show error state if tokens failed to load
+  if (tokensError) {
+    return (
+      <MainLayout>
+        <div className="swaps-layout min-h-screen bg-gradient-to-b from-slate-50 to-white">
+          <div className="container mx-auto px-4 py-8">
+            <div className="flex items-center justify-center min-h-[400px]">
+              <div className="text-center">
+                <p className="text-red-600 mb-4">Failed to load tokens: {tokensError}</p>
+                <Button onClick={() => window.location.reload()}>Retry</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </MainLayout>
+    );
+  }
 
   return (
     <MainLayout>
@@ -857,14 +1039,7 @@ function SwapsPageContent({
                   <SwapInterfaceWrapper
                     fromToken={swapState.fromToken}
                     toToken={swapState.toToken}
-                    onTokenChange={(fromToken, toToken) => {
-                      console.log(`🔄 Token change: ${fromToken?.symbol}/${toToken?.symbol}`);
-                      setSwapState(prev => ({
-                        ...prev,
-                        fromToken,
-                        toToken
-                      }));
-                    }}
+                    onTokenChange={handleTokenChange}
                   />
                 </TabsContent>
 
@@ -992,7 +1167,7 @@ function SwapsPageContent({
                       ) : (
                         <>
                           <span className="font-medium">
-                            {pairPrice > 0 ? formatTokenPrice(pairPrice, swapState.toToken?.symbol || '') : '0.00000000'}
+                            {pairPrice > 0 ? formatTokenPrice(pairPrice, baseTokenForFormatting?.symbol || '') : '0.00000000'}
                           </span>
                           {priceChange24h !== 0 && (
                             <span

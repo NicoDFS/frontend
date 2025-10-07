@@ -2,6 +2,7 @@
 // This provides a common interface for all DEX protocols (KalySwap, PancakeSwap, Uniswap V2)
 
 import { Token, QuoteResult, SwapParams, PairInfo } from '@/config/dex/types';
+import type { PublicClient, WalletClient } from 'viem';
 
 export interface IDexService {
   /**
@@ -19,32 +20,36 @@ export interface IDexService {
    * @param tokenIn Input token
    * @param tokenOut Output token
    * @param amountIn Amount of input token
+   * @param publicClient Public client for blockchain interactions
    * @returns Quote result with expected output amount and price impact
    */
-  getQuote(tokenIn: Token, tokenOut: Token, amountIn: string): Promise<QuoteResult>;
+  getQuote(tokenIn: Token, tokenOut: Token, amountIn: string, publicClient: PublicClient): Promise<QuoteResult>;
 
   /**
    * Execute a token swap
    * @param params Swap parameters
+   * @param walletClient Wallet client for signing transactions
    * @returns Transaction hash
    */
-  executeSwap(params: SwapParams): Promise<string>;
+  executeSwap(params: SwapParams, walletClient: WalletClient): Promise<string>;
 
   /**
    * Get the pair address for two tokens
    * @param tokenA First token
    * @param tokenB Second token
+   * @param publicClient Public client for blockchain interactions
    * @returns Pair address or null if pair doesn't exist
    */
-  getPairAddress(tokenA: Token, tokenB: Token): Promise<string | null>;
+  getPairAddress(tokenA: Token, tokenB: Token, publicClient: PublicClient): Promise<string | null>;
 
   /**
    * Get pair information including reserves
    * @param tokenA First token
    * @param tokenB Second token
+   * @param publicClient Public client for blockchain interactions
    * @returns Pair information or null if pair doesn't exist
    */
-  getPairInfo(tokenA: Token, tokenB: Token): Promise<PairInfo | null>;
+  getPairInfo(tokenA: Token, tokenB: Token, publicClient: PublicClient): Promise<PairInfo | null>;
 
   /**
    * Get the list of supported tokens
@@ -57,6 +62,12 @@ export interface IDexService {
    * @returns Router contract address
    */
   getRouterAddress(): string;
+
+  /**
+   * Get the router contract ABI
+   * @returns Router contract ABI
+   */
+  getRouterABI(): any[];
 
   /**
    * Get the factory contract address
@@ -88,9 +99,10 @@ export interface IDexService {
    * @param tokenIn Input token
    * @param tokenOut Output token
    * @param amountIn Amount of input token
+   * @param publicClient Public client for blockchain interactions
    * @returns Price impact percentage
    */
-  calculatePriceImpact(tokenIn: Token, tokenOut: Token, amountIn: string): Promise<number>;
+  calculatePriceImpact(tokenIn: Token, tokenOut: Token, amountIn: string, publicClient: PublicClient): Promise<number>;
 
   /**
    * Get the minimum amount out for a swap with slippage tolerance
@@ -104,17 +116,19 @@ export interface IDexService {
    * Check if two tokens can be swapped directly (pair exists)
    * @param tokenA First token
    * @param tokenB Second token
+   * @param publicClient Public client for blockchain interactions
    * @returns True if direct swap is possible
    */
-  canSwapDirectly(tokenA: Token, tokenB: Token): Promise<boolean>;
+  canSwapDirectly(tokenA: Token, tokenB: Token, publicClient: PublicClient): Promise<boolean>;
 
   /**
    * Get the best route for swapping tokens (may include intermediate tokens)
    * @param tokenIn Input token
    * @param tokenOut Output token
+   * @param publicClient Public client for blockchain interactions
    * @returns Array of token addresses representing the swap route
    */
-  getSwapRoute(tokenIn: Token, tokenOut: Token): Promise<string[]>;
+  getSwapRoute(tokenIn: Token, tokenOut: Token, publicClient: PublicClient): Promise<string[]>;
 }
 
 // Error types for DEX operations

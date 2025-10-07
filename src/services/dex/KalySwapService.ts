@@ -5,8 +5,10 @@ import { BaseDexService } from './BaseDexService';
 import { SwapParams, Token } from '@/config/dex/types';
 import { KALYSWAP_CONFIG } from '@/config/dex/kalyswap';
 import { DexError, SwapFailedError } from './IDexService';
-import { useWalletClient } from 'wagmi';
-import { getContract, parseUnits } from 'viem';
+import { getContract, parseUnits, createPublicClient, http } from 'viem';
+import type { WalletClient, PublicClient } from 'viem';
+import { chainRpcUrls } from '@/config/wagmi.config';
+import { kalychain } from '@/config/chains';
 
 export class KalySwapService extends BaseDexService {
   constructor() {
@@ -21,15 +23,15 @@ export class KalySwapService extends BaseDexService {
     return 3888; // KalyChain
   }
 
-  async executeSwap(params: SwapParams): Promise<string> {
+  async executeSwap(params: SwapParams, walletClient: WalletClient): Promise<string> {
     try {
-      const walletClient = useWalletClient();
-      if (!walletClient.data) {
+      if (!walletClient) {
         throw new DexError('Wallet client not available', 'NO_WALLET', this.getName());
       }
 
-      // Get swap route
-      const route = await this.getSwapRoute(params.tokenIn, params.tokenOut);
+      // Get swap route - we'll need publicClient for this, but for now use a workaround
+      // The route calculation will be done at a higher level
+      const route = params.route || await this.getSwapRoute(params.tokenIn, params.tokenOut, walletClient as any);
       if (route.length === 0) {
         throw new SwapFailedError(this.getName(), 'No swap route available');
       }
@@ -38,47 +40,67 @@ export class KalySwapService extends BaseDexService {
       const amountIn = parseUnits(params.amountIn, params.tokenIn.decimals);
       const amountOutMin = parseUnits(params.amountOutMin, params.tokenOut.decimals);
 
-      // Get router contract
-      const routerContract = getContract({
-        address: this.config.router as `0x${string}`,
-        abi: this.config.routerABI,
-        client: walletClient.data,
-      });
-
       // Calculate deadline (current time + deadline minutes)
       const deadline = Math.floor(Date.now() / 1000) + (params.deadline * 60);
+
+      // Get account from wallet client
+      const account = walletClient.account;
+      if (!account) {
+        throw new DexError('No account found in wallet client', 'NO_ACCOUNT', this.getName());
+      }
 
       let txHash: string;
 
       // Handle different swap scenarios
+      // KalySwap uses KLC instead of ETH in function names
       if (params.tokenIn.isNative) {
-        // ETH/KLC to Token
-        txHash = await routerContract.write.swapExactETHForTokens([
-          amountOutMin,
-          route,
-          params.to as `0x${string}`,
-          BigInt(deadline)
-        ], {
-          value: amountIn
-        }) as string;
+        // KLC to Token
+        txHash = await walletClient.writeContract({
+          address: this.config.router as `0x${string}`,
+          abi: this.config.routerABI,
+          functionName: 'swapExactKLCForTokens',
+          args: [
+            amountOutMin,
+            route,
+            params.to as `0x${string}`,
+            BigInt(deadline)
+          ],
+          value: amountIn,
+          account,
+          chain: undefined
+        });
       } else if (params.tokenOut.isNative) {
-        // Token to ETH/KLC
-        txHash = await routerContract.write.swapExactTokensForETH([
-          amountIn,
-          amountOutMin,
-          route,
-          params.to as `0x${string}`,
-          BigInt(deadline)
-        ]) as string;
+        // Token to KLC
+        txHash = await walletClient.writeContract({
+          address: this.config.router as `0x${string}`,
+          abi: this.config.routerABI,
+          functionName: 'swapExactTokensForKLC',
+          args: [
+            amountIn,
+            amountOutMin,
+            route,
+            params.to as `0x${string}`,
+            BigInt(deadline)
+          ],
+          account,
+          chain: undefined
+        });
       } else {
         // Token to Token
-        txHash = await routerContract.write.swapExactTokensForTokens([
-          amountIn,
-          amountOutMin,
-          route,
-          params.to as `0x${string}`,
-          BigInt(deadline)
-        ]) as string;
+        txHash = await walletClient.writeContract({
+          address: this.config.router as `0x${string}`,
+          abi: this.config.routerABI,
+          functionName: 'swapExactTokensForTokens',
+          args: [
+            amountIn,
+            amountOutMin,
+            route,
+            params.to as `0x${string}`,
+            BigInt(deadline)
+          ],
+          account,
+          chain: undefined
+        });
       }
 
       return txHash;
@@ -102,7 +124,13 @@ export class KalySwapService extends BaseDexService {
         return 0;
       }
 
-      const pairInfo = await this.getPairInfo(klcToken, usdtToken);
+      // Create a public client for reading data
+      const publicClient = createPublicClient({
+        chain: kalychain,
+        transport: http(chainRpcUrls[this.getChainId() as keyof typeof chainRpcUrls])
+      });
+
+      const pairInfo = await this.getPairInfo(klcToken, usdtToken, publicClient);
       if (!pairInfo) {
         return 0;
       }
@@ -128,7 +156,13 @@ export class KalySwapService extends BaseDexService {
         return 0;
       }
 
-      const pairInfo = await this.getPairInfo(kswapToken, klcToken);
+      // Create a public client for reading data
+      const publicClient = createPublicClient({
+        chain: kalychain,
+        transport: http(chainRpcUrls[this.getChainId() as keyof typeof chainRpcUrls])
+      });
+
+      const pairInfo = await this.getPairInfo(kswapToken, klcToken, publicClient);
       if (!pairInfo) {
         return 0;
       }
@@ -149,12 +183,12 @@ export class KalySwapService extends BaseDexService {
   }
 
   // Override route calculation for KalySwap-specific routing
-  async getSwapRoute(tokenIn: Token, tokenOut: Token): Promise<string[]> {
+  async getSwapRoute(tokenIn: Token, tokenOut: Token, publicClient: PublicClient): Promise<string[]> {
     const addressIn = tokenIn.isNative ? this.getWethAddress() : tokenIn.address;
     const addressOut = tokenOut.isNative ? this.getWethAddress() : tokenOut.address;
 
     // Check direct pair first
-    const directPairExists = await this.canSwapDirectly(tokenIn, tokenOut);
+    const directPairExists = await this.canSwapDirectly(tokenIn, tokenOut, publicClient);
     if (directPairExists) {
       return [addressIn, addressOut];
     }
@@ -165,8 +199,8 @@ export class KalySwapService extends BaseDexService {
       const wklcToken = this.config.tokens.find(t => t.address.toLowerCase() === wklcAddress.toLowerCase());
       if (wklcToken) {
         const canRouteViaWKLC = await Promise.all([
-          this.canSwapDirectly(tokenIn, wklcToken),
-          this.canSwapDirectly(wklcToken, tokenOut)
+          this.canSwapDirectly(tokenIn, wklcToken, publicClient),
+          this.canSwapDirectly(wklcToken, tokenOut, publicClient)
         ]);
 
         if (canRouteViaWKLC[0] && canRouteViaWKLC[1]) {
@@ -179,8 +213,8 @@ export class KalySwapService extends BaseDexService {
     const usdtToken = this.config.tokens.find(t => t.symbol === 'USDT');
     if (usdtToken && addressIn !== usdtToken.address && addressOut !== usdtToken.address) {
       const canRouteViaUSDT = await Promise.all([
-        this.canSwapDirectly(tokenIn, usdtToken),
-        this.canSwapDirectly(usdtToken, tokenOut)
+        this.canSwapDirectly(tokenIn, usdtToken, publicClient),
+        this.canSwapDirectly(usdtToken, tokenOut, publicClient)
       ]);
 
       if (canRouteViaUSDT[0] && canRouteViaUSDT[1]) {

@@ -1,23 +1,18 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { usePublicClient } from 'wagmi';
 import { ethers } from 'ethers';
 import { getPairAddress } from '@/utils/priceImpact';
 import { getFactoryData, getPairsData, getKalyswapDayData, getPairDayData } from '@/lib/subgraph-client';
-
-// Import DEX contract ABIs
-import pairABI from '@/config/abis/dex/pairABI.json';
-import routerABI from '@/config/abis/dex/routerABI.json';
-import erc20ABI from '@/config/abis/dex/erc20ABI.json';
-
-// DEX Contract addresses
-const DEX_CONTRACTS = {
-  ROUTER: '0x183F288BF7EEBe1A3f318F4681dF4a4681dF4a70ef32B2f3',
-  WKLC_USDT_PAIR: '0x25FDDaF836d12dC5e285823a644bb86E0b79c8e2',
-  WKLC: '0x069255299Bb729399f3CECaBdc73d15d3D10a2A3', // Actual wKLC token address from pair
-  USDT: '0x2CA775C77B922A51FcF3097F52bFFdbc0250D99A', // USDT token address
-};
+import {
+  isChainSupported as isGeckoTerminalSupported,
+  findPoolAddress,
+  getGeckoTerminalOHLC,
+  convertGeckoTerminalToChartData,
+  getPoolInfo
+} from '@/lib/geckoterminal-client';
+import { Token } from '@/config/dex/types';
 
 // RPC endpoint for KalyChain
 const RPC_URL = 'https://rpc.kalychain.io/rpc';
@@ -79,37 +74,32 @@ export function usePriceData(pair: TokenPair, timeframe: string = '1h') {
         return;
       }
 
-      // Get token addresses
-      const tokenAddressMap: Record<string, string> = {
-        'KLC': '0x069255299bb729399f3cecabdc73d15d3d10a2a3', // wKLC address (KLC = wKLC for pricing)
-        'wKLC': '0x069255299bb729399f3cecabdc73d15d3d10a2a3',
-        'USDT': '0x2ca775c77b922a51fcf3097f52bffdbc0250d99a',
-        'KSWAP': '0xcc93b84ceed74dc28c746b7697d6fa477ffff65a',
-        'DAI': '0x6e92cac380f7a7b86f4163fad0df2f277b16edc6',
-        'CLISHA': '0x376e0ac0b55aa79f9b30aac8842e5e84ff06360c'
-      };
+      // Get current chain and DEX config first
+      const chainId = await publicClient.getChainId();
+      const { getDexConfig, findTokenBySymbol } = await import('@/config/dex');
+      const dexConfig = getDexConfig(chainId);
 
-      const baseTokenAddress = tokenAddressMap[pair.baseToken];
-      const quoteTokenAddress = tokenAddressMap[pair.quoteToken];
-
-      if (!baseTokenAddress || !quoteTokenAddress) {
-        console.log(`⚠️ Token addresses not found for ${pair.baseToken}/${pair.quoteToken}`);
+      if (!dexConfig) {
+        console.log(`⚠️ Chain ${chainId} not supported for price data - no DEX configuration found`);
         return;
       }
 
-      // Get pair address from factory contract
-      const factoryAddress = '0xD42Af909d323D88e0E933B6c50D3e91c279004ca';
+      // Find token addresses from DEX config
+      const baseToken = findTokenBySymbol(pair.baseToken, chainId);
+      const quoteToken = findTokenBySymbol(pair.quoteToken, chainId);
+
+      if (!baseToken || !quoteToken) {
+        console.log(`⚠️ Tokens not found in DEX config for ${pair.baseToken}/${pair.quoteToken} on chain ${chainId}`);
+        return;
+      }
+
+      const baseTokenAddress = baseToken.isNative ? dexConfig.wethAddress : baseToken.address;
+      const quoteTokenAddress = quoteToken.isNative ? dexConfig.wethAddress : quoteToken.address;
+
+      // Get pair address from factory contract using chain-specific config
       const factoryContract = {
-        address: factoryAddress as `0x${string}`,
-        abi: [
-          {
-            "constant": true,
-            "inputs": [{"name": "tokenA", "type": "address"}, {"name": "tokenB", "type": "address"}],
-            "name": "getPair",
-            "outputs": [{"name": "pair", "type": "address"}],
-            "type": "function"
-          }
-        ]
+        address: dexConfig.factory as `0x${string}`,
+        abi: dexConfig.factoryABI
       };
 
       const pairAddress = await publicClient.readContract({
@@ -138,7 +128,7 @@ export function usePriceData(pair: TokenPair, timeframe: string = '1h') {
 
       // Convert subgraph data to chart format
       // Note: Subgraph provides daily data, so we'll create OHLC from daily prices
-      const formattedData: PricePoint[] = pairDayData.map((dayData: any) => {
+      const rawData: PricePoint[] = pairDayData.map((dayData: any) => {
         // Calculate price from reserves (token1Price is quoteToken price in baseToken)
         const price = parseFloat(dayData.reserve1) > 0 && parseFloat(dayData.reserve0) > 0
           ? parseFloat(dayData.reserve1) / parseFloat(dayData.reserve0)
@@ -153,6 +143,14 @@ export function usePriceData(pair: TokenPair, timeframe: string = '1h') {
           volume: parseFloat(dayData.dailyVolumeUSD || '0')
         };
       }).reverse(); // Reverse to get chronological order
+
+      // Deduplicate by timestamp - keep the last occurrence for each unique timestamp
+      const formattedData = Array.from(
+        rawData.reduce((map, point) => {
+          map.set(point.time, point); // Overwrites if duplicate timestamp exists
+          return map;
+        }, new Map<number, PricePoint>()).values()
+      );
 
       setPriceData(formattedData);
 
@@ -402,17 +400,6 @@ export function formatPriceChange(change: number): string {
   return `${sign}${change.toFixed(2)}%`;
 }
 
-// Token interface for historical price data
-interface Token {
-  chainId: number;
-  address: string;
-  decimals: number;
-  name: string;
-  symbol: string;
-  logoURI: string;
-  isNative?: boolean;
-}
-
 // Hook for fetching historical price data from DEX subgraph
 export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | null) {
   const [priceData, setPriceData] = useState<PricePoint[]>([]);
@@ -420,13 +407,7 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
   const [error, setError] = useState<string | null>(null);
   const [pairAddress, setPairAddress] = useState<string | null>(null);
 
-  console.log('🔍 useHistoricalPriceData called with:', {
-    tokenA: tokenA?.symbol,
-    tokenB: tokenB?.symbol,
-    tokenAAddress: tokenA?.address,
-    tokenBAddress: tokenB?.address,
-    timestamp: new Date().toISOString()
-  });
+
 
   // Safely get publicClient - will be null if not in Wagmi context
   let publicClient: any = null;
@@ -439,6 +420,20 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
 
   // Check if we have valid tokens
   const hasValidTokens = tokenA && tokenB && tokenA.address !== tokenB.address;
+
+  // Normalize token order to ensure consistent pool lookup regardless of swap direction
+  // This ensures KLC/USDT and USDT/KLC both fetch the same pool data
+  // Sort by address to get consistent ordering
+  const [normalizedTokenA, normalizedTokenB] = useMemo(() => {
+    if (!tokenA || !tokenB) return [tokenA, tokenB];
+
+    // Sort tokens by address (lowercase for case-insensitive comparison)
+    const addrA = tokenA.address.toLowerCase();
+    const addrB = tokenB.address.toLowerCase();
+
+    // Return tokens in consistent order
+    return addrA < addrB ? [tokenA, tokenB] : [tokenB, tokenA];
+  }, [tokenA?.address, tokenB?.address]);
 
   // Get pair address dynamically from factory contract (like Uniswap)
   useEffect(() => {
@@ -455,37 +450,41 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
       }
 
       try {
-        // Use factory contract to get pair address dynamically
-        const address = await getPairAddress(publicClient, tokenA!, tokenB!);
+        // Use normalized token order for consistent pair lookup
+        const address = await getPairAddress(publicClient, normalizedTokenA!, normalizedTokenB!);
 
         setPairAddress(address);
-        console.log('🔍 Pair address resolved:', {
-          tokenA: tokenA!.symbol,
-          tokenB: tokenB!.symbol,
+        console.log('🔍 Pair address resolved (normalized order):', {
+          originalTokenA: tokenA!.symbol,
+          originalTokenB: tokenB!.symbol,
+          normalizedTokenA: normalizedTokenA!.symbol,
+          normalizedTokenB: normalizedTokenB!.symbol,
           pairAddress: address,
           exists: !!address
         });
       } catch (error) {
-        console.error('Error getting pair address:', error);
+        console.error('❌ Error getting pair address:', {
+          tokenA: tokenA!.symbol,
+          tokenB: tokenB!.symbol,
+          error: error instanceof Error ? error.message : error
+        });
         setPairAddress(null);
       }
     };
 
     fetchPairAddress();
-  }, [tokenA, tokenB, hasValidTokens, publicClient]);
+  }, [normalizedTokenA, normalizedTokenB, hasValidTokens, publicClient]);
+
+  // Use a ref to track if the current fetch should be cancelled
+  const cancelFetchRef = useRef<{ cancel: boolean }>({ cancel: false });
 
   const fetchHistoricalData = useCallback(async () => {
-    console.log('🔍 fetchHistoricalData called with:', {
-      tokenA: tokenA?.symbol,
-      tokenB: tokenB?.symbol,
-      pairAddress,
-      hasValidTokens,
-      timestamp: new Date().toISOString()
-    });
+    // Reset cancel flag for this fetch
+    cancelFetchRef.current = { cancel: false };
+    const currentFetch = cancelFetchRef.current;
 
     // If no valid tokens, show no data
     if (!hasValidTokens) {
-      console.log('⚠️ No valid tokens');
       setPriceData([]);
       setError('Invalid token pair');
       setIsLoading(false);
@@ -496,27 +495,216 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
     setError(null);
 
     try {
-      // All pairs now use subgraph data - no more CoinGecko dependency
+      // Determine chainId from tokens for multichain support
+      const chainId = normalizedTokenA?.chainId || normalizedTokenB?.chainId || 3888;
 
-      // For other pairs, try subgraph data
-      if (!pairAddress) {
-        console.log('⚠️ No pair exists for this token combination');
-        setPriceData([]);
-        setError('No liquidity pool exists for this token pair');
-        setIsLoading(false);
+      console.log('🔗 Fetching chart data for chain (using normalized tokens):', {
+        chainId,
+        normalizedTokenA: normalizedTokenA?.symbol,
+        normalizedTokenB: normalizedTokenB?.symbol,
+        normalizedTokenAChainId: normalizedTokenA?.chainId,
+        normalizedTokenBChainId: normalizedTokenB?.chainId,
+        pairAddress: pairAddress?.toLowerCase()
+      });
+
+      // Route between GeckoTerminal (BSC/Arbitrum) and Subgraph (KalyChain)
+      if (isGeckoTerminalSupported(chainId)) {
+        console.log('🦎 Using GeckoTerminal API for external chain:', chainId);
+
+        // Find pool address if not provided
+        let poolAddr = pairAddress;
+
+        if (!poolAddr) {
+          console.log('🔍 Searching for pool address using normalized token order...');
+          // Use normalized tokens for consistent pool lookup
+          poolAddr = await findPoolAddress(chainId, normalizedTokenA!, normalizedTokenB!);
+
+          if (!poolAddr) {
+            if (!currentFetch.cancel) {
+              setPriceData([]);
+              setError(`No liquidity pool found for ${tokenA?.symbol}/${tokenB?.symbol} on this DEX`);
+              setIsLoading(false);
+            }
+            return;
+          }
+        }
+
+        // Check if cancelled before async operations
+        if (currentFetch.cancel) return;
+
+        // Get pool info to determine base/quote tokens
+        const poolInfo = await getPoolInfo(chainId, poolAddr);
+
+        if (currentFetch.cancel) return;
+
+        if (!poolInfo) {
+          if (!currentFetch.cancel) {
+            setPriceData([]);
+            setError(`Could not fetch pool information for ${tokenA?.symbol}/${tokenB?.symbol}`);
+            setIsLoading(false);
+          }
+          return;
+        }
+
+        // Fetch OHLC data from GeckoTerminal (168 hours = 7 days)
+        const ohlcvList = await getGeckoTerminalOHLC(chainId, poolAddr, 'hour', 1, 168);
+
+        if (currentFetch.cancel) return;
+
+        if (ohlcvList.length === 0) {
+          if (!currentFetch.cancel) {
+            setPriceData([]);
+            setError(`Chart data not available for ${tokenA?.symbol}/${tokenB?.symbol}`);
+            setIsLoading(false);
+          }
+          return;
+        }
+
+        // Determine if we need to invert prices based on user's token order vs pool's base/quote
+        // User wants to see tokenA/tokenB (tokenA price in tokenB terms)
+        // GeckoTerminal shows base/quote (base price in quote terms)
+        // If user's tokenA matches pool's base, no inversion needed
+        // If user's tokenA matches pool's quote, we need to invert
+
+        const userTokenAAddr = tokenA!.address.toLowerCase();
+        const userTokenBAddr = tokenB!.address.toLowerCase();
+
+        // Extract base and quote token addresses from the full API response
+        const poolBaseToken = poolInfo.relationships?.base_token?.data?.id?.split('_')[1]?.toLowerCase();
+        const poolQuoteToken = poolInfo.relationships?.quote_token?.data?.id?.split('_')[1]?.toLowerCase();
+
+        if (!poolBaseToken || !poolQuoteToken) {
+          if (!currentFetch.cancel) {
+            setPriceData([]);
+            setError(`Could not extract token information from pool data`);
+            setIsLoading(false);
+          }
+          return;
+        }
+
+        // Wrapped token addresses for native token matching
+        // CRITICAL: Native tokens (BNB, ETH, KLC) = Wrapped tokens (WBNB, WETH, WKLC)
+        const WBNB = '0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c'; // BSC
+        const WETH = '0x82af49447d8a07e3bd95bd0d56f35241523fbab1'; // Arbitrum
+        const WKLC = '0x069255299Bb729399f3CECaBdc73d15d3D10a2A3'; // KalyChain
+        const NATIVE_ADDR = '0x0000000000000000000000000000000000000000';
+
+        // Helper function to check if two addresses match (considering native/wrapped equivalence)
+        // BNB = WBNB, ETH = WETH, KLC = WKLC - they are THE SAME TOKEN
+        const addressMatches = (userAddr: string, poolAddr: string): boolean => {
+          if (userAddr === poolAddr) return true;
+
+          // Check if user has native and pool has wrapped (or vice versa)
+          if (userAddr === NATIVE_ADDR && (poolAddr === WBNB || poolAddr === WETH || poolAddr === WKLC)) {
+            return true;
+          }
+          if (poolAddr === NATIVE_ADDR && (userAddr === WBNB || userAddr === WETH || userAddr === WKLC)) {
+            return true;
+          }
+
+          return false;
+        };
+
+        const isTokenABase = addressMatches(userTokenAAddr, poolBaseToken);
+        const isTokenAQuote = addressMatches(userTokenAAddr, poolQuoteToken);
+        const isTokenBBase = addressMatches(userTokenBAddr, poolBaseToken);
+        const isTokenBQuote = addressMatches(userTokenBAddr, poolQuoteToken);
+
+        // CRITICAL: GeckoTerminal price = BASE token price in QUOTE token terms
+        // Example: Pool Base=WBNB, Quote=USDT, Price=$600 means 1 WBNB = $600 USDT
+        //
+        // User wants: tokenA/tokenB (price of tokenA in terms of tokenB)
+        //
+        // We need to invert if:
+        // 1. User's tokenA is the pool's QUOTE (we have BASE/QUOTE but need QUOTE/BASE)
+        // 2. User's tokenA is the pool's BASE but tokenB is NOT the pool's QUOTE
+        //
+        // We DON'T invert if:
+        // - User's tokenA is BASE and tokenB is QUOTE (pool already shows this)
+        const shouldInvert = isTokenAQuote || (isTokenABase && !isTokenBQuote);
+
+        console.log('🔄 GeckoTerminal price orientation check:', {
+          userPair: `${normalizedTokenA?.symbol}/${normalizedTokenB?.symbol}`,
+          userTokenA: userTokenAAddr,
+          userTokenB: userTokenBAddr,
+          poolBase: poolBaseToken,
+          poolQuote: poolQuoteToken,
+          poolBaseSymbol: poolInfo?.attributes?.base_token_symbol,
+          poolQuoteSymbol: poolInfo?.attributes?.quote_token_symbol,
+          poolPriceUsd: poolInfo?.attributes?.base_token_price_usd,
+          isTokenABase,
+          isTokenAQuote,
+          isTokenBBase,
+          isTokenBQuote,
+          shouldInvert,
+          reasoning: shouldInvert
+            ? (isTokenAQuote ? 'tokenA is QUOTE (need to flip)' : 'tokenA is BASE but tokenB is not QUOTE')
+            : 'tokenA is BASE and tokenB is QUOTE (already correct)'
+        });
+
+        // Convert GeckoTerminal data to our chart format with optional inversion
+        const chartData = convertGeckoTerminalToChartData(ohlcvList, shouldInvert);
+
+        console.log(`✅ GeckoTerminal: Processed ${chartData.length} price points${shouldInvert ? ' (inverted)' : ''}`, {
+          displayPair: `${tokenA?.symbol}/${tokenB?.symbol}`,
+          poolPair: `${poolBaseToken}/${poolQuoteToken}`,
+          dataPoints: chartData.length,
+          inverted: shouldInvert,
+          samplePrices: chartData.slice(0, 3).map(p => p.close.toFixed(4)),
+          latestPrice: chartData[chartData.length - 1]?.close.toFixed(4)
+        });
+
+        // Only update state if this fetch hasn't been cancelled
+        if (!currentFetch.cancel) {
+          console.log('📈 SETTING PRICE DATA FROM GECKOTERMINAL:', {
+            pair: `${tokenA?.symbol}/${tokenB?.symbol}`,
+            points: chartData.length,
+            latestPrice: chartData[chartData.length - 1]?.close.toFixed(4),
+            timestamp: new Date().toISOString()
+          });
+          setPriceData(chartData);
+          setIsLoading(false);
+        } else {
+          console.log('⚠️ GeckoTerminal fetch was cancelled, not updating state');
+        }
         return;
       }
 
-      console.log('🔍 Fetching historical price data from subgraph...');
+      // Use subgraph for KalyChain (chainId 3888)
+      console.log('📊 Using subgraph for KalyChain');
+
+      if (!pairAddress) {
+        if (!currentFetch.cancel) {
+          setPriceData([]);
+          setError('No liquidity pool exists for this token pair');
+          setIsLoading(false);
+        }
+        return;
+      }
 
       // Import the direct subgraph functions
       const { getPairHourData, getPairData } = await import('@/lib/subgraph-client');
 
       // Fetch hourly data for better chart granularity (168 hours = 7 days)
+      // Pass chainId to use the correct subgraph
       const [hourData, pairData] = await Promise.all([
-        getPairHourData(pairAddress.toLowerCase(), 168, 0),
-        getPairData(pairAddress.toLowerCase())
+        getPairHourData(pairAddress.toLowerCase(), 168, 0, chainId),
+        getPairData(pairAddress.toLowerCase(), chainId)
       ]);
+
+      console.log('🔍 Subgraph response:', {
+        pairAddress: pairAddress.toLowerCase(),
+        hourDataLength: hourData?.length || 0,
+        pairDataExists: !!pairData,
+        hourDataSample: hourData?.slice(0, 2),
+        pairDataSample: pairData ? {
+          id: pairData.id,
+          token0: pairData.token0?.symbol,
+          token1: pairData.token1?.symbol,
+          reserve0: pairData.reserve0,
+          reserve1: pairData.reserve1
+        } : null
+      });
 
       console.log('📊 Direct subgraph response:', {
         hourDataLength: hourData?.length || 0,
@@ -587,22 +775,20 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
                 return null; // Skip invalid data
               }
 
-              // Calculate price correctly based on which token we want the price for
-              // If we want tokenA price in terms of tokenB:
-              // - If tokenA is token0, price = reserve1/reserve0 (token1 per token0)
-              // - If tokenA is token1, price = reserve0/reserve1 (token0 per token1)
-
+              // Calculate price using NORMALIZED tokens for consistency
+              // This ensures the chart shows the same price regardless of pair flip
+              // Always calculate based on normalizedTokenA (the base token)
               let price = 0;
               let calculation = '';
 
-              if (pairInfo?.token0?.symbol === tokenA?.symbol) {
-                // tokenA is token0, so price = reserve1/reserve0 (how much token1 per token0)
+              if (pairInfo?.token0?.symbol === normalizedTokenA?.symbol) {
+                // normalizedTokenA is token0, so price = reserve1/reserve0 (token1 per token0)
                 price = reserve1 / reserve0;
-                calculation = `${reserve1}/${reserve0} (${tokenA?.symbol} is token0)`;
-              } else if (pairInfo?.token1?.symbol === tokenA?.symbol) {
-                // tokenA is token1, so price = reserve0/reserve1 (how much token0 per token1)
+                calculation = `${reserve1}/${reserve0} (${normalizedTokenA?.symbol} is token0)`;
+              } else if (pairInfo?.token1?.symbol === normalizedTokenA?.symbol) {
+                // normalizedTokenA is token1, so price = reserve0/reserve1 (token0 per token1)
                 price = reserve0 / reserve1;
-                calculation = `${reserve0}/${reserve1} (${tokenA?.symbol} is token1)`;
+                calculation = `${reserve0}/${reserve1} (${normalizedTokenA?.symbol} is token1)`;
               } else {
                 // Fallback: assume we want token1 price in token0
                 price = reserve1 / reserve0;
@@ -611,9 +797,9 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
 
               // Log the first calculation for debugging
               if (hourData.indexOf(hour) === 0) {
-                console.log('💰 Price calculation debug:', {
-                  tokenA: tokenA?.symbol,
-                  tokenB: tokenB?.symbol,
+                console.log('💰 Price calculation debug (using normalized tokens):', {
+                  displayPair: `${tokenA?.symbol}/${tokenB?.symbol}`,
+                  normalizedPair: `${normalizedTokenA?.symbol}/${normalizedTokenB?.symbol}`,
                   token0: pairInfo?.token0?.symbol,
                   token1: pairInfo?.token1?.symbol,
                   reserve0,
@@ -637,13 +823,28 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
             .filter((point: any) => point !== null && point.close > 0) // Filter out invalid price points
             .sort((a: any, b: any) => (a.time as number) - (b.time as number)); // Sort by time ascending
 
-          console.log(`✅ Processed ${historicalData.length} REAL historical price points from subgraph`);
-          console.log('📊 Sample data points:', historicalData.slice(0, 3).map(p => ({
+          // Deduplicate by timestamp - keep the last occurrence for each unique timestamp
+          const deduplicatedData = Array.from(
+            historicalData.reduce((map, point) => {
+              map.set(point.time, point); // Overwrites if duplicate timestamp exists
+              return map;
+            }, new Map()).values()
+          );
+
+          console.log(`✅ Processed ${deduplicatedData.length} REAL historical price points from subgraph (${historicalData.length - deduplicatedData.length} duplicates removed)`);
+          console.log('📊 Sample data points:', deduplicatedData.slice(0, 3).map(p => ({
             time: typeof p.time === 'number' ? new Date(p.time * 1000).toISOString().split('T')[0] : 'invalid',
             price: p.close.toFixed(8),
             volume: p.volume.toFixed(2)
           })));
-          setPriceData(historicalData);
+
+          console.log('📈 SETTING PRICE DATA FROM SUBGRAPH:', {
+            pair: `${tokenA?.symbol}/${tokenB?.symbol}`,
+            points: deduplicatedData.length,
+            latestPrice: deduplicatedData[deduplicatedData.length - 1]?.close.toFixed(8),
+            timestamp: new Date().toISOString()
+          });
+          setPriceData(deduplicatedData);
         } else {
           console.log('⚠️ No historical data available - subgraph may not be fully synced');
           setPriceData([]);
@@ -656,15 +857,24 @@ export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | nul
       }
     } catch (err) {
       console.error('❌ Error fetching historical price data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch historical data');
-      setPriceData([]);
+      if (!currentFetch.cancel) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch historical data');
+        setPriceData([]);
+      }
     } finally {
-      setIsLoading(false);
+      if (!currentFetch.cancel) {
+        setIsLoading(false);
+      }
     }
-  }, [tokenA, tokenB, pairAddress, hasValidTokens]);
+  }, [normalizedTokenA, normalizedTokenB, pairAddress, hasValidTokens]); // ONLY use normalized tokens - DO NOT add tokenA/tokenB
 
   useEffect(() => {
     fetchHistoricalData();
+
+    // Cleanup function to cancel fetch when dependencies change
+    return () => {
+      cancelFetchRef.current.cancel = true;
+    };
   }, [fetchHistoricalData]);
 
   return {

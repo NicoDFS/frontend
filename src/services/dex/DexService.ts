@@ -4,6 +4,7 @@
 import { IDexService, DexError } from './IDexService';
 import { Token, QuoteResult, SwapParams, PairInfo, isSupportedDexChain } from '@/config/dex/types';
 import { getDexConfig } from '@/config/dex';
+import type { PublicClient, WalletClient } from 'viem';
 
 // Lazy imports to avoid circular dependencies
 let KalySwapService: any;
@@ -70,34 +71,35 @@ export class DexService {
     chainId: number,
     tokenIn: Token,
     tokenOut: Token,
-    amountIn: string
+    amountIn: string,
+    publicClient: PublicClient
   ): Promise<QuoteResult> {
     const service = await this.getDexService(chainId);
-    return service.getQuote(tokenIn, tokenOut, amountIn);
+    return service.getQuote(tokenIn, tokenOut, amountIn, publicClient);
   }
 
   /**
    * Execute a token swap on a specific chain
    */
-  static async executeSwap(chainId: number, params: SwapParams): Promise<string> {
+  static async executeSwap(chainId: number, params: SwapParams, walletClient: WalletClient): Promise<string> {
     const service = await this.getDexService(chainId);
-    return service.executeSwap(params);
+    return service.executeSwap(params, walletClient);
   }
 
   /**
    * Get pair address for two tokens on a specific chain
    */
-  static async getPairAddress(chainId: number, tokenA: Token, tokenB: Token): Promise<string | null> {
+  static async getPairAddress(chainId: number, tokenA: Token, tokenB: Token, publicClient: PublicClient): Promise<string | null> {
     const service = await this.getDexService(chainId);
-    return service.getPairAddress(tokenA, tokenB);
+    return service.getPairAddress(tokenA, tokenB, publicClient);
   }
 
   /**
    * Get pair information for two tokens on a specific chain
    */
-  static async getPairInfo(chainId: number, tokenA: Token, tokenB: Token): Promise<PairInfo | null> {
+  static async getPairInfo(chainId: number, tokenA: Token, tokenB: Token, publicClient: PublicClient): Promise<PairInfo | null> {
     const service = await this.getDexService(chainId);
-    return service.getPairInfo(tokenA, tokenB);
+    return service.getPairInfo(tokenA, tokenB, publicClient);
   }
 
   /**
@@ -127,9 +129,9 @@ export class DexService {
   /**
    * Get the best swap route for tokens on a specific chain
    */
-  static async getSwapRoute(chainId: number, tokenIn: Token, tokenOut: Token): Promise<string[]> {
+  static async getSwapRoute(chainId: number, tokenIn: Token, tokenOut: Token, publicClient: PublicClient): Promise<string[]> {
     const service = await this.getDexService(chainId);
-    return service.getSwapRoute(tokenIn, tokenOut);
+    return service.getSwapRoute(tokenIn, tokenOut, publicClient);
   }
 
   /**
@@ -139,18 +141,19 @@ export class DexService {
     chainId: number,
     tokenIn: Token,
     tokenOut: Token,
-    amountIn: string
+    amountIn: string,
+    publicClient: PublicClient
   ): Promise<number> {
     const service = await this.getDexService(chainId);
-    return service.calculatePriceImpact(tokenIn, tokenOut, amountIn);
+    return service.calculatePriceImpact(tokenIn, tokenOut, amountIn, publicClient);
   }
 
   /**
    * Check if two tokens can be swapped directly on a specific chain
    */
-  static async canSwapDirectly(chainId: number, tokenA: Token, tokenB: Token): Promise<boolean> {
+  static async canSwapDirectly(chainId: number, tokenA: Token, tokenB: Token, publicClient: PublicClient): Promise<boolean> {
     const service = await this.getDexService(chainId);
-    return service.canSwapDirectly(tokenA, tokenB);
+    return service.canSwapDirectly(tokenA, tokenB, publicClient);
   }
 
   /**

@@ -7,6 +7,14 @@ import { kalyswapWallet } from './wallets'
 // Get project ID from environment variables
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'your-project-id'
 
+// Chain-specific RPC configuration - using paid unlimited nodes
+export const chainRpcUrls = {
+  [kalychain.id]: process.env.NEXT_PUBLIC_KALYCHAIN_RPC_URL || 'https://rpc.kalychain.io/rpc',
+  [arbitrum.id]: process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL || 'https://arbitrum.nownodes.io/38c9312e-ab3b-43cc-9f00-da2b23125a28',
+  [bsc.id]: process.env.NEXT_PUBLIC_BSC_RPC_URL || 'https://bsc.nownodes.io/38c9312e-ab3b-43cc-9f00-da2b23125a28',
+  [clisha.id]: process.env.NEXT_PUBLIC_CLISHA_RPC_URL || 'https://rpc.clishachain.com/rpc',
+} as const
+
 // Create wagmi config with internal wallet registered for auto-reconnection
 const createWagmiConfigWithInternalWallet = () => {
   // Get default wallets
@@ -30,9 +38,11 @@ const createWagmiConfigWithInternalWallet = () => {
     projectId,
   })
 
-  // Create transports
+  // Create transports with explicit RPC URLs
   const transports = supportedChains.reduce((acc, chain) => {
-    acc[chain.id] = http()
+    // Use explicit RPC URLs from chainRpcUrls to avoid default thirdweb RPCs
+    const rpcUrl = chainRpcUrls[chain.id as keyof typeof chainRpcUrls]
+    acc[chain.id] = http(rpcUrl)
     return acc
   }, {} as Record<number, any>)
 
@@ -57,14 +67,6 @@ if (process.env.NODE_ENV === 'development') {
 
 // Export for use in providers
 export { projectId }
-
-// Chain-specific RPC configuration
-export const chainRpcUrls = {
-  [kalychain.id]: 'https://rpc.kalychain.io/rpc',
-  [arbitrum.id]: 'https://arb1.arbitrum.io/rpc',
-  [bsc.id]: 'https://bsc-dataseed.binance.org',
-  [clisha.id]: 'https://rpc.clishachain.com/rpc',
-} as const
 
 // Wallet connection configuration
 export const walletConnectConfig = {

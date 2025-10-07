@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { usePairSwaps, type FormattedSwap } from '@/hooks/usePairSwaps';
+import { useChainId } from 'wagmi';
+import { getAddressUrl, getExplorerName } from '@/utils/explorerLinks';
 import {
   Card,
   CardContent,
@@ -43,11 +45,12 @@ interface TransactionDataProps {
 }
 
 export default function TransactionData({ selectedPair, userAddress }: TransactionDataProps) {
+  const chainId = useChainId();
   const [activeTab, setActiveTab] = useState<'recent' | 'my'>('recent');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Use the subgraph for pair-specific transactions
+  // Use the subgraph/GeckoTerminal for pair-specific transactions
   const {
     swaps,
     loading,
@@ -55,8 +58,9 @@ export default function TransactionData({ selectedPair, userAddress }: Transacti
     refetch
   } = usePairSwaps({
     pairAddress: selectedPair?.pairAddress,
-    userAddress: activeTab === 'my' ? userAddress : null,
-    limit: itemsPerPage * 5 // Get more transactions since we'll paginate client-side
+    userAddress: activeTab === 'my' && chainId === 3888 ? userAddress : null,
+    limit: itemsPerPage * 5, // Get more transactions since we'll paginate client-side
+    chainId: chainId
   });
 
   // Client-side pagination for swap transactions
@@ -223,6 +227,29 @@ export default function TransactionData({ selectedPair, userAddress }: Transacti
               {!userAddress ? (
                 <div className="text-center py-8 text-gray-500">
                   <p>Connect your wallet to view your transaction history</p>
+                </div>
+              ) : (chainId === 56 || chainId === 42161) ? (
+                // For BSC and Arbitrum, show explorer link instead
+                <div className="text-center py-8">
+                  <p className="text-gray-400 mb-4">
+                    View your complete transaction history on {getExplorerName(chainId)}
+                  </p>
+                  {selectedPair && (
+                    <p className="text-sm text-gray-500 mb-4">
+                      for {selectedPair.token0Symbol}/{selectedPair.token1Symbol} pair
+                    </p>
+                  )}
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const explorerUrl = getAddressUrl(chainId, userAddress);
+                      window.open(explorerUrl, '_blank', 'noopener,noreferrer');
+                    }}
+                    className="border-amber-200/20 hover:border-amber-200/40 hover:bg-amber-200/5"
+                  >
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    View on {getExplorerName(chainId)}
+                  </Button>
                 </div>
               ) : loading ? (
                 <div className="flex items-center justify-center py-8">

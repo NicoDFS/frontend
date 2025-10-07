@@ -3,8 +3,8 @@
 
 import { IDexService, DexError, PairNotFoundError, UnsupportedTokenError } from './IDexService';
 import { Token, QuoteResult, SwapParams, PairInfo, DexConfig } from '@/config/dex/types';
-import { usePublicClient, useWalletClient } from 'wagmi';
 import { getContract, parseUnits, formatUnits } from 'viem';
+import type { PublicClient, WalletClient } from 'viem';
 
 export abstract class BaseDexService implements IDexService {
   protected config: DexConfig;
@@ -16,7 +16,7 @@ export abstract class BaseDexService implements IDexService {
   // Abstract methods that must be implemented by subclasses
   abstract getName(): string;
   abstract getChainId(): number;
-  abstract executeSwap(params: SwapParams): Promise<string>;
+  abstract executeSwap(params: SwapParams, walletClient: WalletClient): Promise<string>;
 
   // Common implementations
   getTokenList(): Token[] {
@@ -25,6 +25,10 @@ export abstract class BaseDexService implements IDexService {
 
   getRouterAddress(): string {
     return this.config.router;
+  }
+
+  getRouterABI(): any[] {
+    return this.config.routerABI;
   }
 
   getFactoryAddress(): string {
@@ -52,7 +56,7 @@ export abstract class BaseDexService implements IDexService {
   }
 
   // Common quote implementation using router contract
-  async getQuote(tokenIn: Token, tokenOut: Token, amountIn: string): Promise<QuoteResult> {
+  async getQuote(tokenIn: Token, tokenOut: Token, amountIn: string, publicClient: PublicClient): Promise<QuoteResult> {
     try {
       // Validate tokens
       if (!this.isTokenSupported(tokenIn.address) && !tokenIn.isNative) {
@@ -63,16 +67,26 @@ export abstract class BaseDexService implements IDexService {
       }
 
       // Get swap route
-      const route = await this.getSwapRoute(tokenIn, tokenOut);
+      const route = await this.getSwapRoute(tokenIn, tokenOut, publicClient);
       if (route.length === 0) {
         throw new PairNotFoundError(this.getName(), tokenIn.symbol, tokenOut.symbol);
       }
+
+      // Debug logging
+      console.log(`[${this.getName()}] Quote Debug:`, {
+        tokenIn: `${tokenIn.symbol} (${tokenIn.address}) decimals: ${tokenIn.decimals}`,
+        tokenOut: `${tokenOut.symbol} (${tokenOut.address}) decimals: ${tokenOut.decimals}`,
+        amountIn,
+        route: route.map((addr, i) => {
+          const token = this.config.tokens.find(t => t.address.toLowerCase() === addr.toLowerCase());
+          return `${i}: ${token?.symbol || 'Unknown'} (${addr})`;
+        })
+      });
 
       // Convert amount to proper units
       const amountInWei = parseUnits(amountIn, tokenIn.decimals);
 
       // Get quote from router contract
-      const publicClient = usePublicClient();
       if (!publicClient) {
         throw new DexError('Public client not available', 'NO_CLIENT', this.getName());
       }
@@ -87,11 +101,19 @@ export abstract class BaseDexService implements IDexService {
       const amounts = await routerContract.read.getAmountsOut([amountInWei, route]) as bigint[];
       const amountOut = amounts[amounts.length - 1];
 
+      // Debug logging for amounts
+      console.log(`[${this.getName()}] Quote Amounts:`, {
+        amountInWei: amountInWei.toString(),
+        amounts: amounts.map((a, i) => `${i}: ${a.toString()}`),
+        amountOut: amountOut.toString(),
+        tokenOutDecimals: tokenOut.decimals
+      });
+
       // Format output amount
       const formattedAmountOut = formatUnits(amountOut, tokenOut.decimals);
 
       // Calculate price impact
-      const priceImpact = await this.calculatePriceImpact(tokenIn, tokenOut, amountIn);
+      const priceImpact = await this.calculatePriceImpact(tokenIn, tokenOut, amountIn, publicClient);
 
       return {
         amountOut: formattedAmountOut,
@@ -109,9 +131,8 @@ export abstract class BaseDexService implements IDexService {
   }
 
   // Common pair address calculation using factory contract
-  async getPairAddress(tokenA: Token, tokenB: Token): Promise<string | null> {
+  async getPairAddress(tokenA: Token, tokenB: Token, publicClient: PublicClient): Promise<string | null> {
     try {
-      const publicClient = usePublicClient();
       if (!publicClient) {
         throw new DexError('Public client not available', 'NO_CLIENT', this.getName());
       }
@@ -144,14 +165,13 @@ export abstract class BaseDexService implements IDexService {
   }
 
   // Common pair info implementation
-  async getPairInfo(tokenA: Token, tokenB: Token): Promise<PairInfo | null> {
+  async getPairInfo(tokenA: Token, tokenB: Token, publicClient: PublicClient): Promise<PairInfo | null> {
     try {
-      const pairAddress = await this.getPairAddress(tokenA, tokenB);
+      const pairAddress = await this.getPairAddress(tokenA, tokenB, publicClient);
       if (!pairAddress) {
         return null;
       }
 
-      const publicClient = usePublicClient();
       if (!publicClient) {
         throw new DexError('Public client not available', 'NO_CLIENT', this.getName());
       }
@@ -202,9 +222,9 @@ export abstract class BaseDexService implements IDexService {
   }
 
   // Common price impact calculation
-  async calculatePriceImpact(tokenIn: Token, tokenOut: Token, amountIn: string): Promise<number> {
+  async calculatePriceImpact(tokenIn: Token, tokenOut: Token, amountIn: string, publicClient: PublicClient): Promise<number> {
     try {
-      const pairInfo = await this.getPairInfo(tokenIn, tokenOut);
+      const pairInfo = await this.getPairInfo(tokenIn, tokenOut, publicClient);
       if (!pairInfo) {
         return 0; // No liquidity, can't calculate impact
       }
@@ -223,13 +243,13 @@ export abstract class BaseDexService implements IDexService {
   }
 
   // Common swap route calculation
-  async getSwapRoute(tokenIn: Token, tokenOut: Token): Promise<string[]> {
+  async getSwapRoute(tokenIn: Token, tokenOut: Token, publicClient: PublicClient): Promise<string[]> {
     // Handle native tokens
     const addressIn = tokenIn.isNative ? this.getWethAddress() : tokenIn.address;
     const addressOut = tokenOut.isNative ? this.getWethAddress() : tokenOut.address;
 
     // Check if direct pair exists
-    const directPairExists = await this.canSwapDirectly(tokenIn, tokenOut);
+    const directPairExists = await this.canSwapDirectly(tokenIn, tokenOut, publicClient);
     if (directPairExists) {
       return [addressIn, addressOut];
     }
@@ -240,8 +260,8 @@ export abstract class BaseDexService implements IDexService {
       const wethToken = this.config.tokens.find(t => t.address.toLowerCase() === wethAddress.toLowerCase());
       if (wethToken) {
         const canRouteViaWeth = await Promise.all([
-          this.canSwapDirectly(tokenIn, wethToken),
-          this.canSwapDirectly(wethToken, tokenOut)
+          this.canSwapDirectly(tokenIn, wethToken, publicClient),
+          this.canSwapDirectly(wethToken, tokenOut, publicClient)
         ]);
 
         if (canRouteViaWeth[0] && canRouteViaWeth[1]) {
@@ -255,8 +275,8 @@ export abstract class BaseDexService implements IDexService {
   }
 
   // Common direct swap check
-  async canSwapDirectly(tokenA: Token, tokenB: Token): Promise<boolean> {
-    const pairAddress = await this.getPairAddress(tokenA, tokenB);
+  async canSwapDirectly(tokenA: Token, tokenB: Token, publicClient: PublicClient): Promise<boolean> {
+    const pairAddress = await this.getPairAddress(tokenA, tokenB, publicClient);
     return pairAddress !== null;
   }
 }

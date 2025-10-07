@@ -23,7 +23,8 @@ import { useSwapTransactions, type SwapTransaction } from '@/hooks/useSwapTransa
 import { useDexData, type DexTransaction } from '@/hooks/useDexData';
 import { useExplorerTransactions, type ExplorerTransaction } from '@/hooks/useExplorerTransactions';
 import { usePairSwaps, type FormattedSwap } from '@/hooks/usePairSwaps';
-import { useAccount } from 'wagmi';
+import { useAccount, useChainId } from 'wagmi';
+import { getAddressUrl, getExplorerName } from '@/utils/explorerLinks';
 
 interface SwapHistoryProps {
   className?: string;
@@ -39,14 +40,15 @@ export default function SwapHistory({
   pairAddress = null
 }: SwapHistoryProps) {
   const { address, isConnected } = useAccount();
+  const chainId = useChainId();
   const [activeTab, setActiveTab] = useState<'recent' | 'my'>('recent');
 
   // Debug logging
   useEffect(() => {
-    console.log('SwapHistory - Wallet status:', { address, isConnected, activeTab });
-  }, [address, isConnected, activeTab]);
+    console.log('SwapHistory - Wallet status:', { address, isConnected, activeTab, chainId });
+  }, [address, isConnected, activeTab, chainId]);
 
-  // Use subgraph for recent trades (all trades or pair-specific)
+  // Use subgraph/GeckoTerminal for recent trades (all trades or pair-specific)
   const {
     swaps: recentSwaps,
     loading: recentLoading,
@@ -54,10 +56,12 @@ export default function SwapHistory({
     refetch: refetchRecent
   } = usePairSwaps({
     pairAddress: pairAddress,
-    limit: maxItems
+    limit: maxItems,
+    chainId: chainId
   });
 
-  // Use subgraph for user-specific trades
+  // Use subgraph for user-specific trades (only for KalyChain)
+  // For BSC/Arbitrum, we'll show explorer link instead
   const {
     swaps: userSwaps,
     loading: userLoading,
@@ -65,8 +69,9 @@ export default function SwapHistory({
     refetch: refetchUser
   } = usePairSwaps({
     pairAddress: pairAddress,
-    userAddress: isConnected ? address : null,
-    limit: maxItems
+    userAddress: isConnected && chainId === 3888 ? address : null,
+    limit: maxItems,
+    chainId: chainId
   });
 
   // Use swap transactions for pending/new user transactions
@@ -443,6 +448,24 @@ export default function SwapHistory({
             {!isConnected ? (
               <div className="text-center py-8 text-gray-500">
                 <p>Connect your wallet to view your transaction history</p>
+              </div>
+            ) : (chainId === 56 || chainId === 42161) ? (
+              // For BSC and Arbitrum, show explorer link instead
+              <div className="text-center py-8">
+                <p className="text-gray-400 mb-4">
+                  View your complete transaction history on {getExplorerName(chainId)}
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const explorerUrl = getAddressUrl(chainId, address!);
+                    window.open(explorerUrl, '_blank', 'noopener,noreferrer');
+                  }}
+                  className="border-amber-200/20 hover:border-amber-200/40 hover:bg-amber-200/5"
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  View on {getExplorerName(chainId)}
+                </Button>
               </div>
             ) : loading && displayTransactions.length === 0 ? (
               <div className="flex items-center justify-center py-8">

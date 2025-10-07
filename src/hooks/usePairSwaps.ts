@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getPairSwaps, getRecentSwaps } from '@/lib/subgraph-client';
+import { getPoolTrades } from '@/lib/geckoterminal-client';
 import { safeApiCall, isNetworkError } from '@/utils/networkUtils';
 
 // Swap transaction interface
@@ -55,6 +56,7 @@ interface UsePairSwapsProps {
   pairAddress?: string | null;
   limit?: number;
   userAddress?: string | null;
+  chainId?: number; // Chain ID to determine data source
 }
 
 interface UsePairSwapsResult {
@@ -106,10 +108,44 @@ function formatSwap(swap: SubgraphSwap, userAddress?: string | null): FormattedS
   };
 }
 
+// Helper function to format GeckoTerminal trades
+function formatGeckoTerminalTrade(trade: any, pairAddress: string): FormattedSwap {
+  const attrs = trade.attributes;
+
+  // Determine trade type based on kind
+  const type = attrs.kind === 'buy' ? 'BUY' : 'SELL';
+
+  // Get token symbols from the trade
+  const fromToken = attrs.from_token_amount ?
+    { symbol: 'Token', amount: attrs.from_token_amount } :
+    { symbol: 'Token', amount: '0' };
+  const toToken = attrs.to_token_amount ?
+    { symbol: 'Token', amount: attrs.to_token_amount } :
+    { symbol: 'Token', amount: '0' };
+
+  return {
+    id: trade.id || `gecko-${attrs.block_number}-${attrs.tx_hash}`,
+    hash: attrs.tx_hash || '',
+    timestamp: new Date(attrs.block_timestamp),
+    blockNumber: attrs.block_number || 0,
+    pairAddress: pairAddress,
+    token0Symbol: fromToken.symbol,
+    token1Symbol: toToken.symbol,
+    token0Amount: parseFloat(fromToken.amount).toFixed(6),
+    token1Amount: parseFloat(toToken.amount).toFixed(6),
+    amountUSD: parseFloat(attrs.volume_in_usd || '0'),
+    sender: attrs.tx_from_address || '',
+    from: attrs.tx_from_address || '',
+    to: attrs.tx_to_address || '',
+    type
+  };
+}
+
 export function usePairSwaps({
   pairAddress,
   limit = 20,
-  userAddress
+  userAddress,
+  chainId = 3888
 }: UsePairSwapsProps): UsePairSwapsResult {
   const [swaps, setSwaps] = useState<FormattedSwap[]>([]);
   const [loading, setLoading] = useState(false);
@@ -120,7 +156,34 @@ export function usePairSwaps({
     setError(null);
 
     try {
-      console.log('Fetching swaps from subgraph...', { pairAddress, limit, userAddress });
+      // For BSC and Arbitrum, use GeckoTerminal for recent trades only
+      // User trades are not supported (will show explorer link instead)
+      if ((chainId === 56 || chainId === 42161) && !userAddress) {
+        console.log('Fetching swaps from GeckoTerminal...', { chainId, pairAddress, limit });
+
+        if (!pairAddress) {
+          console.warn('⚠️ GeckoTerminal requires pairAddress for trades');
+          setSwaps([]);
+          setLoading(false);
+          return;
+        }
+
+        // Fetch trades from GeckoTerminal
+        const geckoTrades = await getPoolTrades(chainId, pairAddress, limit);
+
+        // Format trades for UI
+        const formattedSwaps = geckoTrades.map(trade =>
+          formatGeckoTerminalTrade(trade, pairAddress)
+        );
+
+        console.log(`✅ Fetched ${formattedSwaps.length} trades from GeckoTerminal`);
+        setSwaps(formattedSwaps);
+        setLoading(false);
+        return;
+      }
+
+      // For KalyChain or when userAddress is provided, use subgraph
+      console.log('Fetching swaps from subgraph...', { chainId, pairAddress, limit, userAddress });
 
       let rawSwaps: SubgraphSwap[] = [];
 
@@ -158,7 +221,7 @@ export function usePairSwaps({
       setSwaps(formattedSwaps);
 
     } catch (err) {
-      console.error('Error fetching swaps from subgraph:', err);
+      console.error('Error fetching swaps:', err);
 
       // Handle network errors gracefully
       if (isNetworkError(err)) {
@@ -171,7 +234,7 @@ export function usePairSwaps({
     } finally {
       setLoading(false);
     }
-  }, [pairAddress, limit, userAddress]);
+  }, [pairAddress, limit, userAddress, chainId]);
 
   // Fetch swaps when dependencies change
   useEffect(() => {
