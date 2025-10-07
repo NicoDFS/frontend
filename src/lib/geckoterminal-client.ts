@@ -335,7 +335,7 @@ export function convertGeckoTerminalToChartData(ohlcvList: any[], invert: boolea
       close: closePrice,
       value: closePrice // For line charts
     };
-  }).filter(Boolean); // Remove null entries
+  }).filter((item): item is NonNullable<typeof item> => item !== null); // Remove null entries
 
   // Sort by time in ascending order (required by chart library)
   chartData.sort((a, b) => a.time - b.time);

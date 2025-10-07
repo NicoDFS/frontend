@@ -400,17 +400,6 @@ export function formatPriceChange(change: number): string {
   return `${sign}${change.toFixed(2)}%`;
 }
 
-// Token interface for historical price data
-interface Token {
-  chainId: number;
-  address: string;
-  decimals: number;
-  name: string;
-  symbol: string;
-  logoURI: string;
-  isNative?: boolean;
-}
-
 // Hook for fetching historical price data from DEX subgraph
 export function useHistoricalPriceData(tokenA: Token | null, tokenB: Token | null) {
   const [priceData, setPriceData] = useState<PricePoint[]>([]);

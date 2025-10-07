@@ -218,6 +218,3 @@ class TokenListService {
 
 // Export singleton instance
 export const tokenListService = new TokenListService();
-
-// Export types for external use
-export type { TokenList, TokenListConfig };

@@ -9,8 +9,10 @@ interface Token {
   address: string;
   symbol: string;
   decimals: number;
-  chainId?: number;
+  chainId: number;
   isNative?: boolean;
+  name: string;
+  logoURI: string;
 }
 
 interface PairMarketStats {
@@ -321,7 +323,7 @@ export function usePairMarketStats(tokenA?: Token, tokenB?: Token): PairMarketSt
 
           if (pairVolumeData) {
             real24hrVolume = parseFloat(pairVolumeData.volume24hrUSD) || 0;
-            console.log(`✅ Real 24hr volume for ${tokenA.symbol}/${tokenB.symbol}: $${real24hrVolume.toFixed(2)}`);
+            console.log(`✅ Real 24hr volume for ${tokenA?.symbol}/${tokenB?.symbol}: $${real24hrVolume.toFixed(2)}`);
           }
         } catch (volumeError) {
           console.error('Failed to fetch real 24hr volume from backend:', volumeError);

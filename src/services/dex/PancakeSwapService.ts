@@ -5,8 +5,10 @@ import { BaseDexService } from './BaseDexService';
 import { SwapParams, Token } from '@/config/dex/types';
 import { PANCAKESWAP_CONFIG } from '@/config/dex/pancakeswap';
 import { DexError, SwapFailedError } from './IDexService';
-import { getContract, parseUnits } from 'viem';
+import { getContract, parseUnits, createPublicClient, http } from 'viem';
 import type { WalletClient, PublicClient } from 'viem';
+import { bsc } from 'viem/chains';
+import { chainRpcUrls } from '@/config/wagmi.config';
 
 export class PancakeSwapService extends BaseDexService {
   constructor() {
@@ -37,47 +39,66 @@ export class PancakeSwapService extends BaseDexService {
       const amountIn = parseUnits(params.amountIn, params.tokenIn.decimals);
       const amountOutMin = parseUnits(params.amountOutMin, params.tokenOut.decimals);
 
-      // Get router contract
-      const routerContract = getContract({
-        address: this.config.router as `0x${string}`,
-        abi: this.config.routerABI,
-        client: walletClient,
-      });
-
       // Calculate deadline (current time + deadline minutes)
       const deadline = Math.floor(Date.now() / 1000) + (params.deadline * 60);
+
+      // Get account from wallet client
+      const account = walletClient.account;
+      if (!account) {
+        throw new DexError('No account found in wallet client', 'NO_ACCOUNT', this.getName());
+      }
 
       let txHash: string;
 
       // Handle different swap scenarios
       if (params.tokenIn.isNative) {
         // BNB to Token
-        txHash = await routerContract.write.swapExactETHForTokens([
-          amountOutMin,
-          route,
-          params.to as `0x${string}`,
-          BigInt(deadline)
-        ], {
-          value: amountIn
-        }) as string;
+        txHash = await walletClient.writeContract({
+          address: this.config.router as `0x${string}`,
+          abi: this.config.routerABI,
+          functionName: 'swapExactETHForTokens',
+          args: [
+            amountOutMin,
+            route,
+            params.to as `0x${string}`,
+            BigInt(deadline)
+          ],
+          value: amountIn,
+          account,
+          chain: undefined
+        });
       } else if (params.tokenOut.isNative) {
         // Token to BNB
-        txHash = await routerContract.write.swapExactTokensForETH([
-          amountIn,
-          amountOutMin,
-          route,
-          params.to as `0x${string}`,
-          BigInt(deadline)
-        ]) as string;
+        txHash = await walletClient.writeContract({
+          address: this.config.router as `0x${string}`,
+          abi: this.config.routerABI,
+          functionName: 'swapExactTokensForETH',
+          args: [
+            amountIn,
+            amountOutMin,
+            route,
+            params.to as `0x${string}`,
+            BigInt(deadline)
+          ],
+          account,
+          chain: undefined
+        });
       } else {
         // Token to Token
-        txHash = await routerContract.write.swapExactTokensForTokens([
-          amountIn,
-          amountOutMin,
-          route,
-          params.to as `0x${string}`,
-          BigInt(deadline)
-        ]) as string;
+        txHash = await walletClient.writeContract({
+          address: this.config.router as `0x${string}`,
+          abi: this.config.routerABI,
+          functionName: 'swapExactTokensForTokens',
+          args: [
+            amountIn,
+            amountOutMin,
+            route,
+            params.to as `0x${string}`,
+            BigInt(deadline)
+          ],
+          account,
+          chain: undefined
+        });
       }
 
       return txHash;
@@ -101,7 +122,13 @@ export class PancakeSwapService extends BaseDexService {
         return 0;
       }
 
-      const pairInfo = await this.getPairInfo(bnbToken, usdtToken);
+      // Create a public client for reading data
+      const publicClient = createPublicClient({
+        chain: bsc,
+        transport: http(chainRpcUrls[this.getChainId() as keyof typeof chainRpcUrls])
+      });
+
+      const pairInfo = await this.getPairInfo(bnbToken, usdtToken, publicClient);
       if (!pairInfo) {
         return 0;
       }
@@ -127,7 +154,13 @@ export class PancakeSwapService extends BaseDexService {
         return 0;
       }
 
-      const pairInfo = await this.getPairInfo(cakeToken, bnbToken);
+      // Create a public client for reading data
+      const publicClient = createPublicClient({
+        chain: bsc,
+        transport: http(chainRpcUrls[this.getChainId() as keyof typeof chainRpcUrls])
+      });
+
+      const pairInfo = await this.getPairInfo(cakeToken, bnbToken, publicClient);
       if (!pairInfo) {
         return 0;
       }

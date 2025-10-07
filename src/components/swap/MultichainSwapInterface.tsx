@@ -560,11 +560,11 @@ export default function MultichainSwapInterface({
         )}
 
         {/* Error Display */}
-        {hasError && (
+        {hasError && error && (
           <ErrorDisplay
             error={error}
             onRetry={retry}
-            onDismiss={clearError}
+            onReset={clearError}
             isRetrying={isRetrying}
           />
         )}
@@ -862,7 +862,6 @@ export default function MultichainSwapInterface({
         selectedToken={swapState.fromToken}
         tokens={supportedTokens}
         title="Select From Token"
-        balances={balances}
         getFormattedBalance={getFormattedBalance}
       />
 
@@ -873,7 +872,6 @@ export default function MultichainSwapInterface({
         selectedToken={swapState.toToken}
         tokens={supportedTokens}
         title="Select To Token"
-        balances={balances}
         getFormattedBalance={getFormattedBalance}
       />
     </>

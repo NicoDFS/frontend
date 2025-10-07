@@ -45,7 +45,7 @@ export function useDexSwap(chainId: number): UseDexSwapReturn {
 
       const service = await DexService.getDexService(chainId);
       const quote = await service.getQuote(tokenIn, tokenOut, amountIn, publicClient);
-      
+
       return quote;
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to get quote';
@@ -114,7 +114,7 @@ export function useDexSwap(chainId: number): UseDexSwapReturn {
 
       // Encode function data
       const data = encodeFunctionData({
-        abi: service.config.routerABI,
+        abi: service.getRouterABI(),
         functionName,
         args
       });

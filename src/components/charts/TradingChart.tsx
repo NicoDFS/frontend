@@ -424,8 +424,20 @@ export default function TradingChart({
 
       // Ensure data is sorted by time in ascending order
       const sortedData = deduplicatedData.sort((a, b) => {
-        const timeA = typeof a.time === 'number' ? a.time : new Date(a.time).getTime() / 1000;
-        const timeB = typeof b.time === 'number' ? b.time : new Date(b.time).getTime() / 1000;
+        const getTimestamp = (time: Time): number => {
+          if (typeof time === 'number') {
+            return time;
+          } else if (typeof time === 'object' && 'year' in time) {
+            // BusinessDay object: { year, month, day }
+            return new Date(time.year, time.month - 1, time.day).getTime() / 1000;
+          } else {
+            // String timestamp
+            return new Date(time as string).getTime() / 1000;
+          }
+        };
+
+        const timeA = getTimestamp(a.time);
+        const timeB = getTimestamp(b.time);
         return timeA - timeB;
       });
 

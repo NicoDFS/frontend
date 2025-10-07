@@ -46,7 +46,7 @@ export default function SimpleTokenListTest() {
 
       if (directResponse.ok) {
         const directData = await directResponse.json();
-        setResults(prev => prev + `✅ Direct API call: ${directData.name} (${directData.tokens.length} tokens)\n`);
+        setTestResults(prev => prev + `✅ Direct API call: ${directData.name} (${directData.tokens.length} tokens)\n`);
       } else {
         throw new Error(`Direct API call failed: ${directResponse.status}`);
       }

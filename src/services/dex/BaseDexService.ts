@@ -27,6 +27,10 @@ export abstract class BaseDexService implements IDexService {
     return this.config.router;
   }
 
+  getRouterABI(): any[] {
+    return this.config.routerABI;
+  }
+
   getFactoryAddress(): string {
     return this.config.factory;
   }
