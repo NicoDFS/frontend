@@ -63,7 +63,7 @@ class TokenListService {
       // Use absolute URL for backend API calls
       let apiUrl: string;
       if (url.startsWith('/api/')) {
-        apiUrl = `http://localhost:3000${url}`;
+        apiUrl = `https://app.kalyswap.io${url}`;
       } else {
         apiUrl = url;
       }
