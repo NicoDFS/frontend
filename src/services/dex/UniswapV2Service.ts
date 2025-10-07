@@ -1,5 +1,5 @@
-// Uniswap V2 DEX service implementation
-// Handles all Uniswap V2-specific operations on Arbitrum
+// Camelot DEX service implementation
+// Handles all Camelot V2-specific operations on Arbitrum
 
 import { BaseDexService } from './BaseDexService';
 import { SwapParams, Token } from '@/config/dex/types';
@@ -14,7 +14,7 @@ export class UniswapV2Service extends BaseDexService {
   }
 
   getName(): string {
-    return 'Uniswap V2';
+    return 'Camelot';
   }
 
   getChainId(): number {
@@ -152,8 +152,14 @@ export class UniswapV2Service extends BaseDexService {
     const addressIn = tokenIn.isNative ? this.getWethAddress() : tokenIn.address;
     const addressOut = tokenOut.isNative ? this.getWethAddress() : tokenOut.address;
 
+    console.log(`[${this.getName()}] Finding route:`, {
+      tokenIn: `${tokenIn.symbol} (${addressIn})`,
+      tokenOut: `${tokenOut.symbol} (${addressOut})`
+    });
+
     // Check direct pair first
     const directPairExists = await this.canSwapDirectly(tokenIn, tokenOut, publicClient);
+    console.log(`[${this.getName()}] Direct pair exists:`, directPairExists);
     if (directPairExists) {
       return [addressIn, addressOut];
     }
@@ -168,6 +174,7 @@ export class UniswapV2Service extends BaseDexService {
           this.canSwapDirectly(wethToken, tokenOut, publicClient)
         ]);
 
+        console.log(`[${this.getName()}] Can route via WETH:`, canRouteViaWETH);
         if (canRouteViaWETH[0] && canRouteViaWETH[1]) {
           return [addressIn, wethAddress, addressOut];
         }
@@ -182,6 +189,7 @@ export class UniswapV2Service extends BaseDexService {
         this.canSwapDirectly(usdcToken, tokenOut, publicClient)
       ]);
 
+      console.log(`[${this.getName()}] Can route via USDC:`, canRouteViaUSDC);
       if (canRouteViaUSDC[0] && canRouteViaUSDC[1]) {
         return [addressIn, usdcToken.address, addressOut];
       }
@@ -192,9 +200,10 @@ export class UniswapV2Service extends BaseDexService {
     if (usdtToken && addressIn !== usdtToken.address && addressOut !== usdtToken.address) {
       const canRouteViaUSDT = await Promise.all([
         this.canSwapDirectly(tokenIn, usdtToken, publicClient),
-        this.canSwapDirectly(usdtToken, tokenOut, publicClient)
+        this.canSwapDirectly(usdcToken, tokenOut, publicClient)
       ]);
 
+      console.log(`[${this.getName()}] Can route via USDT:`, canRouteViaUSDT);
       if (canRouteViaUSDT[0] && canRouteViaUSDT[1]) {
         return [addressIn, usdtToken.address, addressOut];
       }

@@ -68,6 +68,17 @@ export abstract class BaseDexService implements IDexService {
         throw new PairNotFoundError(this.getName(), tokenIn.symbol, tokenOut.symbol);
       }
 
+      // Debug logging
+      console.log(`[${this.getName()}] Quote Debug:`, {
+        tokenIn: `${tokenIn.symbol} (${tokenIn.address}) decimals: ${tokenIn.decimals}`,
+        tokenOut: `${tokenOut.symbol} (${tokenOut.address}) decimals: ${tokenOut.decimals}`,
+        amountIn,
+        route: route.map((addr, i) => {
+          const token = this.config.tokens.find(t => t.address.toLowerCase() === addr.toLowerCase());
+          return `${i}: ${token?.symbol || 'Unknown'} (${addr})`;
+        })
+      });
+
       // Convert amount to proper units
       const amountInWei = parseUnits(amountIn, tokenIn.decimals);
 
@@ -85,6 +96,14 @@ export abstract class BaseDexService implements IDexService {
       // Call getAmountsOut on router
       const amounts = await routerContract.read.getAmountsOut([amountInWei, route]) as bigint[];
       const amountOut = amounts[amounts.length - 1];
+
+      // Debug logging for amounts
+      console.log(`[${this.getName()}] Quote Amounts:`, {
+        amountInWei: amountInWei.toString(),
+        amounts: amounts.map((a, i) => `${i}: ${a.toString()}`),
+        amountOut: amountOut.toString(),
+        tokenOutDecimals: tokenOut.decimals
+      });
 
       // Format output amount
       const formattedAmountOut = formatUnits(amountOut, tokenOut.decimals);

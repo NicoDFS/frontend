@@ -251,7 +251,7 @@ export default function MultichainSwapInterface({
     switch (chainId) {
       case 3888: return 'KalySwap';
       case 56: return 'PancakeSwap';
-      case 42161: return 'Uniswap V2';
+      case 42161: return 'Camelot';
       default: return '';
     }
   }, [chainId]);

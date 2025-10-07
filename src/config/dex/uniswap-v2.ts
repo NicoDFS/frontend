@@ -3,10 +3,10 @@ import { ARBITRUM_TOKENS } from './tokens/arbitrum';
 import { UNISWAP_V2_ROUTER_ABI, UNISWAP_V2_FACTORY_ABI } from '../abis';
 
 export const UNISWAP_V2_CONFIG: DexConfig = {
-  name: 'Uniswap V2',
-  factory: '0xf1D7CC64Fb4452F05c498126312eBE29f30Fbcf9', // Uniswap V2 Factory on Arbitrum
-  router: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D', // Uniswap V2 Router on Arbitrum
-  subgraphUrl: 'https://gateway.thegraph.com/api/subgraphs/id/CStW6CSQbHoXsgKuVCrk3uShGA4JX3CAzzv2x9zaGf8w',
+  name: 'Camelot',
+  factory: '0x6EcCab422D763aC031210895C81787E87B43A652', // Camelot V2 Factory on Arbitrum
+  router: '0xc873fEcbd354f5A56E00E710B90EF4201db2448d', // Camelot V2 Router on Arbitrum
+  subgraphUrl: 'https://api.thegraph.com/subgraphs/name/camelotlabs/camelot-amm',
   tokens: ARBITRUM_TOKENS,
   routerABI: UNISWAP_V2_ROUTER_ABI,
   factoryABI: UNISWAP_V2_FACTORY_ABI,
@@ -18,16 +18,16 @@ export const UNISWAP_V2_CONFIG: DexConfig = {
   },
 };
 
-// Uniswap V2 specific constants
+// Camelot V2 specific constants
 export const UNISWAP_V2_CONSTANTS = {
   CHAIN_ID: 42161,
-  INIT_CODE_HASH: '0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f', // Uniswap V2 init code hash
+  INIT_CODE_HASH: '0xa856464ae65f7619087bc369daaf7e387dae1e5af69cfa7935850ebf754b04c1', // Camelot V2 init code hash
   MINIMUM_LIQUIDITY: 1000,
   FEE_DENOMINATOR: 10000,
   FEE_NUMERATOR: 30, // 0.3% fee
 } as const;
 
-// Helper functions for Uniswap V2
+// Helper functions for Camelot V2
 export function getUniswapV2PairAddress(tokenA: string, tokenB: string): string {
   // Calculate pair address using CREATE2
   const { getCreate2Address } = require('viem');
@@ -50,7 +50,7 @@ export function getUniswapV2PairAddress(tokenA: string, tokenB: string): string 
 }
 
 export function isUniswapV2Token(address: string): boolean {
-  return ARBITRUM_TOKENS.some(token => 
+  return ARBITRUM_TOKENS.some(token =>
     token.address.toLowerCase() === address.toLowerCase()
   );
 }

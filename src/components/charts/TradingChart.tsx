@@ -410,7 +410,26 @@ export default function TradingChart({
         value: item.close,
       }));
 
-      lineSeries.setData(lineData);
+      // Remove duplicate timestamps - keep only the last value for each timestamp
+      const deduplicatedData = lineData.reduce((acc: LineData[], current) => {
+        const existingIndex = acc.findIndex(item => item.time === current.time);
+        if (existingIndex >= 0) {
+          // Replace existing entry with current (keep last value)
+          acc[existingIndex] = current;
+        } else {
+          acc.push(current);
+        }
+        return acc;
+      }, []);
+
+      // Ensure data is sorted by time in ascending order
+      const sortedData = deduplicatedData.sort((a, b) => {
+        const timeA = typeof a.time === 'number' ? a.time : new Date(a.time).getTime() / 1000;
+        const timeB = typeof b.time === 'number' ? b.time : new Date(b.time).getTime() / 1000;
+        return timeA - timeB;
+      });
+
+      lineSeries.setData(sortedData);
       seriesRef.current = lineSeries;
     }
 
