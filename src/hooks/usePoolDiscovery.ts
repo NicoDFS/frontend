@@ -7,6 +7,15 @@ import { getContractAddress, DEFAULT_CHAIN_ID } from '@/config/contracts';
 import { FACTORY_ABI, PAIR_ABI, ERC20_ABI } from '@/config/abis';
 import { useUserPositions } from './useUserPositions';
 
+// Blacklisted pool addresses (duplicate/test pools to exclude)
+const BLACKLISTED_POOLS = [
+  '0xf5d0e9ff1d439d478f13b167e8260a1f98f2b793',
+  '0xd8aacb9a2084f73c53c4edb5633bfa01124669f6',
+  '0x37ea64bb4d58b6513c80befa5dc777080ad62eb9',
+  '0xb87d4bb205865716f556ba032eaeb41d7f096830',
+  '0x83210c8c37913ff3e4a713767be416415db6e434',
+].map(addr => addr.toLowerCase());
+
 export interface PoolData {
   id: string;
   address: string;
@@ -178,8 +187,22 @@ export function usePoolDiscovery() {
       const subgraphPairs = await getPairsData(100, 'reserveUSD', 'desc');
 
       if (subgraphPairs && subgraphPairs.length > 0) {
+        console.log('🔍 Blacklist:', BLACKLISTED_POOLS);
+
+        // Filter out blacklisted pools
+        const filteredPairs = subgraphPairs.filter((pair: any) => {
+          const pairId = pair.id.toLowerCase();
+          const isBlacklisted = BLACKLISTED_POOLS.includes(pairId);
+          if (isBlacklisted) {
+            console.log(`❌ Filtering out blacklisted pool: ${pairId}`);
+          }
+          return !isBlacklisted;
+        });
+
+        console.log(`🔍 Filtered ${subgraphPairs.length - filteredPairs.length} blacklisted pools out of ${subgraphPairs.length} total`);
+
         // Transform subgraph data to PoolData format
-        const pools: PoolData[] = subgraphPairs.map((pair: any) => ({
+        const pools: PoolData[] = filteredPairs.map((pair: any) => ({
           id: pair.id,
           address: pair.id,
           token0: {
@@ -257,6 +280,14 @@ export function usePoolDiscovery() {
       for (let i = 0; i < maxPairs; i++) {
         try {
           const pairAddress = await factoryContract.read.allPairs([BigInt(i)]);
+          const pairAddressLower = (pairAddress as string).toLowerCase();
+
+          // Skip blacklisted pools
+          if (BLACKLISTED_POOLS.includes(pairAddressLower)) {
+            console.log(`❌ Skipping blacklisted pool: ${pairAddressLower}`);
+            continue;
+          }
+
           const poolData = await getPoolData(pairAddress as string);
           if (poolData) {
             pools.push(poolData);
@@ -379,7 +410,8 @@ export function usePoolDiscovery() {
     if (publicClient) {
       fetchPools();
     }
-  }, [fetchPools, publicClient]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [publicClient]); // Only re-fetch when publicClient changes, not fetchPools
 
   return {
     pools: filteredAndSortedPools(),

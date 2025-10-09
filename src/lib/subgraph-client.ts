@@ -28,6 +28,8 @@ export function getSubgraphClient(chainId?: number): GraphQLClient {
   return new GraphQLClient(subgraphUrl, {
     headers: {
       'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
     },
   });
 }
