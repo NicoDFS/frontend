@@ -808,10 +808,10 @@ export default function MultichainSwapInterface({
         <Button
           onClick={handleSwap}
           disabled={!canSwap}
-          className="w-full h-12 text-lg font-medium bg-amber-600 hover:bg-amber-700 disabled:bg-stone-700 disabled:text-gray-400"
+          className="w-full h-14 text-lg font-bold rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border-2 border-amber-400/50 hover:border-amber-300 disabled:from-stone-800 disabled:to-stone-800 disabled:text-gray-400 disabled:border-stone-600 disabled:cursor-not-allowed transition-all duration-200 shadow-xl hover:shadow-2xl hover:shadow-amber-500/50 disabled:shadow-none active:scale-[0.98]"
         >
           {isSwapping && (
-            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
           )}
           {getSwapButtonText()}
         </Button>
